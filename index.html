@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infogr.ai — AI Infographic Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0C0C0C;
+  --surface: #161616;
+  --surface2: #1F1F1F;
+  --surface3: #282828;
+  --border: #2A2A2A;
+  --border2: #333;
+  --accent: #E05A2B;
+  --accent-hover: #F06533;
+  --accent-dim: rgba(224,90,43,0.12);
+  --text: #EDEAE4;
+  --text2: #A8A49E;
+  --text3: #5C5956;
+  --success: #4CAF7D;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+/* ── HEADER ── */
+header {
+  padding: 0 32px;
+  height: 56px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(12,12,12,0.92);
+  backdrop-filter: blur(12px);
+}
+.logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+.logo-dot { color: var(--accent); }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.badge { font-size: 10px; color: var(--text3); background: var(--surface2); padding: 3px 9px; border-radius: 20px; border: 1px solid var(--border); letter-spacing: 0.05em; }
+
+/* ── LAYOUT ── */
+.app { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 56px); }
+
+/* ── LEFT PANEL ── */
+.panel {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.panel::-webkit-scrollbar { width: 3px; }
+.panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.section { padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.section-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--text3); margin-bottom: 12px;
+}
+
+/* API KEY */
+.api-wrap { position: relative; }
+.api-input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 9px 36px 9px 12px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 12px;
+  transition: border-color 0.15s;
+}
+.api-input:focus { outline: none; border-color: var(--accent); }
+.api-input::placeholder { color: var(--text3); }
+.api-status { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 7px; height: 7px; border-radius: 50%; background: var(--border2); transition: background 0.3s; }
+.api-status.ok { background: var(--success); }
+.api-note { font-size: 10px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
+.api-note a { color: var(--accent); text-decoration: none; }
+
+/* TEMPLATES */
+.tpl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tpl-card {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 8px 6px 7px; cursor: pointer;
+  transition: all 0.15s; text-align: center;
+}
+.tpl-card:hover { border-color: var(--border2); background: var(--surface3); }
+.tpl-card.active { border-color: var(--accent); background: var(--accent-dim); }
+.tpl-card svg { width: 100%; height: 58px; display: block; margin-bottom: 5px; }
+.tpl-name { font-size: 9px; color: var(--text3); font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
+.tpl-card.active .tpl-name { color: var(--accent); }
+
+/* PROMPT */
+.prompt-input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 10px 12px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 12.5px; resize: none;
+  height: 100px; transition: border-color 0.15s; line-height: 1.5;
+}
+.prompt-input:focus { outline: none; border-color: var(--accent); }
+.prompt-input::placeholder { color: var(--text3); }
+
+/* TONE */
+.chip-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip {
+  font-size: 11px; padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--border2); background: var(--surface2);
+  color: var(--text2); cursor: pointer; transition: all 0.12s;
+  font-family: 'DM Sans', sans-serif;
+}
+.chip:hover { border-color: var(--accent); color: var(--text); }
+.chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+/* SIZE */
+.size-row { display: flex; gap: 5px; }
+.size-btn {
+  font-size: 11px; padding: 4px 11px; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--surface2);
+  color: var(--text2); cursor: pointer; transition: all 0.12s;
+  font-family: 'DM Sans', sans-serif;
+}
+.size-btn:hover { border-color: var(--accent); color: var(--text); }
+.size-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+/* GENERATE BTN */
+.panel-bottom { padding: 16px 20px; margin-top: auto; }
+.gen-btn {
+  width: 100%; padding: 12px; background: var(--accent); border: none;
+  border-radius: 8px; color: white; font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 12px; letter-spacing: 0.08em;
+  cursor: pointer; transition: all 0.15s; text-transform: uppercase;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.gen-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+.gen-btn:active:not(:disabled) { transform: translateY(0); }
+.gen-btn:disabled { background: var(--surface3); color: var(--text3); cursor: not-allowed; }
+.gen-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+.gen-btn.loading .gen-spinner { display: block; }
+.gen-btn.loading .gen-label { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── CANVAS AREA ── */
+.canvas-area {
+  background: #080808;
+  display: flex; flex-direction: column;
+  overflow-y: auto; position: relative;
+}
+.canvas-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  background: var(--surface); position: sticky; top: 0; z-index: 10;
+}
+.canvas-toolbar-left { display: flex; align-items: center; gap: 6px; flex: 1; }
+.tool-hint { font-size: 10px; color: var(--text3); font-style: italic; }
+.tool-btn {
+  font-size: 11px; padding: 5px 13px; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--surface2);
+  color: var(--text2); cursor: pointer; font-family: 'DM Sans', sans-serif;
+  transition: all 0.12s; white-space: nowrap;
+}
+.tool-btn:hover { border-color: var(--accent); color: var(--text); }
+.tool-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+.tool-btn.primary:hover { background: var(--accent-hover); }
+
+/* OUTPUT */
+.canvas-body { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: 32px; }
+.output-wrap {
+  background: white; border-radius: 6px; overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 24px 80px rgba(0,0,0,0.6);
+  position: relative; user-select: none;
+}
+.output-wrap svg { display: block; width: 100%; }
+
+/* EMPTY STATE */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 14px; padding: 80px 40px;
+  text-align: center; width: 100%;
+}
+.empty-icon {
+  width: 64px; height: 64px; border: 1.5px solid var(--border2);
+  border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: var(--text3);
+}
+.empty-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--text2); }
+.empty-sub { font-size: 12px; color: var(--text3); max-width: 280px; line-height: 1.6; }
+.empty-steps { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; text-align: left; }
+.empty-step { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text3); }
+.step-num { width: 20px; height: 20px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: var(--text3); flex-shrink: 0; }
+
+/* LOADING */
+.loading-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 20px; padding: 80px 40px; width: 100%;
+}
+.loading-ring {
+  width: 40px; height: 40px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+.loading-text { font-size: 13px; color: var(--text2); }
+.loading-sub { font-size: 11px; color: var(--text3); }
+
+/* ERROR */
+.error-state {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 60px 40px; text-align: center;
+}
+.error-icon { font-size: 32px; }
+.error-title { font-family: 'Syne', sans-serif; font-size: 14px; color: #E05A2B; }
+.error-msg { font-size: 11px; color: var(--text3); max-width: 300px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Infogr<span class="logo-dot">.</span>ai</div>
+  <div class="header-right">
+    <div class="badge">MVP v0.1</div>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ── LEFT PANEL ── -->
+  <div class="panel">
+
+    <!-- API KEY -->
+    <div class="section">
+      <div class="section-label">Anthropic API Key</div>
+      <div class="api-wrap">
+        <input class="api-input" type="password" id="apiKey" placeholder="sk-ant-api03-..." autocomplete="off" oninput="checkApiKey(this.value)"/>
+        <div class="api-status" id="apiStatus"></div>
+      </div>
+      <div class="api-note">Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> — stored in your browser only, never sent to our servers.</div>
+    </div>
+
+    <!-- TEMPLATE -->
+    <div class="section">
+      <div class="section-label">Choose Template</div>
+      <div class="tpl-grid">
+
+        <div class="tpl-card active" data-tpl="steps" onclick="selectTpl('steps',this)">
+          <svg viewBox="0 0 80 60"><rect width="80" height="60" fill="#F5F5F5" rx="3"/>
+            <rect x="4" y="4" width="72" height="11" rx="2" fill="#1A1A1A"/>
+            <circle cx="13" cy="24" r="4" fill="#E05A2B"/>
+            <rect x="20" y="21" width="42" height="3" rx="1.5" fill="#ccc"/>
+            <rect x="20" y="26" width="32" height="2.5" rx="1.5" fill="#e5e5e5"/>
+            <line x1="13" y1="28" x2="13" y2="34" stroke="#E05A2B" stroke-width="1" stroke-dasharray="2,2"/>
+            <circle cx="13" cy="38" r="4" fill="#1A1A1A"/>
+            <rect x="20" y="35" width="38" height="3" rx="1.5" fill="#ccc"/>
+            <rect x="20" y="40" width="28" height="2.5" rx="1.5" fill="#e5e5e5"/>
+            <line x1="13" y1="42" x2="13" y2="48" stroke="#1A1A1A" stroke-width="1" stroke-dasharray="2,2"/>
+            <circle cx="13" cy="52" r="4" fill="#E05A2B"/>
+            <rect x="20" y="49" width="34" height="3" rx="1.5" fill="#ccc"/>
+          </svg>
+          <div class="tpl-name">Steps</div>
+        </div>
+
+        <div class="tpl-card" data-tpl="funnel" onclick="selectTpl('funnel',this)">
+          <svg viewBox="0 0 80 60"><rect width="80" height="60" fill="#F5F5F5" rx="3"/>
+            <text x="40" y="9" text-anchor="middle" font-size="5" font-weight="700" fill="#333" font-family="sans-serif">FUNNEL</text>
+            <polygon points="8,12 72,12 65,24 15,24" fill="#7BC67E" opacity="0.9"/>
+            <polygon points="15,26 65,26 58,38 22,38" fill="#F0C040" opacity="0.9"/>
+            <polygon points="22,40 58,40 52,52 28,52" fill="#F09050" opacity="0.9"/>
+            <polygon points="28,54 52,54 47,60 33,60" fill="#9B7FD4" opacity="0.9"/>
+          </svg>
+          <div class="tpl-name">Funnel</div>
+        </div>
+
+        <div class="tpl-card" data-tpl="hubspoke" onclick="selectTpl('hubspoke',this)">
+          <svg viewBox="0 0 80 60"><rect width="80" height="60" fill="#F5F5F5" rx="3"/>
+            <circle cx="40" cy="30" r="11" fill="#E05A2B"/>
+            <text x="40" y="34" text-anchor="middle" font-size="4.5" font-weight="700" fill="white" font-family="sans-serif">HUB</text>
+            <line x1="40" y1="19" x2="40" y2="8" stroke="#E05A2B" stroke-width="1" stroke-dasharray="2,2" opacity="0.6"/>
+            <line x1="40" y1="41" x2="40" y2="54" stroke="#E05A2B" stroke-width="1" stroke-dasharray="2,2" opacity="0.6"/>
+            <line x1="29" y1="24" x2="16" y2="14" stroke="#E05A2B" stroke-width="1" stroke-dasharray="2,2" opacity="0.6"/>
+            <line x1="51" y1="24" x2="64" y2="14" stroke="#E05A2B" stroke-width="1" stroke-dasharray="2,2" opacity="0.6"/>
+            <line x1="29" y1="36" x2="16" y2="48" stroke="#E05A2B" stroke-width="1" stroke-dasharray="2,2" opacity="0.6"/>
+            <line x1="51" y1="36" x2="64" y2="48" stroke="#E05A2B" stroke-width="1" stroke-dasharray="2,2" opacity="0.6"/>
+            <rect x="33" y="4" width="14" height="9" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+            <rect x="33" y="47" width="14" height="9" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+            <rect x="4" y="10" width="14" height="9" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+            <rect x="62" y="10" width="14" height="9" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+            <rect x="4" y="43" width="14" height="9" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+            <rect x="62" y="43" width="14" height="9" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+          </svg>
+          <div class="tpl-name">Hub & Spoke</div>
+        </div>
+
+        <div class="tpl-card" data-tpl="grid" onclick="selectTpl('grid',this)">
+          <svg viewBox="0 0 80 60"><rect width="80" height="60" fill="#F5F5F5" rx="3"/>
+            <rect x="4" y="4" width="72" height="10" rx="2" fill="#1A1A1A"/>
+            <rect x="4" y="17" width="34" height="18" rx="2" fill="#E05A2B" opacity="0.8"/>
+            <rect x="42" y="17" width="34" height="18" rx="2" fill="#1A1A1A" opacity="0.8"/>
+            <rect x="4" y="38" width="21" height="18" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+            <rect x="29" y="38" width="21" height="18" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+            <rect x="55" y="38" width="21" height="18" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+          </svg>
+          <div class="tpl-name">Mixed Grid</div>
+        </div>
+
+        <div class="tpl-card" data-tpl="flowchart" onclick="selectTpl('flowchart',this)">
+          <svg viewBox="0 0 80 60"><rect width="80" height="60" fill="#F5F5F5" rx="3"/>
+            <rect x="28" y="2" width="24" height="10" rx="5" fill="#ffecbd"/>
+            <line x1="40" y1="12" x2="40" y2="18" stroke="#b3b3b3" stroke-width="1.5" marker-end="url(#arr)"/>
+            <rect x="22" y="18" width="36" height="10" rx="2" fill="#c2e5ff"/>
+            <line x1="40" y1="28" x2="40" y2="34" stroke="#b3b3b3" stroke-width="1.5"/>
+            <path d="M40 34 L52 40 L40 46 L28 40 Z" fill="#dcccff"/>
+            <line x1="52" y1="40" x2="68" y2="40" stroke="#b3b3b3" stroke-width="1.5"/>
+            <rect x="54" y="35" width="22" height="10" rx="2" fill="#c2e5ff"/>
+            <line x1="40" y1="46" x2="40" y2="52" stroke="#b3b3b3" stroke-width="1.5" marker-end="url(#arr)"/>
+            <rect x="22" y="52" width="36" height="7" rx="3" fill="#ffecbd"/>
+            <defs><marker id="arr" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L6 3L0 6" fill="none" stroke="#b3b3b3" stroke-width="1.2"/></marker></defs>
+          </svg>
+          <div class="tpl-name">Flowchart</div>
+        </div>
+
+        <div class="tpl-card" data-tpl="timeline" onclick="selectTpl('timeline',this)">
+          <svg viewBox="0 0 80 60"><rect width="80" height="60" fill="#F5F5F5" rx="3"/>
+            <rect x="4" y="4" width="72" height="10" rx="2" fill="#1A1A1A"/>
+            <line x1="40" y1="18" x2="40" y2="58" stroke="#E05A2B" stroke-width="1.5"/>
+            <circle cx="40" cy="22" r="3" fill="#E05A2B"/>
+            <rect x="44" y="18" width="28" height="8" rx="2" fill="#c2e5ff"/>
+            <circle cx="40" cy="34" r="3" fill="#1A1A1A"/>
+            <rect x="8" y="30" width="28" height="8" rx="2" fill="#c2e5ff"/>
+            <circle cx="40" cy="46" r="3" fill="#E05A2B"/>
+            <rect x="44" y="42" width="28" height="8" rx="2" fill="#c2e5ff"/>
+          </svg>
+          <div class="tpl-name">Timeline</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- PROMPT -->
+    <div class="section">
+      <div class="section-label">Describe Your Content</div>
+      <textarea class="prompt-input" id="promptInput" placeholder="e.g. How to set up Claude Cowork in 5 steps for non-technical users..."></textarea>
+    </div>
+
+    <!-- TONE -->
+    <div class="section">
+      <div class="section-label">Tone</div>
+      <div class="chip-row">
+        <button class="chip active" onclick="selectTone('professional',this)">Professional</button>
+        <button class="chip" onclick="selectTone('bold',this)">Bold</button>
+        <button class="chip" onclick="selectTone('minimal',this)">Minimal</button>
+        <button class="chip" onclick="selectTone('playful',this)">Playful</button>
+      </div>
+    </div>
+
+    <!-- SIZE -->
+    <div class="section">
+      <div class="section-label">Export Size</div>
+      <div class="size-row">
+        <button class="size-btn active" onclick="selectSize('square',this)">1:1</button>
+        <button class="size-btn" onclick="selectSize('portrait',this)">9:16</button>
+        <button class="size-btn" onclick="selectSize('landscape',this)">16:9</button>
+        <button class="size-btn" onclick="selectSize('a4',this)">A4</button>
+      </div>
+    </div>
+
+    <!-- GENERATE -->
+    <div class="panel-bottom">
+      <button class="gen-btn" id="genBtn" onclick="generate()">
+        <div class="gen-spinner"></div>
+        <span class="gen-label">Generate Infographic</span>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ── CANVAS AREA ── -->
+  <div class="canvas-area">
+
+    <div class="canvas-toolbar" id="toolbar" style="display:none">
+      <div class="canvas-toolbar-left">
+        <span class="tool-hint">Drag to move · Double-click text to edit</span>
+      </div>
+      <button class="tool-btn" onclick="downloadSVG()">↓ SVG</button>
+      <button class="tool-btn primary" onclick="downloadPNG()">↓ PNG</button>
+    </div>
+
+    <div class="canvas-body">
+      <div id="outputWrap">
+        <div class="empty-state">
+          <div class="empty-icon">◈</div>
+          <div class="empty-title">Your infographic will appear here</div>
+          <div class="empty-sub">Choose a template, describe your content, and click Generate.</div>
+          <div class="empty-steps">
+            <div class="empty-step"><div class="step-num">1</div>Paste your API key above</div>
+            <div class="empty-step"><div class="step-num">2</div>Pick a template</div>
+            <div class="empty-step"><div class="step-num">3</div>Describe what you need</div>
+            <div class="empty-step"><div class="step-num">4</div>Hit Generate</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let currentTpl = 'steps';
+let currentTone = 'professional';
+let currentSize = 'square';
+let currentSVG = '';
+
+const sizeMap = {
+  square:    { w: 800,  h: 800  },
+  portrait:  { w: 600,  h: 1067 },
+  landscape: { w: 1067, h: 600  },
+  a4:        { w: 794,  h: 1123 }
+};
+
+const toneColors = {
+  professional: { primary:'#1A1A1A', accent:'#E05A2B', accent2:'#F0A500', bg:'#FFFFFF', light:'#F5F5F5', muted:'#666666' },
+  bold:         { primary:'#0D0D0D', accent:'#FF3B30', accent2:'#FF9500', bg:'#FFFFFF', light:'#F0F0F0', muted:'#555555' },
+  minimal:      { primary:'#2C2C2C', accent:'#3B82F6', accent2:'#10B981', bg:'#FFFFFF', light:'#FAFAFA', muted:'#9CA3AF' },
+  playful:      { primary:'#1E1B4B', accent:'#8B5CF6', accent2:'#EC4899', bg:'#FFFFFF', light:'#FFF7ED', muted:'#6B7280' }
+};
+
+// ── RESTORE API KEY ──
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('infograi_key');
+  if (saved) {
+    document.getElementById('apiKey').value = saved;
+    document.getElementById('apiStatus').className = 'api-status ok';
+  }
+});
+
+function checkApiKey(v) {
+  const status = document.getElementById('apiStatus');
+  if (v.startsWith('sk-ant') && v.length > 20) {
+    status.className = 'api-status ok';
+    localStorage.setItem('infograi_key', v);
+  } else {
+    status.className = 'api-status';
+    localStorage.removeItem('infograi_key');
+  }
+}
+
+function selectTpl(tpl, el) {
+  currentTpl = tpl;
+  document.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+function selectTone(tone, el) {
+  currentTone = tone;
+  document.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+function selectSize(size, el) {
+  currentSize = size;
+  document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── PROMPTS PER TEMPLATE ──
+function buildPrompt(tpl, topic, dims, colors) {
+  const base = `You are an expert SVG infographic designer. Create a stunning, professional infographic.
+
+TOPIC: ${topic}
+SIZE: ${dims.w}x${dims.h}px — viewBox="0 0 ${dims.w} ${dims.h}"
+COLORS: primary=${colors.primary}, accent=${colors.accent}, accent2=${colors.accent2}, background=${colors.bg}, light=${colors.light}, muted text=${colors.muted}
+
+CRITICAL RULES:
+- Return ONLY valid SVG. No markdown, no explanation, no backticks.
+- Start with <svg and end with </svg>
+- Fill ALL content with real text about the topic — zero placeholder text
+- All text must fit inside its container — use tspan for line breaks
+- Font: font-family="'Helvetica Neue', Arial, sans-serif"
+- Make it look designed by a senior graphic designer
+- Rich visual hierarchy: vary font sizes, use colored blocks, add decorative elements`;
+
+  const templates = {
+    steps: `${base}
+
+LAYOUT: Vertical steps infographic
+- Dark header bar full width with large title
+- 4-6 step rows, each with: alternating accent/dark numbered circle on left, bold step title, 1-2 lines description, small icon placeholder on right
+- Dashed connector lines between steps
+- Dark footer bar with tagline
+- Make it dense and information-rich`,
+
+    funnel: `${base}
+
+LAYOUT: Marketing funnel with annotations
+- Large title at top
+- 4-5 stacked trapezoid funnel layers (widest top, narrowest bottom), each with bold label + short description
+- Left annotation boxes connected by dashed lines to each layer
+- Right annotation boxes with strategy/tips
+- Each layer a different color from a gradient sequence
+- Dark footer`,
+
+    hubspoke: `${base}
+
+LAYOUT: Hub and spoke diagram
+- Large title at top
+- Central bold circle with main concept
+- 6 spokes radiating at equal angles, each ending in a detailed card
+- Cards alternate filled accent color and white with border
+- Each card has title + 2-3 bullet points
+- Dark footer`,
+
+    grid: `${base}
+
+LAYOUT: Mixed grid (LinkedIn cheat sheet style)
+- Bold header bar with title
+- 6-8 sections with VARYING sizes (some full width, some half, some two-thirds + one-third)
+- Each section has colored header strip, icon placeholder, title, bullet points
+- Some sections include sub-tables or mini flow arrows
+- Bold tagline bar near bottom
+- Colored footer`,
+
+    flowchart: `${base}
+
+LAYOUT: Process flowchart
+- Title at top in header bar
+- Start oval (yellow/light) at top
+- 4-6 process boxes (blue/light, rounded corners) connected by arrows
+- 2-3 diamond decision shapes (purple/light) with Yes/No branches
+- End oval at bottom
+- Arrows with yes/no labels on branches
+- Small key/legend in bottom corner`,
+
+    timeline: `${base}
+
+LAYOUT: Vertical timeline
+- Large title header
+- Central vertical line down the middle (accent color)
+- 5-7 timeline events alternating left and right
+- Each event: date/label on one side, description card on other
+- Circle markers on the central line for each event
+- Varied card sizes based on importance
+- Dark footer`
+  };
+
+  return templates[tpl] || templates.steps;
+}
+
+// ── GENERATE ──
+async function generate() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const topic  = document.getElementById('promptInput').value.trim();
+
+  if (!apiKey) { alert('Please enter your Anthropic API key first.'); return; }
+  if (!topic)  { alert('Please describe what you want to create.'); return; }
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  document.getElementById('toolbar').style.display = 'none';
+
+  document.getElementById('outputWrap').innerHTML = `
+    <div class="loading-state">
+      <div class="loading-ring"></div>
+      <div class="loading-text">Claude is designing your infographic…</div>
+      <div class="loading-sub">This usually takes 15–30 seconds</div>
+    </div>`;
+
+  const dims   = sizeMap[currentSize];
+  const colors = toneColors[currentTone];
+  const prompt = buildPrompt(currentTpl, topic, dims, colors);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 8000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    let svg = data.content[0].text.trim()
+      .replace(/```svg\n?/gi, '').replace(/```\n?/gi, '').trim();
+    if (!svg.startsWith('<svg')) {
+      const i = svg.indexOf('<svg');
+      if (i > -1) svg = svg.substring(i); else throw new Error('No SVG returned.');
+    }
+
+    currentSVG = svg;
+    renderSVG(svg, dims);
+    document.getElementById('toolbar').style.display = 'flex';
+
+  } catch (err) {
+    document.getElementById('outputWrap').innerHTML = `
+      <div class="error-state">
+        <div class="error-icon">⚠</div>
+        <div class="error-title">Generation failed</div>
+        <div class="error-msg">${err.message}</div>
+      </div>`;
+  }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+}
+
+// ── RENDER + DRAG + EDIT ──
+function renderSVG(svgText, dims) {
+  const maxW = Math.min(dims.w, window.innerWidth - 360);
+  const wrap = document.createElement('div');
+  wrap.className = 'output-wrap';
+  wrap.style.width = maxW + 'px';
+  wrap.innerHTML = svgText;
+  enableEditing(wrap);
+  document.getElementById('outputWrap').innerHTML = '';
+  document.getElementById('outputWrap').appendChild(wrap);
+}
+
+function enableEditing(container) {
+  const svgEl = container.querySelector('svg');
+  if (!svgEl) return;
+
+  let dragging = null, ox = 0, oy = 0, sx = 0, sy = 0;
+
+  // DRAG
+  svgEl.querySelectorAll('text, rect, circle, polygon, ellipse, g').forEach(el => {
+    el.style.cursor = 'grab';
+    el.addEventListener('mousedown', e => {
+      if (e.target === svgEl) return;
+      e.stopPropagation(); e.preventDefault();
+      dragging = el;
+      el.style.cursor = 'grabbing';
+      const t = el.getAttribute('transform') || '';
+      const m = t.match(/translate\(([^,]+),([^)]+)\)/);
+      ox = m ? parseFloat(m[1]) : 0;
+      oy = m ? parseFloat(m[2]) : 0;
+      sx = e.clientX; sy = e.clientY;
+    });
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    dragging.setAttribute('transform', `translate(${ox + e.clientX - sx},${oy + e.clientY - sy})`);
+  });
+  window.addEventListener('mouseup', () => {
+    if (dragging) { dragging.style.cursor = 'grab'; dragging = null; }
+  });
+
+  // DOUBLE-CLICK TO EDIT TEXT
+  svgEl.addEventListener('dblclick', e => {
+    const target = e.target;
+    if (target.tagName !== 'text' && target.tagName !== 'tspan') return;
+    e.stopPropagation();
+    const cur = target.textContent;
+    const newVal = prompt('Edit text:', cur);
+    if (newVal !== null) {
+      target.textContent = newVal;
+      currentSVG = new XMLSerializer().serializeToString(svgEl);
+    }
+  });
+}
+
+// ── EXPORT ──
+function downloadSVG() {
+  if (!currentSVG) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([currentSVG], { type: 'image/svg+xml' }));
+  a.download = 'infograi-export.svg';
+  a.click();
+}
+
+function downloadPNG() {
+  const svgEl = document.querySelector('.output-wrap svg');
+  if (!svgEl) return;
+  const dims = sizeMap[currentSize];
+  const canvas = document.createElement('canvas');
+  canvas.width = dims.w; canvas.height = dims.h;
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svgEl)], { type: 'image/svg+xml;charset=utf-8' }));
+  img.onload = () => {
+    ctx.drawImage(img, 0, 0, dims.w, dims.h);
+    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.download = 'infograi-export.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+  img.src = url;
+}
+</script>
+</body>
+</html>
