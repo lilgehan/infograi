@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infogr.ai — AI Infographic Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0C0C0C; --surface:#161616; --surface2:#1F1F1F; --surface3:#282828;
+  --border:#2A2A2A; --border2:#333; --accent:#E05A2B; --accent-h:#F06533;
+  --adim:rgba(224,90,43,0.12); --text:#EDEAE4; --t2:#A8A49E; --t3:#5C5956;
+  --ok:#4CAF7D;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+header{padding:0 32px;height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;background:rgba(12,12,12,0.93);backdrop-filter:blur(12px)}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;letter-spacing:-0.5px}
+.logo span{color:var(--accent)}
+.badge{font-size:10px;color:var(--t3);background:var(--surface2);padding:3px 9px;border-radius:20px;border:1px solid var(--border)}
+.app{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 56px)}
+.panel{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.panel::-webkit-scrollbar{width:3px}
+.panel::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sec{padding:18px 20px;border-bottom:1px solid var(--border)}
+.lbl{font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--t3);margin-bottom:12px}
+.api-wrap{position:relative}
+.api-in{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 36px 9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;transition:border-color .15s}
+.api-in:focus{outline:none;border-color:var(--accent)}
+.api-in::placeholder{color:var(--t3)}
+.api-dot{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:7px;height:7px;border-radius:50%;background:var(--border2);transition:background .3s}
+.api-dot.ok{background:var(--ok)}
+.api-note{font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5}
+.api-note a{color:var(--accent);text-decoration:none}
+.prompt-in{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12.5px;resize:none;height:110px;transition:border-color .15s;line-height:1.5}
+.prompt-in:focus{outline:none;border-color:var(--accent)}
+.prompt-in::placeholder{color:var(--t3)}
+.chip-row{display:flex;gap:5px;flex-wrap:wrap}
+.chip{font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);color:var(--t2);cursor:pointer;transition:all .12s;font-family:'DM Sans',sans-serif}
+.chip:hover{border-color:var(--accent);color:var(--text)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.sz-row{display:flex;gap:5px}
+.sz-btn{font-size:11px;padding:4px 11px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--t2);cursor:pointer;transition:all .12s;font-family:'DM Sans',sans-serif}
+.sz-btn:hover{border-color:var(--accent);color:var(--text)}
+.sz-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.panel-bot{padding:16px 20px;margin-top:auto}
+.gen-btn{width:100%;padding:12px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;cursor:pointer;transition:all .15s;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:8px}
+.gen-btn:hover:not(:disabled){background:var(--accent-h);transform:translateY(-1px)}
+.gen-btn:disabled{background:var(--surface3);color:var(--t3);cursor:not-allowed}
+.spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+.gen-btn.loading .spin{display:block}
+.gen-btn.loading .lbl-btn{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.canvas-area{background:#080808;display:flex;flex-direction:column;overflow-y:auto}
+.ctoolbar{display:flex;align-items:center;gap:8px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10}
+.ctoolbar-l{flex:1;font-size:10px;color:var(--t3);font-style:italic}
+.tbtn{font-size:11px;padding:5px 13px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--t2);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .12s}
+.tbtn:hover{border-color:var(--accent);color:var(--text)}
+.tbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.cbody{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:32px}
+.out-wrap{background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.04),0 24px 80px rgba(0,0,0,.6);max-width:840px;width:100%}
+.out-wrap svg{display:block;width:100%;height:auto}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:80px 40px;text-align:center;width:100%}
+.empty-ico{width:64px;height:64px;border:1.5px solid var(--border2);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--t3)}
+.empty-ttl{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--t2)}
+.empty-sub{font-size:12px;color:var(--t3);max-width:280px;line-height:1.6}
+.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:80px 40px;width:100%}
+.loading-ring{width:40px;height:40px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+.loading-txt{font-size:13px;color:var(--t2)}
+.loading-sub{font-size:11px;color:var(--t3)}
+.progress-steps{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.ps{font-size:11px;color:var(--t3);display:flex;align-items:center;gap:8px}
+.ps.done{color:var(--ok)}
+.ps.active{color:var(--text)}
+.ps-dot{width:6px;height:6px;border-radius:50%;background:var(--border2);flex-shrink:0}
+.ps.done .ps-dot{background:var(--ok)}
+.ps.active .ps-dot{background:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Infogr<span>.</span>ai</div>
+  <div class="badge">Designer Agent v0.3</div>
+</header>
+
+<div class="app">
+  <div class="panel">
+    <div class="sec">
+      <div class="lbl">Anthropic API Key</div>
+      <div class="api-wrap">
+        <input class="api-in" type="password" id="apiKey" placeholder="sk-ant-api03-..." oninput="checkKey(this.value)"/>
+        <div class="api-dot" id="apiDot"></div>
+      </div>
+      <div class="api-note">Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> — stored in your browser only.</div>
+    </div>
+
+    <div class="sec">
+      <div class="lbl">Describe Your Document</div>
+      <textarea class="prompt-in" id="promptIn" placeholder="e.g. How to set up Claude Cowork completely in 1 hour for non-technical users — steps, tips, prerequisites, folder structure..."></textarea>
+    </div>
+
+    <div class="sec">
+      <div class="lbl">Tone</div>
+      <div class="chip-row">
+        <button class="chip on" onclick="setTone('professional',this)">Professional</button>
+        <button class="chip" onclick="setTone('bold',this)">Bold</button>
+        <button class="chip" onclick="setTone('minimal',this)">Minimal</button>
+        <button class="chip" onclick="setTone('playful',this)">Playful</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="lbl">Export Size</div>
+      <div class="sz-row">
+        <button class="sz-btn on" onclick="setSize('portrait',this)">Portrait</button>
+        <button class="sz-btn" onclick="setSize('square',this)">Square</button>
+        <button class="sz-btn" onclick="setSize('landscape',this)">Wide</button>
+      </div>
+    </div>
+
+    <div class="panel-bot">
+      <button class="gen-btn" id="genBtn" onclick="generate()">
+        <div class="spin"></div>
+        <span class="lbl-btn">Generate Infographic</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="canvas-area">
+    <div class="ctoolbar" id="toolbar" style="display:none">
+      <div class="ctoolbar-l">Double-click any text to edit</div>
+      <button class="tbtn" onclick="downloadSVG()">↓ SVG</button>
+      <button class="tbtn primary" onclick="downloadPNG()">↓ PNG</button>
+    </div>
+    <div class="cbody">
+      <div id="outputWrap">
+        <div class="empty">
+          <div class="empty-ico">◈</div>
+          <div class="empty-ttl">Your infographic will appear here</div>
+          <div class="empty-sub">The designer agent will pick the right blocks, icons, and layout for your topic automatically.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let tone = 'professional', size = 'portrait', currentSVG = '';
+
+// ── BLOCK CATALOG (mirrors agent.js) ──
+const CATALOG = {
+  "header-main":        {slots:["slot_pretitle","slot_title_line1","slot_title_line2","slot_title_accent","icon_header"], h:120},
+  "header-simple":      {slots:["slot_title","slot_subtitle"], h:72},
+  "footer-dark":        {slots:["slot_brand","slot_tagline","slot_cta"], h:48},
+  "footer-tagline":     {slots:["slot_label","slot_tagline"], h:56},
+  "step-row":           {slots:["slot_number","slot_title","slot_body","slot_body2","icon_step"], h:100},
+  "step-row-compact":   {slots:["slot_number","slot_title","slot_body","slot_body2","icon_step"], h:72},
+  "callout-tip":        {slots:["slot_tip"], h:48},
+  "quote-block":        {slots:["slot_quote","slot_attribution"], h:100},
+  "two-col-equal":      {slots:["slot_col1_title","slot_col1_b1","slot_col1_b2","slot_col1_b3","slot_col1_b4","slot_col1_b5","slot_col2_title","slot_col2_b1","slot_col2_b2","slot_col2_b3","slot_col2_b4","slot_col2_b5","icon_col1","icon_col2"], h:180},
+  "two-col-wide-narrow":{slots:["slot_wide_title","slot_wide_b1","slot_wide_b2","slot_wide_b3","slot_wide_b4","slot_wide_note","slot_narrow_label","slot_narrow_b1","slot_narrow_b2","slot_narrow_b3","slot_narrow_b4","icon_wide","icon_narrow"], h:200},
+  "three-col-grid":     {slots:["slot_card1_title","slot_card1_b1","slot_card1_b2","slot_card1_b3","slot_card2_title","slot_card2_b1","slot_card2_b2","slot_card2_b3","slot_card3_title","slot_card3_b1","slot_card3_b2","slot_card3_b3","icon_card1","icon_card2","icon_card3"], h:160},
+  "full-width-section": {slots:["slot_section_label","slot_section_title","slot_section_body","icon_section"], h:100},
+  "funnel-layer":       {slots:["slot_funnel_label","slot_funnel_sub","icon_funnel"], h:72},
+  "stat-card":          {slots:["slot_stat1_number","slot_stat1_label","slot_stat1_sub","slot_stat2_number","slot_stat2_label","slot_stat2_sub","slot_stat3_number","slot_stat3_label","slot_stat3_sub","slot_stat4_number","slot_stat4_label","slot_stat4_sub"], h:120},
+  "comparison-row":     {slots:["slot_from","slot_arrow_label","slot_to"], h:72},
+  "decision-diamond":   {slots:["slot_question_line1","slot_question_line2","slot_yes_label","slot_no_label","slot_yes_action","slot_no_action"], h:160},
+  "timeline-node":      {slots:["slot_left_date","slot_left_title","slot_right_date","slot_right_title"], h:80},
+  "prerequisites-bar":  {slots:["slot_pre1","slot_pre2","slot_pre3","slot_pre4"], h:72},
+  "acronym-row":        {slots:["slot_letter","slot_word","slot_detail","icon_acronym"], h:56},
+  "sticky-note":        {slots:["slot_sticky_label","slot_sticky_line1","slot_sticky_line2","slot_sticky_line3","slot_sticky_sub1","slot_sticky_sub2"], h:200, w:220, floating:true}
+};
+
+const BLOCK_BASE_URL = './blocks/';
+
+const PHOSPHOR_CDN = 'https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2/assets/regular/';
+
+const iconCache = {};
+
+async function fetchIcon(name) {
+  if (iconCache[name]) return iconCache[name];
+  try {
+    const r = await fetch(`${PHOSPHOR_CDN}${name}.svg`);
+    if (!r.ok) return null;
+    const txt = await r.text();
+    const m = txt.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+    iconCache[name] = m ? m[1] : null;
+    return iconCache[name];
+  } catch { return null; }
+}
+
+// ── INIT ──
+window.addEventListener('load', () => {
+  const k = localStorage.getItem('infograi_key');
+  if (k) { document.getElementById('apiKey').value = k; document.getElementById('apiDot').className = 'api-dot ok'; }
+});
+
+function checkKey(v) {
+  const d = document.getElementById('apiDot');
+  if (v.startsWith('sk-ant') && v.length > 20) { d.className='api-dot ok'; localStorage.setItem('infograi_key',v); }
+  else { d.className='api-dot'; localStorage.removeItem('infograi_key'); }
+}
+function setTone(t,el) { tone=t; document.querySelectorAll('.chip').forEach(b=>b.classList.remove('on')); el.classList.add('on'); }
+function setSize(s,el) { size=s; document.querySelectorAll('.sz-btn').forEach(b=>b.classList.remove('on')); el.classList.add('on'); }
+
+// ── AGENT PROMPT ──
+function buildPrompt(topic) {
+  const blockDescs = Object.entries(CATALOG).map(([n,b])=>`- ${n} (h:${b.h}px)`).join('\n');
+  return `You are a professional infographic designer agent. Create an assembly plan for a high-quality document.
+
+TOPIC: ${topic}
+TONE: ${tone}
+
+AVAILABLE BLOCKS:
+${blockDescs}
+
+BLOCK DESCRIPTIONS:
+- header-main: Large dark header, pretitle + 2-line title + accent word. Always first block.
+- header-simple: Centered light header, title + subtitle.
+- prerequisites-bar: 4 prerequisites with check icons. Use when topic has requirements.
+- stat-card: 4 metric cards. Use when topic has measurable outcomes.
+- full-width-section: Colored divider introducing a major section.
+- step-row: Numbered step with icon, title, 2-line description. Core workhorse block.
+- step-row-compact: Smaller step row for 6+ steps.
+- callout-tip: Green tip box. Insert after steps for important tips.
+- two-col-equal: Two columns with headers + 5 bullets each. Use for comparisons.
+- two-col-wide-narrow: Wide content + narrow summary panel. Use for detailed sections.
+- three-col-grid: 3 cards with icon + title + 3 bullets. Use for pillars/categories.
+- comparison-row: Before → After flow. Use for transformations.
+- acronym-row: One letter of an acronym framework. Stack per letter.
+- quote-block: Large pull quote. Use for key principles.
+- funnel-layer: One funnel layer. Stack 4-5 for conversion funnels.
+- timeline-node: One timeline event. Stack for chronological flows.
+- decision-diamond: Yes/No decision point for flowcharts.
+- sticky-note: Floating callout for the single most important insight.
+- footer-tagline: Bold closing statement bar. Second-to-last block.
+- footer-dark: Dark branded footer. Always last block.
+
+AVAILABLE ICONS (Phosphor Icons — pick exact names):
+download, upload, folder, folder-open, file, file-text, clipboard, check, check-circle,
+plus-circle, play, arrow-right, refresh, search, filter, code, terminal, cpu, database,
+cloud, server, wifi, link, settings, sliders, lock, key, eye, bell, user, users, mail,
+message, phone, share, bar-chart, trending-up, pie-chart, target, dollar, briefcase,
+award, star, zap, home, map, calendar, clock, layers, grid, brain, robot, sparkles,
+wand, rocket, image, video, mic, github, slack, figma, notion, vercel
+
+DESIGNER RULES:
+1. Always start with header-main, always end with footer-tagline + footer-dark
+2. Add prerequisites-bar right after header if topic has requirements
+3. Add stat-card near top if topic has measurable outcomes
+4. Use callout-tip after at least 40% of step-rows
+5. Vary block types — never repeat same block more than 4 times consecutively
+6. Minimum 10 blocks, aim for 14-18 for richness
+7. Every icon slot must have a real icon name — pick the most semantically relevant
+8. If topic mentions brand (Claude, Slack, GitHub, Figma, Notion, Vercel), use its icon
+9. Fill every slot with real specific content — zero placeholders
+10. slot_body2 can be empty string "" if not needed
+11. For step-row slot_number use "1", "2", etc.
+12. accent_color should match tone: professional=#2563EB, bold=#DC2626, minimal=#0F766E, playful=#7C3AED
+
+Return ONLY valid JSON, no markdown, no explanation:
+{
+  "title": "...",
+  "subtitle": "...",
+  "brand": "...",
+  "accent_color": "#hex",
+  "blocks": [
+    {
+      "block": "block-name",
+      "slots": { "slot_name": "content", "icon_slot": "icon-name" }
+    }
+  ]
+}`;
+}
+
+// ── GENERATE ──
+async function generate() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const topic  = document.getElementById('promptIn').value.trim();
+  if (!apiKey) { alert('Please enter your Anthropic API key.'); return; }
+  if (!topic)  { alert('Please describe your document topic.'); return; }
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true; btn.classList.add('loading');
+  document.getElementById('toolbar').style.display = 'none';
+
+  showProgress(['Analyzing topic...','Selecting blocks...','Filling content...','Fetching icons...','Assembling document...'], 0);
+
+  try {
+    // Step 1: Get assembly plan from Claude
+    updateProgress(0);
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 4000,
+        messages: [{ role:'user', content: buildPrompt(topic) }]
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    updateProgress(1);
+    let planText = data.content[0].text.trim()
+      .replace(/```json\n?/gi,'').replace(/```\n?/gi,'').trim();
+    const plan = JSON.parse(planText);
+
+    // Step 2: Fetch all block SVGs
+    updateProgress(2);
+    const blockFiles = {};
+    const uniqueBlocks = [...new Set(plan.blocks.map(b => b.block))];
+    await Promise.all(uniqueBlocks.map(async blockName => {
+      const cat = CATALOG[blockName];
+      if (!cat) return;
+      try {
+        const r = await fetch(`${BLOCK_BASE_URL}${blockName}.svg`);
+        if (r.ok) blockFiles[blockName] = await r.text();
+      } catch(e) {}
+    }));
+
+    // Step 3: Fetch all icons
+    updateProgress(3);
+    const iconNames = new Set();
+    plan.blocks.forEach(b => {
+      Object.entries(b.slots || {}).forEach(([k,v]) => {
+        if (k.startsWith('icon_') && v) iconNames.add(v);
+      });
+    });
+    await Promise.all([...iconNames].map(n => fetchIcon(n)));
+
+    // Step 4: Assemble SVG
+    updateProgress(4);
+    const svg = await assembleSVG(plan, blockFiles);
+    currentSVG = svg;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'out-wrap';
+    wrap.innerHTML = svg;
+    enableEdit(wrap);
+
+    document.getElementById('outputWrap').innerHTML = '';
+    document.getElementById('outputWrap').appendChild(wrap);
+    document.getElementById('toolbar').style.display = 'flex';
+
+  } catch(err) {
+    document.getElementById('outputWrap').innerHTML = `
+      <div class="empty">
+        <div class="empty-ico">⚠</div>
+        <div class="empty-ttl">Generation failed</div>
+        <div class="empty-sub">${err.message}</div>
+      </div>`;
+  }
+
+  btn.disabled = false; btn.classList.remove('loading');
+}
+
+// ── ASSEMBLE SVG FROM PLAN ──
+async function assembleSVG(plan, blockFiles) {
+  let totalH = 0;
+  const parts = [];
+  const accent = plan.accent_color || '#E05A2B';
+
+  for (const item of plan.blocks) {
+    const cat = CATALOG[item.block];
+    if (!cat || !blockFiles[item.block]) continue;
+
+    let svg = blockFiles[item.block];
+
+    // Fill text slots
+    for (const [slotId, value] of Object.entries(item.slots || {})) {
+      if (slotId.startsWith('icon_')) continue; // handle icons separately
+      if (!value) continue;
+      // Replace content of text element with this id
+      svg = svg.replace(
+        new RegExp(`(<text[^>]+id="${slotId}"[^>]*>)[^<]*(</text>)`, 'g'),
+        `$1${escapeXML(String(value))}$2`
+      );
+      // Also handle tspan children
+      svg = svg.replace(
+        new RegExp(`(<text[^>]+id="${slotId}"[^>]*>)<tspan[^>]*>[^<]*</tspan>(</text>)`, 'g'),
+        `$1${escapeXML(String(value))}$2`
+      );
+    }
+
+    // Fill icon slots
+    for (const [slotId, iconName] of Object.entries(item.slots || {})) {
+      if (!slotId.startsWith('icon_') || !iconName) continue;
+      const iconPaths = iconCache[iconName];
+      if (!iconPaths) continue;
+
+      // Find the icon group and inject phosphor paths inside the background rect
+      svg = svg.replace(
+        new RegExp(`(<g id="${slotId}"[^>]*>)([\\s\\S]*?)(</g>)`, ''),
+        (match, open, inner, close) => {
+          // Keep the background rect, replace placeholder icon
+          const bgRect = inner.match(/<rect[^/]*/)?.[0] || '';
+          const bgStr = bgRect ? bgRect + '/>' : '';
+          // Parse transform from group to get icon position/size
+          const txMatch = open.match(/translate\(([^,]+),([^)]+)\)/);
+          const tx = txMatch ? parseFloat(txMatch[1]) : 0;
+          const ty = txMatch ? parseFloat(txMatch[2]) : 0;
+          return `${open}${bgStr}<g transform="translate(4,4) scale(0.667)" fill="none" stroke="${accent}" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">${iconPaths}</g>${close}`;
+        }
+      );
+    }
+
+    // Apply accent color
+    svg = svg.replace(/#E05A2B/g, accent);
+
+    // Strip outer SVG tags, keep inner content
+    const inner = svg.replace(/<\?xml[^>]*\?>/,'')
+                     .replace(/<!DOCTYPE[^>]*>/,'')
+                     .replace(/<svg[^>]*>/,'')
+                     .replace(/<\/svg>/,'')
+                     .trim();
+
+    parts.push({ inner, y: totalH, h: cat.h });
+    totalH += cat.h;
+  }
+
+  // Compose
+  let out = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${totalH}" viewBox="0 0 800 ${totalH}">`;
+  out += `<rect width="800" height="${totalH}" fill="#FFFFFF"/>`;
+  for (const p of parts) {
+    out += `<g transform="translate(0,${p.y})">${p.inner}</g>`;
+  }
+  out += `</svg>`;
+  return out;
+}
+
+function escapeXML(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── PROGRESS UI ──
+function showProgress(steps, active) {
+  const stepsHTML = steps.map((s,i) => `
+    <div class="ps ${i<active?'done':i===active?'active':''}" id="ps${i}">
+      <div class="ps-dot"></div>${s}
+    </div>`).join('');
+  document.getElementById('outputWrap').innerHTML = `
+    <div class="loading-state">
+      <div class="loading-ring"></div>
+      <div class="loading-txt">Designer agent working…</div>
+      <div class="progress-steps">${stepsHTML}</div>
+    </div>`;
+}
+
+function updateProgress(active) {
+  const steps = ['Analyzing topic…','Selecting blocks…','Filling content…','Fetching icons…','Assembling document…'];
+  document.querySelectorAll('.ps').forEach((el,i) => {
+    el.className = `ps ${i<active?'done':i===active?'active':''}`;
+  });
+}
+
+// ── EDITING ──
+function enableEdit(container) {
+  const svg = container.querySelector('svg');
+  if (!svg) return;
+  svg.addEventListener('dblclick', e => {
+    const t = e.target;
+    if (t.tagName !== 'text' && t.tagName !== 'tspan') return;
+    e.stopPropagation();
+    const cur = t.textContent;
+    const nv = prompt('Edit text:', cur);
+    if (nv !== null) {
+      t.textContent = nv;
+      currentSVG = new XMLSerializer().serializeToString(svg);
+    }
+  });
+}
+
+// ── EXPORT ──
+function downloadSVG() {
+  if (!currentSVG) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([currentSVG],{type:'image/svg+xml'}));
+  a.download = 'infograi.svg'; a.click();
+}
+
+function downloadPNG() {
+  const svgEl = document.querySelector('.out-wrap svg');
+  if (!svgEl) return;
+  const w = 800, h = parseInt(svgEl.getAttribute('height') || 800);
+  const canvas = document.createElement('canvas');
+  canvas.width = w*2; canvas.height = h*2; // 2x for retina
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2,2);
+  const img = new Image();
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svgEl)],{type:'image/svg+xml;charset=utf-8'}));
+  img.onload = () => {
+    ctx.drawImage(img,0,0,w,h);
+    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.download = 'infograi.png';
+    a.href = canvas.toDataURL('image/png'); a.click();
+  };
+  img.src = url;
+}
+</script>
+</body>
+</html>
