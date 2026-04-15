@@ -75,6 +75,14 @@ header{padding:0 32px;height:56px;border-bottom:1px solid var(--border);display:
 .ps-dot{width:6px;height:6px;border-radius:50%;background:var(--border2);flex-shrink:0}
 .ps.done .ps-dot{background:var(--ok)}
 .ps.active .ps-dot{background:var(--accent)}
+
+.tpl-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tpl-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:7px 5px 6px;cursor:pointer;transition:all .15s;text-align:center}
+.tpl-card:hover{border-color:var(--border2)}
+.tpl-card.on{border-color:var(--accent);background:var(--adim)}
+.tpl-card svg{width:100%;height:52px;display:block;margin-bottom:4px}
+.tpl-name{font-size:9px;color:var(--t3);font-weight:500;letter-spacing:.05em;text-transform:uppercase}
+.tpl-card.on .tpl-name{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -100,6 +108,36 @@ header{padding:0 32px;height:56px;border-bottom:1px solid var(--border);display:
     </div>
 
     <div class="sec">
+      <div class="lbl">Document Type</div>
+      <div class="tpl-grid">
+        <div class="tpl-card on" onclick="setDocType('steps',this)">
+          <svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="10" rx="2" fill="#1A1A1A"/><circle cx="13" cy="23" r="4" fill="#E05A2B"/><rect x="20" y="20" width="42" height="3" rx="1" fill="#ccc"/><circle cx="13" cy="37" r="4" fill="#1A1A1A"/><rect x="20" y="34" width="38" height="3" rx="1" fill="#ccc"/><circle cx="13" cy="51" r="4" fill="#E05A2B"/><rect x="20" y="48" width="34" height="3" rx="1" fill="#ccc"/></svg>
+          <div class="tpl-name">Steps Guide</div>
+        </div>
+        <div class="tpl-card" onclick="setDocType('grid',this)">
+          <svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="10" rx="2" fill="#1A1A1A"/><rect x="4" y="17" width="34" height="18" rx="2" fill="#E05A2B" opacity="0.8"/><rect x="42" y="17" width="34" height="18" rx="2" fill="#1A1A1A" opacity="0.8"/><rect x="4" y="38" width="21" height="16" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/><rect x="29" y="38" width="21" height="16" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/><rect x="55" y="38" width="21" height="16" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/></svg>
+          <div class="tpl-name">Mixed Grid</div>
+        </div>
+        <div class="tpl-card" onclick="setDocType('timeline',this)">
+          <svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="10" rx="2" fill="#1A1A1A"/><line x1="40" y1="18" x2="40" y2="56" stroke="#E05A2B" stroke-width="1.5"/><circle cx="40" cy="22" r="3" fill="#E05A2B"/><rect x="44" y="18" width="28" height="8" rx="2" fill="#c2e5ff"/><circle cx="40" cy="36" r="3" fill="#1A1A1A"/><rect x="8" y="32" width="28" height="8" rx="2" fill="#c2e5ff"/></svg>
+          <div class="tpl-name">Timeline</div>
+        </div>
+        <div class="tpl-card" onclick="setDocType('funnel',this)">
+          <svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><polygon points="8,10 72,10 65,22 15,22" fill="#7BC67E" opacity="0.9"/><polygon points="15,24 65,24 58,36 22,36" fill="#F0C040" opacity="0.9"/><polygon points="22,38 58,38 52,50 28,50" fill="#F09050" opacity="0.9"/></svg>
+          <div class="tpl-name">Funnel</div>
+        </div>
+        <div class="tpl-card" onclick="setDocType('comparison',this)">
+          <svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="10" rx="2" fill="#1A1A1A"/><rect x="4" y="17" width="33" height="37" rx="2" fill="#E6F0FF" stroke="#BFDBFE" stroke-width="0.5"/><rect x="43" y="17" width="33" height="37" rx="2" fill="#DCFCE7" stroke="#BBF7D0" stroke-width="0.5"/></svg>
+          <div class="tpl-name">Comparison</div>
+        </div>
+        <div class="tpl-card" onclick="setDocType('flowchart',this)">
+          <svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="28" y="2" width="24" height="9" rx="4" fill="#ffecbd"/><rect x="22" y="17" width="36" height="9" rx="2" fill="#c2e5ff"/><path d="M40 32 L52 38 L40 44 L28 38 Z" fill="#dcccff"/><rect x="22" y="50" width="36" height="7" rx="3" fill="#ffecbd"/></svg>
+          <div class="tpl-name">Flowchart</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
       <div class="lbl">Tone</div>
       <div class="chip-row">
         <button class="chip on" onclick="setTone('professional',this)">Professional</button>
@@ -110,11 +148,12 @@ header{padding:0 32px;height:56px;border-bottom:1px solid var(--border);display:
     </div>
 
     <div class="sec">
-      <div class="lbl">Export Size</div>
+      <div class="lbl">Canvas Size</div>
       <div class="sz-row">
-        <button class="sz-btn on" onclick="setSize('portrait',this)">Portrait</button>
-        <button class="sz-btn" onclick="setSize('square',this)">Square</button>
-        <button class="sz-btn" onclick="setSize('landscape',this)">Wide</button>
+        <button class="sz-btn on" onclick="setSize('a4',this)">A4</button>
+        <button class="sz-btn" onclick="setSize('portrait',this)">9:16</button>
+        <button class="sz-btn" onclick="setSize('square',this)">1:1</button>
+        <button class="sz-btn" onclick="setSize('landscape',this)">16:9</button>
       </div>
     </div>
 
@@ -146,7 +185,15 @@ header{padding:0 32px;height:56px;border-bottom:1px solid var(--border);display:
 
 <script>
 // ── STATE ──
-let tone = 'professional', size = 'portrait', currentSVG = '';
+let tone = 'professional', size = 'a4', docType = 'steps', currentSVG = '';
+
+// ── CANVAS SIZES ──
+const SIZES = {
+  'a4':        { w:800, h:1131, label:'A4' },
+  'portrait':  { w:800, h:1422, label:'9:16' },
+  'square':    { w:800, h:800,  label:'1:1' },
+  'landscape': { w:1422, h:800, label:'16:9' }
+};
 
 // ── BLOCK CATALOG (mirrors agent.js) ──
 const CATALOG = {
@@ -203,14 +250,19 @@ function checkKey(v) {
 }
 function setTone(t,el) { tone=t; document.querySelectorAll('.chip').forEach(b=>b.classList.remove('on')); el.classList.add('on'); }
 function setSize(s,el) { size=s; document.querySelectorAll('.sz-btn').forEach(b=>b.classList.remove('on')); el.classList.add('on'); }
+function setDocType(t,el) { docType=t; document.querySelectorAll('.tpl-card').forEach(b=>b.classList.remove('on')); el.classList.add('on'); }
 
 // ── AGENT PROMPT ──
-function buildPrompt(topic) {
+function buildPrompt(topic, canvas, docType) {
+  const blockBudget = Math.floor(canvas.h / 90); // approx blocks that fit
   const blockDescs = Object.entries(CATALOG).map(([n,b])=>`- ${n} (h:${b.h}px)`).join('\n');
   return `You are a professional infographic designer agent. Create an assembly plan for a high-quality document.
 
 TOPIC: ${topic}
 TONE: ${tone}
+DOCUMENT TYPE: ${docType}
+CANVAS: ${canvas.w}x${canvas.h}px
+MAX BLOCKS: ${blockBudget}
 
 AVAILABLE BLOCKS:
 ${blockDescs}
@@ -259,6 +311,19 @@ DESIGNER RULES:
 11. For step-row slot_number use "1", "2", etc.
 12. accent_color should match tone: professional=#2563EB, bold=#DC2626, minimal=#0F766E, playful=#7C3AED
 
+STRICT RULES — VIOLATIONS WILL BREAK THE DOCUMENT:
+- NEVER use placeholder text. Every slot must have real content about the topic.
+- NEVER write "Full Width Section Title", "SECTION LABEL", "Tip content goes here", "Brand Name", "From State / Before", "Card One Title", or any generic placeholder.
+- slot_brand = the actual brand/author name from the topic
+- slot_pretitle = a real category label like "QUICK START GUIDE" or "STEP BY STEP"
+- slot_tip = a real, specific tip about that step
+- slot_section_label = a real section category like "FOLDER STRUCTURE" or "CONFIGURATION"
+- slot_section_title = a real descriptive title
+- slot_from / slot_to = real before/after states from the topic
+- All card titles, bullet points, stat numbers must be real content
+- Select blocks whose TOTAL HEIGHT fits within the canvas height: ${canvas.h}px
+- For docType="${docType}", prioritize these blocks accordingly
+
 Return ONLY valid JSON, no markdown, no explanation:
 {
   "title": "...",
@@ -301,7 +366,7 @@ async function generate() {
       body: JSON.stringify({
         model: 'claude-opus-4-5',
         max_tokens: 4000,
-        messages: [{ role:'user', content: buildPrompt(topic) }]
+        messages: [{ role:'user', content: buildPrompt(topic, SIZES[size], docType) }]
       })
     });
 
@@ -426,8 +491,16 @@ async function assembleSVG(plan, blockFiles) {
     totalH += cat.h;
   }
 
-  // Compose
-  let out = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${totalH}" viewBox="0 0 800 ${totalH}">`;
+  // Scale to canvas if needed
+  const canvas = SIZES[size] || SIZES['a4'];
+  const scaleX = canvas.w / 800;
+  const scaleY = totalH > canvas.h ? canvas.h / totalH : 1;
+  const scale = Math.min(scaleX, scaleY);
+  const finalW = Math.round(800 * scale);
+  const finalH = Math.round(totalH * scale);
+
+  // Compose — scale content to fit canvas
+  let out = `<svg xmlns="http://www.w3.org/2000/svg" width="${finalW}" height="${finalH}" viewBox="0 0 800 ${totalH}">`;
   out += `<rect width="800" height="${totalH}" fill="#FFFFFF"/>`;
   for (const p of parts) {
     out += `<g transform="translate(0,${p.y})">${p.inner}</g>`;
