@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="200" viewBox="0 0 220 200">
+  <!-- Drop shadow -->
+  <rect x="8" y="8" width="210" height="190" rx="4" fill="#00000015"/>
+  <!-- Sticky note body -->
+  <rect x="2" y="2" width="210" height="190" rx="4" fill="#FFF9C4"/>
+  <!-- Top pin -->
+  <circle cx="110" cy="8" r="5" fill="#E05A2B" opacity="0.6"/>
+  <!-- Fold corner -->
+  <polygon points="164,192 212,192 212,144" fill="#E8D44D" opacity="0.5"/>
+  <text id="slot_sticky_label" x="16" y="28" font-family="'Helvetica Neue',Arial,sans-serif" font-size="9" font-weight="700" fill="#9A7D0A" letter-spacing="1">NOTE</text>
+  <text id="slot_sticky_line1" x="16" y="52" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#1A1A1A">The most important</text>
+  <text id="slot_sticky_line2" x="16" y="70" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#1A1A1A">step. Don't skip</text>
+  <text id="slot_sticky_line3" x="16" y="88" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#E05A2B">context.</text>
+  <line x1="16" y1="108" x2="180" y2="108" stroke="#DAC100" stroke-width="1" opacity="0.5"/>
+  <text id="slot_sticky_sub1" x="16" y="128" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#555" font-style="italic">Supporting detail or</text>
+  <text id="slot_sticky_sub2" x="16" y="146" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#555" font-style="italic">tip text goes here</text>
+</svg>

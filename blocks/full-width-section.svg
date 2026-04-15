@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100" viewBox="0 0 800 100">
+  <rect width="800" height="100" fill="#F0F7FF"/>
+  <rect width="800" height="4" fill="#2563EB"/>
+  <text id="slot_section_label" x="24" y="28" font-family="'Helvetica Neue',Arial,sans-serif" font-size="10" font-weight="700" fill="#2563EB" letter-spacing="2">SECTION LABEL</text>
+  <text id="slot_section_title" x="24" y="52" font-family="'Helvetica Neue',Arial,sans-serif" font-size="20" font-weight="800" fill="#1A1A1A">Full Width Section Title</text>
+  <text id="slot_section_body" x="24" y="74" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12.5" fill="#555555">Supporting description for this section. Can contain a sentence or two of context.</text>
+  <g id="icon_section" transform="translate(736,28)">
+    <rect width="40" height="40" rx="10" fill="#2563EB" opacity="0.12"/>
+    <text x="20" y="28" text-anchor="middle" font-size="20" fill="#2563EB">⊕</text>
+  </g>
+</svg>

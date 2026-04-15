@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100" viewBox="0 0 800 100">
+  <rect width="800" height="100" fill="#F8F4FF"/>
+  <rect width="6" height="100" fill="#7C3AED"/>
+  <text x="40" y="44" font-family="Georgia,serif" font-size="48" fill="#7C3AED" opacity="0.3">"</text>
+  <text id="slot_quote" x="80" y="46" font-family="Georgia,serif" font-size="16" font-style="italic" fill="#3B1F6E">The most important thing is to just start. Perfection is the enemy of progress.</text>
+  <text id="slot_attribution" x="80" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="700" fill="#7C3AED" letter-spacing="1">— ATTRIBUTION NAME</text>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="72" viewBox="0 0 800 72">
+  <!-- Trapezoid funnel layer — stack multiple, each slightly narrower -->
+  <!-- Layer 1 (widest) — adjust x1/x2 per layer number -->
+  <polygon id="funnel_shape" points="60,4 740,4 700,68 100,68" fill="#7BC67E"/>
+  <text id="slot_funnel_label" x="400" y="28" font-family="'Helvetica Neue',Arial,sans-serif" font-size="14" font-weight="800" fill="#FFFFFF" text-anchor="middle">AWARENESS</text>
+  <text id="slot_funnel_sub" x="400" y="48" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#FFFFFF" text-anchor="middle" opacity="0.9">Get discovered by people and AI</text>
+  <g id="icon_funnel" transform="translate(108,20)">
+    <rect width="28" height="28" rx="7" fill="#FFFFFF" opacity="0.2"/>
+    <text x="14" y="20" text-anchor="middle" font-size="14" fill="#FFFFFF">▲</text>
+  </g>
+</svg>

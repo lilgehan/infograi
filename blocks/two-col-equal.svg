@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="180" viewBox="0 0 800 180">
+  <!-- Left column -->
+  <rect x="8" y="8" width="384" height="164" rx="8" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+  <rect x="8" y="8" width="384" height="36" rx="8" fill="#1A2744"/>
+  <rect x="8" y="36" width="384" height="8" fill="#1A2744"/>
+  <g id="icon_col1" transform="translate(16,14)">
+    <rect width="24" height="24" rx="5" fill="#E05A2B" opacity="0.3"/>
+    <text x="12" y="17" text-anchor="middle" font-size="12" fill="#E05A2B">★</text>
+  </g>
+  <text id="slot_col1_title" x="48" y="31" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">Left Column Title</text>
+  <text id="slot_col1_b1" x="20" y="68" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point one with detail</text>
+  <text id="slot_col1_b2" x="20" y="88" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point two with detail</text>
+  <text id="slot_col1_b3" x="20" y="108" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point three</text>
+  <text id="slot_col1_b4" x="20" y="128" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point four</text>
+  <text id="slot_col1_b5" x="20" y="148" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point five</text>
+  <!-- Right column -->
+  <rect x="408" y="8" width="384" height="164" rx="8" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+  <rect x="408" y="8" width="384" height="36" rx="8" fill="#E05A2B"/>
+  <rect x="408" y="36" width="384" height="8" fill="#E05A2B"/>
+  <g id="icon_col2" transform="translate(416,14)">
+    <rect width="24" height="24" rx="5" fill="#FFFFFF" opacity="0.2"/>
+    <text x="12" y="17" text-anchor="middle" font-size="12" fill="#FFFFFF">◆</text>
+  </g>
+  <text id="slot_col2_title" x="448" y="31" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">Right Column Title</text>
+  <text id="slot_col2_b1" x="420" y="68" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point one with detail</text>
+  <text id="slot_col2_b2" x="420" y="88" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point two with detail</text>
+  <text id="slot_col2_b3" x="420" y="108" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point three</text>
+  <text id="slot_col2_b4" x="420" y="128" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point four</text>
+  <text id="slot_col2_b5" x="420" y="148" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#333333">• Bullet point five</text>
+</svg>

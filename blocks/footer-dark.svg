@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="48" viewBox="0 0 800 48">
+  <rect width="800" height="48" fill="#1A1A1A"/>
+  <circle cx="24" cy="24" r="12" fill="#E05A2B" opacity="0.6"/>
+  <text id="slot_brand" x="44" y="29" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">Brand Name</text>
+  <text id="slot_tagline" x="400" y="29" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#888888" text-anchor="middle">tagline.com</text>
+  <text id="slot_cta" x="760" y="29" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#E05A2B" text-anchor="end">Follow for more →</text>
+</svg>

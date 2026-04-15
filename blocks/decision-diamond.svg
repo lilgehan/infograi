@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="160" viewBox="0 0 800 160">
+  <rect width="800" height="160" fill="#FFFFFF"/>
+  <polygon points="400,8 620,80 400,152 180,80" fill="#EDE9FE" stroke="#8B5CF6" stroke-width="1.5"/>
+  <text id="slot_question_line1" x="400" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="14" font-weight="700" fill="#4C1D95" text-anchor="middle">Do you have</text>
+  <text id="slot_question_line2" x="400" y="92" font-family="'Helvetica Neue',Arial,sans-serif" font-size="14" font-weight="700" fill="#4C1D95" text-anchor="middle">the prerequisite?</text>
+  <text id="slot_yes_label" x="640" y="84" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" font-weight="700" fill="#16A34A">YES →</text>
+  <text id="slot_no_label" x="400" y="155" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" font-weight="700" fill="#DC2626" text-anchor="middle">↓ NO</text>
+  <text id="slot_yes_action" x="720" y="84" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#166534">Continue</text>
+  <text id="slot_no_action" x="400" y="175" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#991B1B" text-anchor="middle" visibility="hidden">Go back</text>
+</svg>

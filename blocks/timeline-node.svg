@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="80" viewBox="0 0 800 80">
+  <rect width="800" height="80" fill="#FFFFFF"/>
+  <line x1="400" y1="0" x2="400" y2="80" stroke="#E05A2B" stroke-width="2" stroke-dasharray="0"/>
+  <circle cx="400" cy="40" r="14" fill="#E05A2B"/>
+  <circle cx="400" cy="40" r="8" fill="#FFFFFF"/>
+  <!-- Left event (even rows) -->
+  <rect id="slot_left_card" x="20" y="14" width="355" height="52" rx="8" fill="#F8F8F8" stroke="#EEEEEE" stroke-width="1"/>
+  <text id="slot_left_date" x="36" y="34" font-family="'Helvetica Neue',Arial,sans-serif" font-size="10" font-weight="700" fill="#E05A2B" letter-spacing="1">STAGE 1</text>
+  <text id="slot_left_title" x="36" y="52" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#1A1A1A">Timeline Event Title</text>
+  <!-- Right event (odd rows) — toggle visibility per usage -->
+  <rect id="slot_right_card" x="425" y="14" width="355" height="52" rx="8" fill="#F0F7FF" stroke="#BFDBFE" stroke-width="1" visibility="hidden"/>
+  <text id="slot_right_date" x="441" y="34" font-family="'Helvetica Neue',Arial,sans-serif" font-size="10" font-weight="700" fill="#2563EB" letter-spacing="1" visibility="hidden">STAGE 2</text>
+  <text id="slot_right_title" x="441" y="52" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#1A1A1A" visibility="hidden">Right Event Title</text>
+</svg>

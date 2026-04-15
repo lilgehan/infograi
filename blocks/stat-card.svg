@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="120" viewBox="0 0 800 120">
+  <rect x="8" y="8" width="182" height="104" rx="8" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+  <rect x="20" y="16" width="32" height="32" rx="8" fill="#E6F0FF"/>
+  <text x="36" y="39" text-anchor="middle" font-size="16" fill="#2563EB" font-family="sans-serif">▲</text>
+  <text id="slot_stat1_number" x="96" y="54" font-family="'Helvetica Neue',Arial,sans-serif" font-size="28" font-weight="800" fill="#1A1A1A" text-anchor="middle">94%</text>
+  <text id="slot_stat1_label" x="96" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#888888" text-anchor="middle">Completion Rate</text>
+  <text id="slot_stat1_sub" x="96" y="100" font-family="'Helvetica Neue',Arial,sans-serif" font-size="10" fill="#16A34A" text-anchor="middle" font-weight="600">↑ 12% this month</text>
+  <rect x="206" y="8" width="182" height="104" rx="8" fill="#1A2744"/>
+  <rect x="218" y="16" width="32" height="32" rx="8" fill="#E05A2B" opacity="0.25"/>
+  <text x="234" y="39" text-anchor="middle" font-size="16" fill="#E05A2B" font-family="sans-serif">⚡</text>
+  <text id="slot_stat2_number" x="294" y="54" font-family="'Helvetica Neue',Arial,sans-serif" font-size="28" font-weight="800" fill="#FFFFFF" text-anchor="middle">2.4x</text>
+  <text id="slot_stat2_label" x="294" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#8899BB" text-anchor="middle">Productivity Gain</text>
+  <text id="slot_stat2_sub" x="294" y="100" font-family="'Helvetica Neue',Arial,sans-serif" font-size="10" fill="#E05A2B" text-anchor="middle" font-weight="600">vs. manual work</text>
+  <rect x="404" y="8" width="182" height="104" rx="8" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+  <rect x="416" y="16" width="32" height="32" rx="8" fill="#DCFCE7"/>
+  <text x="432" y="39" text-anchor="middle" font-size="16" fill="#16A34A" font-family="sans-serif">✓</text>
+  <text id="slot_stat3_number" x="492" y="54" font-family="'Helvetica Neue',Arial,sans-serif" font-size="28" font-weight="800" fill="#1A1A1A" text-anchor="middle">10K+</text>
+  <text id="slot_stat3_label" x="492" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#888888" text-anchor="middle">Active Users</text>
+  <text id="slot_stat3_sub" x="492" y="100" font-family="'Helvetica Neue',Arial,sans-serif" font-size="10" fill="#16A34A" text-anchor="middle" font-weight="600">Growing daily</text>
+  <rect x="602" y="8" width="190" height="104" rx="8" fill="#FFF8F0" stroke="#FDDBB4" stroke-width="1"/>
+  <rect x="614" y="16" width="32" height="32" rx="8" fill="#FED7AA"/>
+  <text x="630" y="39" text-anchor="middle" font-size="16" fill="#EA580C" font-family="sans-serif">★</text>
+  <text id="slot_stat4_number" x="694" y="54" font-family="'Helvetica Neue',Arial,sans-serif" font-size="28" font-weight="800" fill="#1A1A1A" text-anchor="middle">4.9/5</text>
+  <text id="slot_stat4_label" x="694" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="11" fill="#888888" text-anchor="middle">User Rating</text>
+  <text id="slot_stat4_sub" x="694" y="100" font-family="'Helvetica Neue',Arial,sans-serif" font-size="10" fill="#EA580C" text-anchor="middle" font-weight="600">Based on 2K reviews</text>
+</svg>

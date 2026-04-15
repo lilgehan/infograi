@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="72" viewBox="0 0 800 72">
+  <rect width="800" height="72" fill="#F8F8F8"/>
+  <rect width="800" height="3" y="69" fill="#E05A2B"/>
+  <text id="slot_title" x="400" y="34" font-family="'Helvetica Neue',Arial,sans-serif" font-size="24" font-weight="800" fill="#1A1A1A" text-anchor="middle">Document Title</text>
+  <text id="slot_subtitle" x="400" y="58" font-family="'Helvetica Neue',Arial,sans-serif" font-size="13" fill="#666666" text-anchor="middle">Subtitle or tagline goes here</text>
+</svg>

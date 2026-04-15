@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="56" viewBox="0 0 800 56">
+  <rect width="800" height="56" fill="#FFFFFF"/>
+  <rect width="800" height="1" y="55" fill="#EEEEEE"/>
+  <rect x="8" y="8" width="48" height="40" rx="6" fill="#1A2744"/>
+  <text id="slot_letter" x="32" y="36" font-family="'Helvetica Neue',Arial,sans-serif" font-size="24" font-weight="800" fill="#E05A2B" text-anchor="middle">S</text>
+  <text id="slot_word" x="72" y="28" font-family="'Helvetica Neue',Arial,sans-serif" font-size="15" font-weight="700" fill="#1A1A1A">how up consistently.</text>
+  <text id="slot_detail" x="72" y="46" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12" fill="#666666">Post every day even when you don't feel like it. Consistency beats perfection.</text>
+  <g id="icon_acronym" transform="translate(740,16)">
+    <rect width="24" height="24" rx="6" fill="#FFF0EB"/>
+    <text x="12" y="18" text-anchor="middle" font-size="12" fill="#E05A2B" font-family="sans-serif">→</text>
+  </g>
+</svg>

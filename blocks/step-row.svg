@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100" viewBox="0 0 800 100">
+  <rect width="800" height="100" fill="#FFFFFF"/>
+  <rect width="800" height="1" y="99" fill="#EEEEEE"/>
+  <!-- Number circle -->
+  <circle cx="52" cy="50" r="22" fill="#E05A2B"/>
+  <text id="slot_number" x="52" y="56" font-family="'Helvetica Neue',Arial,sans-serif" font-size="16" font-weight="800" fill="#FFFFFF" text-anchor="middle">1</text>
+  <!-- Icon box -->
+  <rect x="716" y="24" width="52" height="52" rx="10" fill="#FFF0EB"/>
+  <g id="icon_step" transform="translate(730,38)">
+    <rect width="24" height="24" rx="4" fill="none" stroke="#E05A2B" stroke-width="1.5"/>
+    <line x1="6" y1="8" x2="18" y2="8" stroke="#E05A2B" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="6" y1="12" x2="18" y2="12" stroke="#E05A2B" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="6" y1="16" x2="14" y2="16" stroke="#E05A2B" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+  <!-- Text -->
+  <text id="slot_title" x="90" y="38" font-family="'Helvetica Neue',Arial,sans-serif" font-size="15" font-weight="700" fill="#1A1A1A">Step Title Goes Here</text>
+  <text id="slot_body" x="90" y="58" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12.5" fill="#555555">Description of this step. Keep it concise and actionable for the reader.</text>
+  <text id="slot_body2" x="90" y="76" font-family="'Helvetica Neue',Arial,sans-serif" font-size="12.5" fill="#555555">Second line of description if needed.</text>
+</svg>
