@@ -1,0 +1,620 @@
+{
+  "icons": {
+    "check-circle": {
+      "path": "icons/check-circle.svg",
+      "tags": [
+        "check",
+        "done",
+        "complete",
+        "success",
+        "tick"
+      ]
+    },
+    "x-circle": {
+      "path": "icons/x-circle.svg",
+      "tags": [
+        "close",
+        "cancel",
+        "remove",
+        "error"
+      ]
+    },
+    "alert-triangle": {
+      "path": "icons/alert-triangle.svg",
+      "tags": [
+        "warning",
+        "alert",
+        "caution",
+        "danger"
+      ]
+    },
+    "info-circle": {
+      "path": "icons/info-circle.svg",
+      "tags": [
+        "info",
+        "help",
+        "note",
+        "tip"
+      ]
+    },
+    "lightbulb": {
+      "path": "icons/lightbulb.svg",
+      "tags": [
+        "idea",
+        "insight",
+        "tip",
+        "innovation"
+      ]
+    },
+    "rocket": {
+      "path": "icons/rocket.svg",
+      "tags": [
+        "launch",
+        "speed",
+        "growth",
+        "startup"
+      ]
+    },
+    "target": {
+      "path": "icons/target.svg",
+      "tags": [
+        "goal",
+        "aim",
+        "focus",
+        "objective"
+      ]
+    },
+    "trophy": {
+      "path": "icons/trophy.svg",
+      "tags": [
+        "win",
+        "award",
+        "achievement",
+        "success"
+      ]
+    },
+    "star": {
+      "path": "icons/star.svg",
+      "tags": [
+        "favorite",
+        "rating",
+        "highlight",
+        "star"
+      ]
+    },
+    "heart": {
+      "path": "icons/heart.svg",
+      "tags": [
+        "love",
+        "like",
+        "care",
+        "favorite"
+      ]
+    },
+    "bolt": {
+      "path": "icons/bolt.svg",
+      "tags": [
+        "fast",
+        "speed",
+        "energy",
+        "power"
+      ]
+    },
+    "chart-line-up": {
+      "path": "icons/chart-line-up.svg",
+      "tags": [
+        "growth",
+        "trend",
+        "analytics",
+        "metrics"
+      ]
+    },
+    "chart-bar": {
+      "path": "icons/chart-bar.svg",
+      "tags": [
+        "bar",
+        "stats",
+        "data",
+        "metrics"
+      ]
+    },
+    "chart-pie": {
+      "path": "icons/chart-pie.svg",
+      "tags": [
+        "pie",
+        "data",
+        "segment",
+        "distribution"
+      ]
+    },
+    "user": {
+      "path": "icons/user.svg",
+      "tags": [
+        "person",
+        "profile",
+        "account"
+      ]
+    },
+    "users": {
+      "path": "icons/users.svg",
+      "tags": [
+        "team",
+        "group",
+        "people",
+        "community"
+      ]
+    },
+    "gear": {
+      "path": "icons/gear.svg",
+      "tags": [
+        "settings",
+        "config",
+        "options",
+        "preferences"
+      ]
+    },
+    "lock": {
+      "path": "icons/lock.svg",
+      "tags": [
+        "security",
+        "private",
+        "secure",
+        "password"
+      ]
+    },
+    "key": {
+      "path": "icons/key.svg",
+      "tags": [
+        "access",
+        "auth",
+        "password",
+        "unlock"
+      ]
+    },
+    "shield": {
+      "path": "icons/shield.svg",
+      "tags": [
+        "security",
+        "protect",
+        "safe",
+        "defense"
+      ]
+    },
+    "globe": {
+      "path": "icons/globe.svg",
+      "tags": [
+        "world",
+        "web",
+        "internet",
+        "global"
+      ]
+    },
+    "map-pin": {
+      "path": "icons/map-pin.svg",
+      "tags": [
+        "location",
+        "place",
+        "pin",
+        "address"
+      ]
+    },
+    "calendar": {
+      "path": "icons/calendar.svg",
+      "tags": [
+        "date",
+        "schedule",
+        "event",
+        "time"
+      ]
+    },
+    "clock": {
+      "path": "icons/clock.svg",
+      "tags": [
+        "time",
+        "schedule",
+        "timer",
+        "duration"
+      ]
+    },
+    "mail": {
+      "path": "icons/mail.svg",
+      "tags": [
+        "email",
+        "message",
+        "inbox",
+        "send"
+      ]
+    },
+    "message": {
+      "path": "icons/message.svg",
+      "tags": [
+        "chat",
+        "conversation",
+        "comment",
+        "talk"
+      ]
+    },
+    "phone": {
+      "path": "icons/phone.svg",
+      "tags": [
+        "call",
+        "contact",
+        "mobile",
+        "telephone"
+      ]
+    },
+    "search": {
+      "path": "icons/search.svg",
+      "tags": [
+        "find",
+        "lookup",
+        "magnify",
+        "query"
+      ]
+    },
+    "book": {
+      "path": "icons/book.svg",
+      "tags": [
+        "read",
+        "learn",
+        "guide",
+        "documentation"
+      ]
+    },
+    "file-text": {
+      "path": "icons/file-text.svg",
+      "tags": [
+        "document",
+        "file",
+        "page",
+        "text"
+      ]
+    },
+    "folder": {
+      "path": "icons/folder.svg",
+      "tags": [
+        "folder",
+        "directory",
+        "group",
+        "organize"
+      ]
+    },
+    "download": {
+      "path": "icons/download.svg",
+      "tags": [
+        "save",
+        "export",
+        "import",
+        "get"
+      ]
+    },
+    "upload": {
+      "path": "icons/upload.svg",
+      "tags": [
+        "send",
+        "import",
+        "share",
+        "push"
+      ]
+    },
+    "code": {
+      "path": "icons/code.svg",
+      "tags": [
+        "code",
+        "dev",
+        "programming",
+        "technical"
+      ]
+    },
+    "terminal": {
+      "path": "icons/terminal.svg",
+      "tags": [
+        "cli",
+        "console",
+        "command",
+        "shell"
+      ]
+    },
+    "database": {
+      "path": "icons/database.svg",
+      "tags": [
+        "data",
+        "storage",
+        "db",
+        "records"
+      ]
+    },
+    "server": {
+      "path": "icons/server.svg",
+      "tags": [
+        "server",
+        "host",
+        "cloud",
+        "infrastructure"
+      ]
+    },
+    "cloud": {
+      "path": "icons/cloud.svg",
+      "tags": [
+        "cloud",
+        "saas",
+        "hosted",
+        "storage"
+      ]
+    },
+    "briefcase": {
+      "path": "icons/briefcase.svg",
+      "tags": [
+        "business",
+        "work",
+        "career",
+        "office"
+      ]
+    },
+    "dollar": {
+      "path": "icons/dollar.svg",
+      "tags": [
+        "money",
+        "price",
+        "cost",
+        "revenue"
+      ]
+    },
+    "credit-card": {
+      "path": "icons/credit-card.svg",
+      "tags": [
+        "payment",
+        "billing",
+        "card",
+        "checkout"
+      ]
+    },
+    "shopping-cart": {
+      "path": "icons/shopping-cart.svg",
+      "tags": [
+        "cart",
+        "buy",
+        "order",
+        "shop"
+      ]
+    },
+    "link": {
+      "path": "icons/link.svg",
+      "tags": [
+        "link",
+        "url",
+        "connect",
+        "chain"
+      ]
+    },
+    "eye": {
+      "path": "icons/eye.svg",
+      "tags": [
+        "view",
+        "visibility",
+        "see",
+        "preview"
+      ]
+    },
+    "puzzle": {
+      "path": "icons/puzzle.svg",
+      "tags": [
+        "integration",
+        "connect",
+        "modular",
+        "fit"
+      ]
+    },
+    "book-open": {
+      "path": "icons/book-open.svg",
+      "tags": [
+        "documentation",
+        "manual",
+        "guide",
+        "knowledge"
+      ]
+    },
+    "thumbs-up": {
+      "path": "icons/thumbs-up.svg",
+      "tags": [
+        "approve",
+        "like",
+        "positive",
+        "best-practice"
+      ]
+    },
+    "thumbs-down": {
+      "path": "icons/thumbs-down.svg",
+      "tags": [
+        "reject",
+        "bad",
+        "anti-pattern",
+        "negative"
+      ]
+    }
+  },
+  "logos": {
+    "claude": {
+      "path": "logos/claude.svg",
+      "tags": [
+        "Claude",
+        "Anthropic",
+        "AI"
+      ]
+    },
+    "github": {
+      "path": "logos/github.svg",
+      "tags": [
+        "GitHub",
+        "git",
+        "repo",
+        "code"
+      ]
+    },
+    "openai": {
+      "path": "logos/openai.svg",
+      "tags": [
+        "OpenAI",
+        "ChatGPT",
+        "GPT",
+        "AI"
+      ]
+    },
+    "notion": {
+      "path": "logos/notion.svg",
+      "tags": [
+        "Notion",
+        "notes",
+        "docs",
+        "wiki"
+      ]
+    },
+    "slack": {
+      "path": "logos/slack.svg",
+      "tags": [
+        "Slack",
+        "chat",
+        "messaging"
+      ]
+    },
+    "figma": {
+      "path": "logos/figma.svg",
+      "tags": [
+        "Figma",
+        "design",
+        "UI"
+      ]
+    },
+    "vercel": {
+      "path": "logos/vercel.svg",
+      "tags": [
+        "Vercel",
+        "hosting",
+        "deploy",
+        "Next"
+      ]
+    },
+    "google": {
+      "path": "logos/google.svg",
+      "tags": [
+        "Google",
+        "search"
+      ]
+    },
+    "microsoft": {
+      "path": "logos/microsoft.svg",
+      "tags": [
+        "Microsoft",
+        "MS",
+        "Office",
+        "Windows"
+      ]
+    },
+    "apple": {
+      "path": "logos/apple.svg",
+      "tags": [
+        "Apple",
+        "Mac",
+        "iOS",
+        "iPhone"
+      ]
+    },
+    "amazon": {
+      "path": "logos/amazon.svg",
+      "tags": [
+        "Amazon",
+        "AWS",
+        "shop"
+      ]
+    },
+    "stripe": {
+      "path": "logos/stripe.svg",
+      "tags": [
+        "Stripe",
+        "payments",
+        "billing"
+      ]
+    },
+    "discord": {
+      "path": "logos/discord.svg",
+      "tags": [
+        "Discord",
+        "chat",
+        "community"
+      ]
+    },
+    "youtube": {
+      "path": "logos/youtube.svg",
+      "tags": [
+        "YouTube",
+        "video"
+      ]
+    },
+    "x-twitter": {
+      "path": "logos/x-twitter.svg",
+      "tags": [
+        "X",
+        "Twitter",
+        "social"
+      ]
+    }
+  },
+  "decorative": {
+    "burst": {
+      "path": "decorative/burst.svg",
+      "tags": [
+        "starburst",
+        "sparkle",
+        "accent"
+      ]
+    },
+    "wave": {
+      "path": "decorative/wave.svg",
+      "tags": [
+        "wave",
+        "organic",
+        "flow"
+      ]
+    },
+    "grid-dots": {
+      "path": "decorative/grid-dots.svg",
+      "tags": [
+        "pattern",
+        "dots",
+        "grid"
+      ]
+    },
+    "concentric": {
+      "path": "decorative/concentric.svg",
+      "tags": [
+        "circle",
+        "ring",
+        "radial"
+      ]
+    },
+    "arrow-up": {
+      "path": "decorative/arrow-up.svg",
+      "tags": [
+        "arrow",
+        "direction",
+        "up"
+      ]
+    },
+    "spiral": {
+      "path": "decorative/spiral.svg",
+      "tags": [
+        "spiral",
+        "swirl",
+        "loop"
+      ]
+    },
+    "stripes": {
+      "path": "decorative/stripes.svg",
+      "tags": [
+        "stripes",
+        "lines",
+        "bands"
+      ]
+    }
+  }
+}
