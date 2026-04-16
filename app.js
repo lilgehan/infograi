@@ -28,6 +28,78 @@ const TONE_COLORS = {
   playful:      '#7C3AED',
 };
 
+// ── CDN ASSET MAPPINGS ─────────────────────────────────────
+// Icons → Phosphor Icons (jsDelivr CDN, regular weight)
+const CDN_ICONS = {
+  'check-circle':  'check-circle',
+  'x-circle':      'x-circle',
+  'alert-triangle':'warning',
+  'info-circle':   'info',
+  'lightbulb':     'lightbulb',
+  'rocket':        'rocket',
+  'target':        'target',
+  'trophy':        'trophy',
+  'star':          'star',
+  'heart':         'heart',
+  'bolt':          'lightning',
+  'chart-line-up': 'chart-line-up',
+  'chart-bar':     'chart-bar',
+  'chart-pie':     'chart-pie',
+  'user':          'user',
+  'users':         'users',
+  'gear':          'gear',
+  'lock':          'lock-simple',
+  'key':           'key',
+  'shield':        'shield',
+  'globe':         'globe',
+  'map-pin':       'map-pin',
+  'calendar':      'calendar',
+  'clock':         'clock',
+  'mail':          'envelope',
+  'message':       'chat',
+  'phone':         'phone',
+  'search':        'magnifying-glass',
+  'book':          'book',
+  'file-text':     'file-text',
+  'folder':        'folder',
+  'download':      'download',
+  'upload':        'upload',
+  'code':          'code',
+  'terminal':      'terminal-window',
+  'database':      'database',
+  'server':        'hard-drives',
+  'cloud':         'cloud',
+  'briefcase':     'briefcase',
+  'dollar':        'currency-dollar',
+  'credit-card':   'credit-card',
+  'shopping-cart': 'shopping-cart',
+  'link':          'link',
+  'eye':           'eye',
+  'puzzle':        'puzzle-piece',
+  'book-open':     'book-open',
+  'thumbs-up':     'thumbs-up',
+  'thumbs-down':   'thumbs-down',
+};
+
+// Logos → Simple Icons CDN slugs
+const CDN_LOGOS = {
+  'claude':    'anthropic',
+  'github':    'github',
+  'openai':    'openai',
+  'notion':    'notion',
+  'slack':     'slack',
+  'figma':     'figma',
+  'vercel':    'vercel',
+  'google':    'google',
+  'microsoft': 'microsoft',
+  'apple':     'apple',
+  'amazon':    'amazon',
+  'stripe':    'stripe',
+  'discord':   'discord',
+  'youtube':   'youtube',
+  'x-twitter': 'x',
+};
+
 const SIZES = {
   a4:        { w: 800,  h: 1131, label: 'A4',   ratio: '1:1.414' },
   portrait:  { w: 800,  h: 1422, label: '9:16', ratio: '9:16'    },
@@ -309,6 +381,15 @@ function buildAgentPrompt(topic, canvas, retry, prevResponse) {
     ? `\n\nYOUR PREVIOUS RESPONSE WAS NOT VALID JSON. Here is what you returned:\n---\n${prevResponse.slice(0, 1000)}\n---\nReturn ONLY valid JSON matching the schema below. No markdown, no explanation.\n\n`
     : '';
 
+  const layoutRecipes = {
+    'steps-guide': 'header-hero → prerequisites-strip → section-divider → 6–9× step-row → 2–3× callout-tip → callout-warning → quote-block → footer-tagline → footer-brand',
+    'mixed-grid':  'header-hero → section-divider → stat-quartet → two-col-equal → three-card-grid → quote-block → callout-tip → section-divider → three-card-grid → footer-tagline → footer-brand',
+    'timeline':    'header-hero → section-divider → 6–8× timeline-node (alternating left/right sides) → stat-quartet → callout-tip → footer-tagline → footer-brand',
+    'funnel':      'header-hero → stat-quartet → 5× funnel-layer (layer 1→5) → three-card-grid → callout-tip → footer-tagline → footer-brand',
+    'comparison':  'header-hero → two-col-equal → 4–5× comparison-row → section-divider → three-card-grid → quote-block → footer-tagline → footer-brand',
+    'flowchart':   'header-hero → step-row → comparison-row → step-row → callout-tip → step-row → comparison-row → three-card-grid → footer-tagline → footer-brand',
+  };
+
   const layoutDirective = STATE.layout === 'auto'
     ? `LAYOUT: AUTO — You choose the single best layout from the list below, based on the TOPIC's nature. Prefer picking an existing layout; only diverge if none fit, in which case assemble a custom block sequence using blocks from the catalog. Report your chosen layout id in the "layout" field.
 Candidates (pick one):
@@ -318,7 +399,9 @@ Candidates (pick one):
   • funnel         — stages, conversion, tiers, hierarchy, narrowing progression
   • comparison     — X vs Y, before/after, pros/cons, old way vs new way
   • flowchart      — decision tree, branching workflow, if-then logic`
-    : `LAYOUT: ${STATE.layout} — use this layout as the primary structural template (see LAYOUT RECIPES below).`;
+    : `LAYOUT: ⚠ HARD REQUIREMENT — "${STATE.layout}" IS THE MANDATORY LAYOUT. You MUST follow this recipe as the backbone of your block sequence:
+  ${layoutRecipes[STATE.layout] || STATE.layout}
+You may enrich this recipe by adding extra blocks between the anchors, but you must not replace the core block types defined by this layout. Set "layout": "${STATE.layout}" in your JSON output.`;
 
   return `${retryHeader}You are a senior infographic designer + subject-matter researcher producing a professional, Figma/Canva-grade document.
 
@@ -400,11 +483,16 @@ function validatePlan(plan) {
   // Filter to valid block IDs only
   plan.blocks = plan.blocks.filter(b => BLOCK_REGISTRY[b.id]);
 
+  // If a specific layout was chosen (not auto), stamp it into the plan
+  if (STATE.layout !== 'auto') {
+    plan.layout = STATE.layout;
+  }
+
   // Default theme
   plan.theme = plan.theme || {};
   if (!plan.theme.accent) plan.theme.accent = TONE_COLORS[STATE.tone];
 
-  // Ensure strings are strings
+  // Ensure props are objects
   plan.blocks.forEach(b => {
     b.props = b.props || {};
   });
@@ -425,17 +513,63 @@ async function fetchBlock(blockId) {
 async function fetchAsset(type, name) {
   const key = `${type}/${name}`;
   if (STATE.assetCache[key]) return STATE.assetCache[key];
-  const def = STATE.assetCatalog?.[type]?.[name];
-  if (!def) return null;
+
+  let svgText = null;
+
+  // Try CDN first (real icons/logos)
+  if (type === 'icons' && CDN_ICONS[name]) {
+    svgText = await fetchCDNIcon(CDN_ICONS[name]);
+  } else if (type === 'logos' && CDN_LOGOS[name]) {
+    svgText = await fetchCDNLogo(CDN_LOGOS[name]);
+  }
+
+  // Fall back to local hand-drawn if CDN failed
+  if (!svgText) {
+    const def = STATE.assetCatalog?.[type]?.[name];
+    if (def) {
+      try {
+        const r = await fetch(`assets/${def.path}`);
+        if (r.ok) svgText = await r.text();
+      } catch {}
+    }
+  }
+
+  if (svgText) {
+    STATE.assetCache[key] = svgText;
+    return svgText;
+  }
+  return null;
+}
+
+async function fetchCDNIcon(phosphorName) {
   try {
-    const r = await fetch(`assets/${def.path}`);
+    const url = `https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2.1.1/assets/regular/${phosphorName}.svg`;
+    const r = await fetch(url);
     if (!r.ok) return null;
     const svg = await r.text();
-    STATE.assetCache[key] = svg;
-    return svg;
+    return sanitizeSVGColors(svg);
   } catch {
     return null;
   }
+}
+
+async function fetchCDNLogo(simpleSlug) {
+  try {
+    const url = `https://cdn.simpleicons.org/${simpleSlug}`;
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const svg = await r.text();
+    return sanitizeSVGColors(svg);
+  } catch {
+    return null;
+  }
+}
+
+// Make any SVG respect CSS currentColor so it adapts to container color
+function sanitizeSVGColors(svg) {
+  return svg
+    .replace(/fill="(?!none\b)[^"]*"/g, 'fill="currentColor"')
+    .replace(/stroke="(?!none\b)[^"]*"/g, 'stroke="currentColor"');
 }
 
 async function preloadBlocks(blocks) {
@@ -490,6 +624,11 @@ async function renderPlan(plan) {
   canvas.setAttribute('data-tone', STATE.tone);
   canvas.setAttribute('data-size', STATE.size);
 
+  // Apply canvas size (width from SIZES; height flows with content)
+  const sz = SIZES[STATE.size];
+  canvas.style.width = sz.w + 'px';
+  canvas.style.maxWidth = '100%';
+
   // Apply accent
   const accent = plan.theme?.accent || STATE.accent;
   STATE.accent = accent;
@@ -539,6 +678,14 @@ async function renderBlock(blockData, plan) {
   return el;
 }
 
+// Normalize a slot item that might be a plain string or an object {text, label, ...}
+function itemText(item) {
+  if (item == null) return '';
+  if (typeof item === 'string') return item;
+  if (typeof item === 'object') return item.text || item.label || item.title || item.body || '';
+  return String(item);
+}
+
 function fillBlockSlots(el, blockId, props, plan) {
   // Block-specific fillers
   switch (blockId) {
@@ -568,7 +715,7 @@ function fillBlockSlots(el, blockId, props, plan) {
         preContainer.innerHTML = preItems.map((item, i) => `
           <div class="ig-pre-item">
             <span data-asset-slot data-asset-type="icon" data-asset-name="${escAttr(item.icon || 'check-circle')}"></span>
-            <span data-editable="true" contenteditable="true">${escHTML(item.text || '')}</span>
+            <span data-editable="true" contenteditable="true">${escHTML(itemText(item))}</span>
           </div>
         `).join('');
       }
@@ -615,8 +762,8 @@ function fillBlockSlots(el, blockId, props, plan) {
       const b2 = Array.isArray(props.col2_bullets) ? props.col2_bullets : [];
       const c1 = el.querySelector('[data-slot="col1_bullets"]');
       const c2 = el.querySelector('[data-slot="col2_bullets"]');
-      if (c1) c1.innerHTML = b1.map(t => `<li data-editable="true" contenteditable="true">${escHTML(t)}</li>`).join('');
-      if (c2) c2.innerHTML = b2.map(t => `<li data-editable="true" contenteditable="true">${escHTML(t)}</li>`).join('');
+      if (c1) c1.innerHTML = b1.map(t => `<li data-editable="true" contenteditable="true">${escHTML(itemText(t))}</li>`).join('');
+      if (c2) c2.innerHTML = b2.map(t => `<li data-editable="true" contenteditable="true">${escHTML(itemText(t))}</li>`).join('');
       break;
 
     case 'two-col-wide-narrow':
@@ -627,8 +774,8 @@ function fillBlockSlots(el, blockId, props, plan) {
       const ni = Array.isArray(props.narrow_items) ? props.narrow_items : [];
       const wbEl = el.querySelector('[data-slot="wide_bullets"]');
       const niEl = el.querySelector('[data-slot="narrow_items"]');
-      if (wbEl) wbEl.innerHTML = wb.map(t => `<li data-editable="true" contenteditable="true">${escHTML(t)}</li>`).join('');
-      if (niEl) niEl.innerHTML = ni.map(t => `<li data-editable="true" contenteditable="true">${escHTML(t)}</li>`).join('');
+      if (wbEl) wbEl.innerHTML = wb.map(t => `<li data-editable="true" contenteditable="true">${escHTML(itemText(t))}</li>`).join('');
+      if (niEl) niEl.innerHTML = ni.map(t => `<li data-editable="true" contenteditable="true">${escHTML(itemText(t))}</li>`).join('');
       break;
 
     case 'three-card-grid':
@@ -642,7 +789,7 @@ function fillBlockSlots(el, blockId, props, plan) {
               <div class="ig-card-icon"><span data-asset-slot data-asset-type="icon" data-asset-name="${escAttr(c.icon || 'star')}"></span></div>
               <div class="ig-card-title" data-editable="true" contenteditable="true">${escHTML(c.title || '')}</div>
               <ul class="ig-card-body">
-                ${bullets.map(b => `<li data-editable="true" contenteditable="true">${escHTML(b)}</li>`).join('')}
+                ${bullets.map(b => `<li data-editable="true" contenteditable="true">${escHTML(itemText(b))}</li>`).join('')}
               </ul>
             </div>
           `;
@@ -854,7 +1001,10 @@ function applyToneToCanvas() {
 function applySizeToCanvas() {
   const canvas = document.querySelector('.ig-canvas');
   if (!canvas) return;
+  const sz = SIZES[STATE.size];
   canvas.setAttribute('data-size', STATE.size);
+  canvas.style.width = sz.w + 'px';
+  canvas.style.maxWidth = '100%';
 }
 
 // ── EXPORT ─────────────────────────────────────────────────
@@ -937,7 +1087,7 @@ function exportHTML() {
 <head>
 <meta charset="UTF-8">
 <title>${escHTML(STATE.plan?.title || 'Infogr.ai export')}</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>${css}
 body { margin: 0; background: #f5f5f5; display: flex; justify-content: center; padding: 40px; }
 </style>
