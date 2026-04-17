@@ -1,11 +1,11 @@
 /* ============================================================
-   Infogr.ai v2.0 — Full HTML Generation Architecture
-   - One-shot HTML via Claude claude-sonnet-4-6 (max_tokens: 16000)
-   - Iframe renderer (srcdoc)
-   - Icons8 Fluency illustrated icons + Clearbit brand logos
-   - Live accent color injection into iframe
-   - Edit mode (contenteditable toggle)
-   - Export: PNG, PDF, HTML
+   Infogr.ai v2.1
+   - Streaming API (Anthropic SSE) + prompt caching
+   - Ribbon toolbar (document.execCommand on iframe)
+   - Pinch-to-zoom + +/− buttons
+   - PNG/PDF export with base64 image prefetch (CORS fix)
+   - Light app theme, Space Grotesk fonts
+   - Icons8 Fluency 72-96px + Clearbit/SimpleIcons logos
    ============================================================ */
 
 // ── STATE ──────────────────────────────────────────────────
@@ -16,13 +16,14 @@ const STATE = {
   tone:        'professional',
   size:        'a4',
   accent:      '#2563EB',
-  currentHTML: null,   // last generated HTML string
-  editMode:    false,
+  currentHTML: null,
+  savedRange:  null,   // saved iframe text selection for ribbon color picker
+  zoomLevel:   1.0,
 };
 
 const TONE_COLORS = {
   professional: '#2563EB',
-  bold:         '#DC2626',
+  bold:         '#F59E0B',
   minimal:      '#0F766E',
   playful:      '#7C3AED',
 };
@@ -67,6 +68,7 @@ window.addEventListener('load', () => {
 
   renderLayoutPicker();
 
+  // Tone chips
   $$('#toneRow .chip').forEach(el => {
     el.addEventListener('click', () => {
       $$('#toneRow .chip').forEach(b => b.classList.remove('on'));
@@ -78,6 +80,7 @@ window.addEventListener('load', () => {
     });
   });
 
+  // Size buttons
   $$('#sizeRow .sz-btn').forEach(el => {
     el.addEventListener('click', () => {
       $$('#sizeRow .sz-btn').forEach(b => b.classList.remove('on'));
@@ -88,15 +91,27 @@ window.addEventListener('load', () => {
   });
 
   $('genBtn').addEventListener('click', generate);
-  $('btnPNG').addEventListener('click', exportPNG);
-  $('btnPDF').addEventListener('click', exportPDF);
-  $('btnHTML').addEventListener('click', exportHTML);
-  $('btnEdit').addEventListener('click', toggleEditMode);
 
+  // Accent picker — live inject into iframe
   $('accentPicker').addEventListener('input', (e) => {
     STATE.accent = e.target.value;
     applyAccentToFrame();
   });
+
+  // Download dropdown
+  $('btnDownload').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('dlMenu').classList.toggle('open');
+  });
+  document.addEventListener('click', () => $('dlMenu')?.classList.remove('open'));
+
+  $('btnPNG').addEventListener('click',  exportPNG);
+  $('btnPDF').addEventListener('click',  exportPDF);
+  $('btnHTML').addEventListener('click', exportHTML);
+
+  // Ribbon
+  setupRibbon();
+  setupZoom();
 });
 
 // ── LAYOUT PICKER ──────────────────────────────────────────
@@ -125,13 +140,13 @@ function renderLayoutPicker() {
 
 function layoutThumb(kind) {
   const thumbs = {
-    auto: `<svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><text x="40" y="22" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="11" fill="#E05A2B">AUTO</text><text x="40" y="38" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#1A2744">✨ AI decides</text><circle cx="16" cy="48" r="2" fill="#E05A2B"/><circle cx="40" cy="48" r="2" fill="#E05A2B"/><circle cx="64" cy="48" r="2" fill="#E05A2B"/></svg>`,
-    steps: `<svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="10" rx="2" fill="#1A2744"/><circle cx="13" cy="23" r="4" fill="#E05A2B"/><rect x="20" y="20" width="42" height="3" rx="1" fill="#ccc"/><circle cx="13" cy="37" r="4" fill="#1A2744"/><rect x="20" y="34" width="38" height="3" rx="1" fill="#ccc"/><circle cx="13" cy="51" r="4" fill="#E05A2B"/><rect x="20" y="48" width="34" height="3" rx="1" fill="#ccc"/></svg>`,
-    grid: `<svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="10" rx="2" fill="#1A2744"/><rect x="4" y="17" width="34" height="18" rx="2" fill="#E05A2B" opacity="0.8"/><rect x="42" y="17" width="34" height="18" rx="2" fill="#1A2744" opacity="0.8"/><rect x="4" y="38" width="21" height="16" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/><rect x="29" y="38" width="21" height="16" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/><rect x="55" y="38" width="21" height="16" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/></svg>`,
-    timeline: `<svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="10" rx="2" fill="#1A2744"/><line x1="40" y1="18" x2="40" y2="56" stroke="#E05A2B" stroke-width="1.5"/><circle cx="40" cy="22" r="3" fill="#E05A2B"/><rect x="44" y="18" width="28" height="8" rx="2" fill="#c2e5ff"/><circle cx="40" cy="36" r="3" fill="#1A2744"/><rect x="8" y="32" width="28" height="8" rx="2" fill="#c2e5ff"/></svg>`,
-    funnel: `<svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><polygon points="8,10 72,10 65,22 15,22" fill="#E05A2B" opacity="0.9"/><polygon points="15,24 65,24 58,36 22,36" fill="#E05A2B" opacity="0.7"/><polygon points="22,38 58,38 52,50 28,50" fill="#E05A2B" opacity="0.5"/></svg>`,
-    comparison: `<svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="10" rx="2" fill="#1A2744"/><rect x="4" y="17" width="33" height="37" rx="2" fill="#FEE2E2" stroke="#FECACA" stroke-width="0.5"/><rect x="43" y="17" width="33" height="37" rx="2" fill="#DCFCE7" stroke="#BBF7D0" stroke-width="0.5"/></svg>`,
-    flowchart: `<svg viewBox="0 0 80 58"><rect width="80" height="58" fill="#F5F5F5" rx="3"/><rect x="28" y="2" width="24" height="9" rx="4" fill="#ffecbd"/><rect x="22" y="17" width="36" height="9" rx="2" fill="#c2e5ff"/><path d="M40 32 L52 38 L40 44 L28 38 Z" fill="#dcccff"/><rect x="22" y="50" width="36" height="7" rx="3" fill="#ffecbd"/></svg>`,
+    auto: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><text x="40" y="20" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="11" fill="#E05A2B">AUTO</text><text x="40" y="34" text-anchor="middle" font-family="sans-serif" font-size="7.5" fill="#666">✨ AI decides</text><circle cx="16" cy="44" r="2" fill="#E05A2B"/><circle cx="40" cy="44" r="2" fill="#E05A2B"/><circle cx="64" cy="44" r="2" fill="#E05A2B"/></svg>`,
+    steps: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="9" rx="2" fill="#1A2744"/><circle cx="12" cy="21" r="4" fill="#E05A2B"/><rect x="19" y="18.5" width="40" height="3" rx="1.5" fill="#ccc"/><circle cx="12" cy="33" r="4" fill="#1A2744"/><rect x="19" y="30.5" width="36" height="3" rx="1.5" fill="#ccc"/><circle cx="12" cy="45" r="4" fill="#E05A2B"/><rect x="19" y="42.5" width="32" height="3" rx="1.5" fill="#ccc"/></svg>`,
+    grid: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="9" rx="2" fill="#1A2744"/><rect x="4" y="16" width="34" height="16" rx="2" fill="#E05A2B" opacity="0.8"/><rect x="42" y="16" width="34" height="16" rx="2" fill="#1A2744" opacity="0.8"/><rect x="4" y="35" width="21" height="14" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/><rect x="29" y="35" width="21" height="14" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/><rect x="55" y="35" width="21" height="14" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/></svg>`,
+    timeline: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="9" rx="2" fill="#1A2744"/><line x1="40" y1="16" x2="40" y2="50" stroke="#E05A2B" stroke-width="1.5"/><circle cx="40" cy="20" r="3" fill="#E05A2B"/><rect x="43" y="16" width="27" height="7" rx="2" fill="#c2e5ff"/><circle cx="40" cy="33" r="3" fill="#1A2744"/><rect x="10" y="29" width="27" height="7" rx="2" fill="#c2e5ff"/></svg>`,
+    funnel: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><polygon points="8,10 72,10 64,22 16,22" fill="#E05A2B" opacity="0.9"/><polygon points="16,24 64,24 56,36 24,36" fill="#E05A2B" opacity="0.7"/><polygon points="24,38 56,38 50,50 30,50" fill="#E05A2B" opacity="0.5"/></svg>`,
+    comparison: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="9" rx="2" fill="#1A2744"/><rect x="4" y="16" width="33" height="32" rx="2" fill="#FEE2E2" stroke="#FECACA" stroke-width="0.5"/><rect x="43" y="16" width="33" height="32" rx="2" fill="#DCFCE7" stroke="#BBF7D0" stroke-width="0.5"/></svg>`,
+    flowchart: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="27" y="2" width="26" height="9" rx="4" fill="#ffecbd"/><rect x="22" y="16" width="36" height="9" rx="2" fill="#c2e5ff"/><path d="M40 30 L52 36 L40 42 L28 36 Z" fill="#dcccff"/><rect x="23" y="46" width="34" height="6" rx="3" fill="#ffecbd"/></svg>`,
   };
   return thumbs[kind] || '';
 }
@@ -143,14 +158,13 @@ async function generate() {
   if (!apiKey) { alert('Please enter your Anthropic API key.'); return; }
   if (!topic)  { alert('Please describe your document topic.'); return; }
 
-  STATE.apiKey   = apiKey;
-  STATE.topic    = topic;
-  STATE.editMode = false;
+  STATE.apiKey = apiKey;
+  STATE.topic  = topic;
 
   const btn = $('genBtn');
   btn.disabled = true;
   btn.classList.add('loading');
-  $('toolbar').style.display = 'none';
+  $('ribbon').style.display = 'none';
 
   showGenerating();
 
@@ -158,8 +172,8 @@ async function generate() {
     const html = await callAgent(topic);
     STATE.currentHTML = html;
     renderHTML(html);
-    $('toolbar').style.display = 'flex';
-    updateEditButton();
+    $('ribbon').style.display = 'flex';
+    setupRibbonForFrame();
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
@@ -169,10 +183,9 @@ async function generate() {
   btn.classList.remove('loading');
 }
 
-// ── AGENT ──────────────────────────────────────────────────
+// ── STREAMING AGENT ────────────────────────────────────────
 async function callAgent(topic) {
-  const sz     = SIZES[STATE.size];
-  const prompt = buildPrompt(topic, sz);
+  const sz = SIZES[STATE.size];
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -180,241 +193,221 @@ async function callAgent(topic) {
       'Content-Type':  'application/json',
       'x-api-key':     STATE.apiKey,
       'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
       model:      'claude-sonnet-4-6',
-      max_tokens: 16000,
-      messages:   [{ role: 'user', content: prompt }],
+      max_tokens: 12000,
+      stream:     true,
+      messages: [{
+        role: 'user',
+        content: buildPromptParts(topic, sz),
+      }],
     }),
   });
 
-  const data = await res.json();
-  if (data.error) throw new Error(`API error: ${data.error.message}`);
-  if (!data.content?.[0]) throw new Error('Empty response from API');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`API error: ${err.error?.message || res.statusText}`);
+  }
 
-  const text = data.content[0].text.trim()
+  const reader  = res.body.getReader();
+  const decoder = new TextDecoder();
+  let accumulated = '';
+  let lineBuffer  = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    lineBuffer += decoder.decode(value, { stream: true });
+    const lines = lineBuffer.split('\n');
+    lineBuffer  = lines.pop() ?? '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const raw = line.slice(6).trim();
+      if (!raw || raw === '[DONE]') continue;
+      try {
+        const ev = JSON.parse(raw);
+        if (ev.type === 'error') throw new Error(`Stream error: ${ev.error?.message}`);
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+          accumulated += ev.delta.text;
+          updateStreamProgress(accumulated.length);
+        }
+      } catch (e) {
+        if (e.message.startsWith('Stream error')) throw e;
+      }
+    }
+  }
+
+  const text = accumulated.trim()
     .replace(/^```html\s*/i, '')
     .replace(/^```\s*/i, '')
     .replace(/```\s*$/i, '')
     .trim();
 
-  if (!text.includes('<html') && !text.includes('<!DOCTYPE')) {
+  if (!text.includes('<') || !text.includes('>')) {
     throw new Error('Agent did not return valid HTML. Please try again.');
   }
-
   return text;
 }
 
-// ── PROMPT BUILDER ─────────────────────────────────────────
-function buildPrompt(topic, sz) {
+// ── PROMPT — static (cacheable) + dynamic ──────────────────
+function buildPromptParts(topic, sz) {
+  return [
+    {
+      type: 'text',
+      text: STATIC_PROMPT,
+      cache_control: { type: 'ephemeral' },
+    },
+    {
+      type: 'text',
+      text: buildDynamicPrompt(topic, sz),
+    },
+  ];
+}
 
-  const toneAccent = TONE_COLORS[STATE.tone];
+// Static part — cached across generations in the same session (~75% input cost reduction)
+const STATIC_PROMPT = `You are a world-class infographic designer. Generate a single, complete, self-contained HTML infographic document.
 
+FONTS — include in <head>:
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+Use "Space Grotesk" ONLY for the hero title (1-2 lines max). Use "Plus Jakarta Sans" for ALL other text.
+NEVER use Syne, Oswald, or any wide/condensed/extended font — they render stretched.
+
+CSS VARIABLES — required, define at :root:
+  :root { --accent: #2563EB; --accent-soft: rgba(37,99,235,0.12); }
+Use var(--accent) and var(--accent-soft) throughout for all accent-colored elements.
+
+CANVAS — absolute rule:
+The .ig-page element MUST be: width:{W}px; height:{H}px; overflow:hidden; box-sizing:border-box;
+  display:flex; flex-direction:column; font-family:'Plus Jakarta Sans',sans-serif;
+Body: margin:0; background:#f0f2f5; display:flex; justify-content:center; align-items:flex-start;
+Every section must have overflow:hidden. Use flex-grow to distribute height. Never use position:absolute for text near edges.
+If content is too tall: reduce font-size, shorten text, or remove bullets — NEVER let it overflow.
+
+ICONS — Icons8 Fluency (primary, colorful illustrated):
+<img src="https://img.icons8.com/fluency/96/{name}.png" width="{px}" height="{px}" alt="" loading="lazy">
+Sizes: hero=96-128px, section card (center above text)=72-80px, stats=36-40px, inline=28-32px
+Names: rocket, idea, lightning-bolt, gear, calendar-3, user-group, shield, checkmark, star, trophy, target, key, lock, internet, database, source-code, console, cloud-storage, briefcase, dollar-coin, search, open-book, chart-increasing, analytics, pie-chart, clock, teamwork, strategy, growth, workflow, checklist, deadline, meeting, handshake, networking, statistics, report, presentation, brain, artificial-intelligence, robot-2, color-palette, image, video, collaboration, creativity, resume, approval, priority, layers, settings, home, smartphone, mail, folder, link
+Icons are PRIMARY visual anchors — center them above section content, use 72-80px, give them breathing room.
+Footer must include: <small style="font-size:10px;color:#94A3B8;">Icons by <a href="https://icons8.com" style="color:inherit;text-decoration:none;">Icons8</a></small>
+
+LOGOS — use when topic names real brands. Never leave blank. Fallback chain:
+1. <img src="https://logo.clearbit.com/{domain}" width="32" height="32" style="border-radius:6px;object-fit:contain;" loading="lazy">
+   Domains: anthropic.com github.com notion.so slack.com figma.com vercel.com openai.com google.com microsoft.com apple.com amazon.com stripe.com discord.com youtube.com twitter.com linear.app airtable.com zapier.com
+2. <img src="https://cdn.simpleicons.org/{slug}" width="32" height="32"> (SVG, brand-colored)
+3. Icons8 thematic icon matching brand category
+4. Inline SVG: <svg width="32" height="32"><circle cx="16" cy="16" r="16" fill="#2563EB"/><text x="16" y="21" text-anchor="middle" fill="white" font-size="13" font-family="sans-serif" font-weight="700">AB</text></svg>
+
+CONTENT RULES:
+1. Real specific facts only — named tools, exact numbers, real stats. Zero filler or lorem ipsum.
+2. Every text element must have contenteditable="true" for inline editing.
+3. Active voice. Cut every unnecessary word.
+4. Titles ≤50 chars. Bullets ≤70 chars. Body ≤120 chars per sentence.
+5. 2-4 points per section. Density: Canva/Gemini quality level.`;
+
+function buildDynamicPrompt(topic, sz) {
   const toneGuides = {
-    professional: `TONE — Professional (clean, authoritative, corporate-grade)
-  Background: #FFFFFF main, #F8FAFC for alternating sections
-  Accent CSS variable: --accent (${toneAccent}) — use for headers, borders, icon badges, highlights
+    professional: `TONE — Professional:
+  Background: #FFFFFF main, #F8FAFC alternating sections
+  --accent: ${TONE_COLORS.professional} (blue) for headers, borders, stat numbers, icon badges
   Text: #0F172A headings, #334155 body, #64748B captions
-  Cards: white, 1px solid #E2E8F0 border, 8px radius, subtle box-shadow
-  Feel: crisp lines, generous whitespace, data-forward`,
+  Cards: white, 1px solid #E2E8F0, border-radius:10px, box-shadow:0 1px 4px rgba(0,0,0,0.06)
+  Feel: clean, authoritative, corporate-grade`,
 
-    bold: `TONE — Bold (dark, punchy, high-contrast)
-  Background: #0F172A main, #1E293B cards/sections
-  Accent CSS variable: --accent (${toneAccent}) — use for glowing borders, labels, stat numbers
+    bold: `TONE — Bold (dark, high-contrast):
+  Background: #0F172A main canvas, #1E293B for card sections
+  --accent: ${TONE_COLORS.bold} (amber) for labels, borders, stat numbers
   Text: #FFFFFF headings, #CBD5E1 body, #94A3B8 captions
-  Labels: uppercase, accent color, letter-spacing 0.08em, 11px font-size
-  Feel: editorial magazine, dark-mode-native, large impactful type`,
+  Cards: rgba(255,255,255,0.06) glass effect, 1px solid rgba(255,255,255,0.12), border-radius:12px
+  Labels: UPPERCASE, var(--accent) color, letter-spacing:0.1em, 11px
+  Icons: use Iconify SVGs with style="color:var(--accent)" for colorable icons on dark bg
+  Feel: editorial dark magazine, punchy, high-contrast`,
 
-    minimal: `TONE — Minimal (editorial, spare, every pixel earns its place)
+    minimal: `TONE — Minimal:
   Background: #FAFAF8 main, #F5F3EF alternating
-  Accent CSS variable: --accent (${toneAccent}) — use sparingly (1px borders, underlines, one highlight element)
+  --accent: ${TONE_COLORS.minimal} (dark teal) — use sparingly: 1px borders, a single underline accent
   Text: #1C1917 headings, #57534E body, #A8A29E captions
-  Borders: 1px solid #E7E5E4 — no drop shadows, flat design
-  Feel: refined, airy, typography-led — let content breathe`,
+  Borders: 1px solid #E7E5E4. No drop-shadows. Flat design only.
+  Feel: editorial, airy, refined typography — every pixel earns its place`,
 
-    playful: `TONE — Playful (warm, energetic, friendly — but data-rich, not childish)
+    playful: `TONE — Playful:
   Background: #FFFBEB main, #FEF3C7 alternating sections
-  Accent CSS variable: --accent (${toneAccent}) — use for headers, badges, highlights
+  --accent: ${TONE_COLORS.playful} (purple) for headers; #F59E0B amber for highlights and stat numbers
   Text: #1C1917 headings, #44403C body
-  Cards: rounded-2xl corners (16px), gentle box-shadows (0 2px 12px rgba(0,0,0,0.08))
-  Secondary accent: #F59E0B amber for stat numbers, callout borders
-  Feel: bright, motivated, premium learning content`,
+  Cards: border-radius:20px, box-shadow:0 3px 16px rgba(0,0,0,0.08), colorful icon badge backgrounds
+  Icons: 80-96px centered above text — let them breathe, they're heroes not accessories
+  Feel: warm, energetic, friendly — specific and data-rich, never childish`,
   };
-
-  const layoutDirective = STATE.layout === 'auto'
-    ? `LAYOUT — Auto: choose the single best layout for this topic.
-  • steps-guide   → numbered tutorial, how-to, process (sequential topics)
-  • mixed-grid    → overview, explainer, feature roundup ("what is X")
-  • timeline      → history, roadmap, chronology, milestones
-  • funnel        → stages, tiers, conversion, narrowing hierarchy
-  • comparison    → X vs Y, before/after, pros/cons
-  • flowchart     → decision tree, branching workflow, if-then logic`
-    : `LAYOUT — MANDATORY: You MUST use the "${STATE.layout}" layout pattern described below.`;
 
   const layoutRecipes = {
-    'steps-guide': `STEPS-GUIDE pattern:
-  Header (full-width, dark or accent bg): category label + main title (Syne, 36-40px) + subtitle
-  Prerequisites strip: 3-4 small chips in a row, each with 24px icon + short label
-  Numbered steps (5-8 steps): large step-number (56px, accent color) left + title + 2-sentence description right + optional 40px icon top-right
-    Alternate white/very-light-accent row backgrounds
-  Key stats strip: 3-4 boxes, each with big number + label + icon
-  Callout box: left accent border, light bg, tip or warning text
-  Footer: brand + attribution`,
+    'steps-guide': `LAYOUT — Steps Guide:
+  1. Full-width hero header (accent bg): LABEL tag + main title (Space Grotesk, 36-40px) + subtitle
+  2. Prerequisites row: 3-4 horizontal chips, each with 28px icon + short label
+  3. Numbered steps (5-7): large step-number (56px, accent color) left + title (18px bold) + 2-sentence description + 48px icon right
+     Alternate white/light-accent row backgrounds
+  4. Key stats strip: 3-4 boxes, each with big number (32px Space Grotesk) + label + 36px icon
+  5. Callout box: left 4px accent border, light bg, tip text
+  6. Footer: brand name + attribution`,
 
-    'mixed-grid': `MIXED-GRID pattern:
-  Hero header (full-width): title (Syne, 40px) + subtitle + optional hero icon (64px) right-aligned
-  Stats row: 3-4 equal boxes, each with big number (36px Syne) + label + 40px icon
-  2-column feature section: wider left (title + 4-5 bullets + icon) + narrow right (key points or callout)
-  3-column card grid: each card = 48px icon + bold title + 3 bullet points
-  Quote or summary callout
-  Footer`,
+    'mixed-grid': `LAYOUT — Mixed Grid:
+  1. Full-width hero: title (Space Grotesk 40px) + subtitle + 96px hero icon right-aligned
+  2. 3-4 stat boxes row: big number (36px) + label + 40px icon
+  3. 2-column: wider left (title + 4-5 bullets + 64px icon) + narrow right (callout or key points)
+  4. 3-column card grid: each card = 72px icon centered + bold title + 3 bullets
+  5. Summary callout or quote
+  6. Footer`,
 
-    'timeline': `TIMELINE pattern:
-  Header with title + subtitle
-  Central vertical bar (3px, accent color) centered horizontally
-  5-7 alternating nodes left/right:
-    Each node: circle dot (12px) on the bar + date label (accent color) + title (bold) + 1-sentence description
-    Left nodes: text right-aligned ending at bar; right nodes: text left-aligned starting from bar
-  Stats or summary row at bottom
-  Footer`,
+    'timeline': `LAYOUT — Timeline:
+  1. Header with title + subtitle
+  2. Central vertical bar (3px accent) centered horizontally, full height
+  3. 5-7 alternating left/right nodes: 12px circle dot on bar + date (accent color, bold) + title + 1-sentence desc
+     Left: text right-aligned ending at bar. Right: text left-aligned from bar.
+  4. Stats or summary row
+  5. Footer`,
 
-    'funnel': `FUNNEL pattern:
-  Header with title + subtitle
-  5 layers, each narrower than the previous (use border-width trick or clip-path):
-    Colors: --accent at opacity 1.0, 0.85, 0.70, 0.55, 0.40
-    Each: centered stage label (bold, white) + stage name + 1-line description on the right
-  Outcome/result box below the funnel
-  Footer`,
+    'funnel': `LAYOUT — Funnel:
+  1. Header with title + subtitle
+  2. 5 trapezoid layers narrowing top to bottom:
+     Use border-width CSS trick or clip-path. Colors: var(--accent) at 1.0, 0.80, 0.63, 0.47, 0.33 opacity.
+     Each: centered stage name (white bold) + 1-line description right of the shape
+  3. Result/outcome box below
+  4. Footer`,
 
-    'comparison': `COMPARISON pattern:
-  Header framing the two options being compared
-  2-column layout (side by side, equal width):
-    Left column: red-tinted header (#FEE2E2) + "Before" or "Option A" label + 4-5 points
-    Right column: green-tinted header (#DCFCE7) + "After" or "Option B" label + 4-5 points
-  3-4 comparison rows between them: left point ←→ right point with arrow/divider in center
-  Summary / recommendation section
-  Footer`,
+    'comparison': `LAYOUT — Comparison:
+  1. Header framing the two options
+  2. Side-by-side columns (equal width):
+     Left: red-tinted header (#FEE2E2) + "Before"/"Option A" + 4-5 points
+     Right: green-tinted header (#DCFCE7) + "After"/"Option B" + 4-5 points
+  3. 3-4 comparison rows: left item → right item with arrow divider
+  4. Summary / recommendation
+  5. Footer`,
 
-    'flowchart': `FLOWCHART pattern:
-  Header
-  Flowchart with connected elements (use flexbox columns + connector lines via ::after pseudo-elements or SVG):
-    Rounded rectangles for process steps (accent bg, white text)
-    Diamond shapes for decisions (rotate 45deg square, yellow/amber)
-    Arrows with text labels between elements
-  Legend or key
-  Footer`,
+    'flowchart': `LAYOUT — Flowchart:
+  1. Header
+  2. Connected flow: rounded-rect process steps (accent bg, white text) + diamond decisions (rotated square, amber) + labeled arrows
+     Use CSS flexbox columns + connector lines via ::after pseudo-elements or thin SVG lines
+  3. Legend
+  4. Footer`,
   };
+
+  const layoutDir = STATE.layout === 'auto'
+    ? `LAYOUT — Auto: choose the single best layout from: steps-guide (sequential how-to), mixed-grid (overview/explainer), timeline (history/roadmap), funnel (stages/tiers), comparison (X vs Y), flowchart (decision tree).`
+    : `LAYOUT — MANDATORY: use "${STATE.layout}" layout exactly as described below.`;
 
   const recipe = layoutRecipes[STATE.layout] || '';
 
-  return `You are a world-class infographic designer. Generate a single, complete, beautiful, self-contained HTML infographic.
+  return `${toneGuides[STATE.tone]}
 
 TOPIC: ${topic}
-CANVAS: Exactly ${sz.w}px × ${sz.h}px — no overflow, no scrollbars
+CANVAS: exactly ${sz.w}px × ${sz.h}px — no overflow, no scroll
 SECTIONS: ${sz.sections} visual sections to fill the canvas height perfectly
-
-══════════════════════════════════════
-CANVAS SIZE — ABSOLUTE RULE
-══════════════════════════════════════
-The root container (.ig-page) MUST be:
-  width: ${sz.w}px;
-  height: ${sz.h}px;
-  overflow: hidden;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-
-Use flex-grow on sections to distribute vertical space perfectly.
-If content would overflow, shrink fonts or shorten text — do NOT let the page scroll.
-Body style: margin:0; background:#f0f2f5; display:flex; justify-content:center; align-items:flex-start; min-height:100vh;
-
-══════════════════════════════════════
-FONTS
-══════════════════════════════════════
-Include in <head>:
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-Use "Syne" for ALL main headings and section titles.
-Use "Plus Jakarta Sans" for body text, bullets, labels, captions.
-
-══════════════════════════════════════
-CSS VARIABLES — required for live theming
-══════════════════════════════════════
-Define at :root:
-  :root {
-    --accent: ${toneAccent};
-    --accent-soft: ${hexToAlpha(toneAccent, 0.12)};
-  }
-Use var(--accent) and var(--accent-soft) throughout for all accent-colored elements
-(headers, borders, icon badges, stat numbers, highlights).
-This allows the user to live-preview accent color changes.
-
-══════════════════════════════════════
-ILLUSTRATED ICONS — Icons8 Fluency (PRIMARY)
-══════════════════════════════════════
-Use colorful illustrated Icons8 Fluency icons for all content icons.
-Pattern: <img src="https://img.icons8.com/fluency/96/{name}.png" width="{px}" height="{px}" alt="" loading="lazy">
-
-Sizes: hero = 64px, section icons = 48px, card icons = 40px, inline/small = 24-32px
-
-Icon name examples (use exact lowercase, hyphens):
-rocket, idea, lightning-bolt, gear, calendar-3, user-group, shield, checkmark, star,
-trophy, target, key, lock, internet, database, source-code, console, cloud-storage,
-briefcase, dollar-coin, search, open-book, folder, link, chart-increasing, analytics,
-pie-chart, clock, mail, smartphone, home, leaf, brain, artificial-intelligence,
-robot-2, settings, teamwork, strategy, growth, workflow, checklist, approval,
-time-management, deadline, project-management, meeting, handshake, networking,
-statistics, report, presentation, resume, refresh, warning, info, layers,
-color-palette, image, video, music, microphone, chat, collaboration, creativity
-
-Pick the closest-matching name. Use 3-6 different icons spread across the document.
-REQUIRED in footer: <small style="color:#94A3B8;font-size:10px;">Icons by <a href="https://icons8.com" style="color:inherit;text-decoration:none;">Icons8</a></small>
-
-══════════════════════════════════════
-BRAND LOGOS — Clearbit (use when topic names real brands)
-══════════════════════════════════════
-Pattern: <img src="https://logo.clearbit.com/{domain}" width="28" height="28" alt="{Brand}" style="border-radius:5px;object-fit:contain;" loading="lazy">
-
-Domains: anthropic.com, github.com, notion.so, slack.com, figma.com, vercel.com,
-openai.com, google.com, microsoft.com, apple.com, amazon.com, stripe.com,
-discord.com, youtube.com, twitter.com, linear.app, airtable.com, zapier.com,
-hubspot.com, salesforce.com, shopify.com, netflix.com, spotify.com
-
-Use ONLY when the topic explicitly mentions these brands — max 3-4 logos total.
-
-══════════════════════════════════════
-${toneGuides[STATE.tone]}
-
-══════════════════════════════════════
-${layoutDirective}
+${layoutDir}
 ${recipe}
-
-══════════════════════════════════════
-CONTENT QUALITY — NON-NEGOTIABLE
-══════════════════════════════════════
-1. Research first: gather real facts, specific numbers, named tools, exact versions, real examples.
-2. Every text element contains specific, real, non-generic content. Zero filler.
-3. Numbers beat adjectives: "saves 3.2 hrs/day" beats "saves lots of time".
-4. Section titles: ≤ 50 chars, punchy. Body: 1-2 tight sentences. Bullets: ≤ 70 chars.
-5. Active voice only. Cut every word you can.
-6. Density: Canva/Gemini quality level — every section earns its space.
-
-══════════════════════════════════════
-EDIT MODE SUPPORT
-══════════════════════════════════════
-Add contenteditable="true" to EVERY text element: headings, paragraphs, list items, labels, numbers, captions.
-This allows users to click and edit any text inline.
-
-══════════════════════════════════════
-OUTPUT
-══════════════════════════════════════
-Return ONLY the complete <!DOCTYPE html> document.
-• All CSS in <style> inside <head>. No external stylesheets. No JavaScript.
-• Beautiful, polished, pixel-perfect — publication-ready.
-• The page must be visually complete and balanced at exactly ${sz.w}×${sz.h}px.
-
-Do NOT include markdown fences, explanations, or any text before or after the HTML.`;
+Return ONLY the complete <!DOCTYPE html> document. No markdown fences, no explanation.`;
 }
 
 // ── RENDERER ───────────────────────────────────────────────
@@ -422,17 +415,15 @@ function renderHTML(html) {
   const sz    = SIZES[STATE.size];
   const frame = document.createElement('iframe');
   frame.id    = 'outputFrame';
-  frame.style.cssText = `
-    width:${sz.w}px; height:${sz.h}px;
-    border:none; display:block;
-    box-shadow:0 4px 40px rgba(0,0,0,0.18);
-    border-radius:4px; flex-shrink:0;
-  `;
+  frame.style.cssText = `width:${sz.w}px;height:${sz.h}px;border:none;display:block;flex-shrink:0;`;
   frame.srcdoc = html;
 
   const wrap = $('outputWrap');
   wrap.innerHTML = '';
   wrap.appendChild(frame);
+
+  // Re-apply zoom after new frame
+  applyZoom(false);
 }
 
 function applyFrameSize() {
@@ -447,77 +438,145 @@ function applyAccentToFrame() {
   const frame = $('outputFrame');
   if (!frame?.contentDocument) return;
   const doc = frame.contentDocument;
-  let styleEl = doc.getElementById('ig-accent-override');
-  if (!styleEl) {
-    styleEl = doc.createElement('style');
-    styleEl.id = 'ig-accent-override';
-    doc.head?.appendChild(styleEl);
+  let el = doc.getElementById('ig-accent-override');
+  if (!el) {
+    el = doc.createElement('style');
+    el.id = 'ig-accent-override';
+    doc.head?.appendChild(el);
   }
-  styleEl.textContent = `:root { --accent: ${STATE.accent}; --accent-soft: ${hexToAlpha(STATE.accent, 0.12)}; }`;
+  el.textContent = `:root{--accent:${STATE.accent};--accent-soft:${hexToAlpha(STATE.accent, 0.12)};}`;
 }
 
-// ── EDIT MODE ──────────────────────────────────────────────
-function toggleEditMode() {
+// ── RIBBON TOOLBAR ─────────────────────────────────────────
+function setupRibbon() {
+  // Format buttons — mousedown + preventDefault keeps iframe selection
+  $$('.rbtn.fmt').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const cmd = btn.dataset.cmd;
+      if (cmd) ribbonCmd(cmd);
+    });
+  });
+
+  // Font family — save/restore selection around the dropdown change
+  $('rbFont').addEventListener('mousedown', (e) => { e.preventDefault(); });
+  $('rbFont').addEventListener('change', (e) => {
+    restoreFrameSelection();
+    ribbonCmd('fontName', e.target.value);
+  });
+
+  // Font size — wrap selection in a span with font-size style
+  $('rbSize').addEventListener('mousedown', (e) => { e.preventDefault(); });
+  $('rbSize').addEventListener('change', (e) => {
+    restoreFrameSelection();
+    applyFontSize(parseInt(e.target.value, 10));
+  });
+
+  // Text color — restore selection then apply
+  $('rbColor').addEventListener('focus',  saveFrameSelection);
+  $('rbColor').addEventListener('input', (e) => {
+    restoreFrameSelection();
+    ribbonCmd('foreColor', e.target.value);
+  });
+}
+
+// Called after each generation to wire up the iframe's selectionchange
+function setupRibbonForFrame() {
   const frame = $('outputFrame');
-  if (!frame?.contentDocument) return;
-
-  STATE.editMode = !STATE.editMode;
-  const doc = frame.contentDocument;
-
-  let styleEl = doc.getElementById('ig-edit-style');
-  if (STATE.editMode) {
-    if (!styleEl) {
-      styleEl = doc.createElement('style');
-      styleEl.id = 'ig-edit-style';
-      doc.head?.appendChild(styleEl);
-    }
-    styleEl.textContent = `
-      [contenteditable] {
-        outline: 2px dashed rgba(37,99,235,0.4) !important;
-        cursor: text !important;
-        border-radius: 2px !important;
-        min-width: 4px; min-height: 1em;
-      }
-      [contenteditable]:hover {
-        outline: 2px dashed #2563EB !important;
-        background: rgba(37,99,235,0.04) !important;
-      }
-      [contenteditable]:focus {
-        outline: 2px solid #2563EB !important;
-        background: rgba(37,99,235,0.06) !important;
-      }`;
-  } else if (styleEl) {
-    styleEl.remove();
-  }
-
-  updateEditButton();
+  if (!frame) return;
+  const tryWire = () => {
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    doc.addEventListener('selectionchange', () => {
+      try {
+        const sel = doc.getSelection();
+        if (sel?.rangeCount > 0) STATE.savedRange = sel.getRangeAt(0).cloneRange();
+      } catch {}
+    });
+  };
+  if (frame.contentDocument?.readyState === 'complete') tryWire();
+  else frame.addEventListener('load', tryWire, { once: true });
 }
 
-function updateEditButton() {
-  const btn = $('btnEdit');
-  if (!btn) return;
-  if (STATE.editMode) {
-    btn.textContent    = '✓ Editing';
-    btn.style.background = '#2563EB';
-    btn.style.color    = '#fff';
-    btn.style.borderColor = '#2563EB';
-  } else {
-    btn.textContent    = '✏ Edit';
-    btn.style.background = '';
-    btn.style.color    = '';
-    btn.style.borderColor = '';
+function saveFrameSelection() {
+  try {
+    const doc = $('outputFrame')?.contentDocument;
+    if (!doc) return;
+    const sel = doc.getSelection();
+    if (sel?.rangeCount > 0) STATE.savedRange = sel.getRangeAt(0).cloneRange();
+  } catch {}
+}
+
+function restoreFrameSelection() {
+  try {
+    if (!STATE.savedRange) return;
+    const doc = $('outputFrame')?.contentDocument;
+    if (!doc) return;
+    const sel = doc.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(STATE.savedRange);
+  } catch {}
+}
+
+function ribbonCmd(cmd, value = null) {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+  doc.execCommand('styleWithCSS', false, true);
+  doc.execCommand(cmd, false, value);
+}
+
+function applyFontSize(px) {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) return;
+  try {
+    const span = doc.createElement('span');
+    span.style.fontSize   = px + 'px';
+    span.style.lineHeight = '1.35';
+    range.surroundContents(span);
+  } catch {
+    // fallback if selection spans multiple elements
+    doc.execCommand('styleWithCSS', false, true);
+    doc.execCommand('fontSize', false, '4');
   }
+}
+
+// ── ZOOM ───────────────────────────────────────────────────
+function setupZoom() {
+  $('btnZoomIn').addEventListener('click',  () => changeZoom(+0.1));
+  $('btnZoomOut').addEventListener('click', () => changeZoom(-0.1));
+
+  // Trackpad pinch = wheel + ctrlKey on Mac
+  document.querySelector('.cbody').addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    changeZoom(e.deltaY < 0 ? +0.05 : -0.05);
+  }, { passive: false });
+}
+
+function changeZoom(delta) {
+  STATE.zoomLevel = Math.max(0.2, Math.min(3.0, STATE.zoomLevel + delta));
+  applyZoom(true);
+}
+
+function applyZoom(animate = true) {
+  const wrap = $('outputWrap');
+  if (!wrap) return;
+  wrap.style.transition = animate ? 'transform 0.15s ease' : 'none';
+  wrap.style.transform  = `scale(${STATE.zoomLevel})`;
+  $('zoomLabel').textContent = Math.round(STATE.zoomLevel * 100) + '%';
 }
 
 // ── EXPORT HELPERS ─────────────────────────────────────────
 function slugify(s) {
   return (s || 'infograi').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 }
-
 function exportFilename(ext) {
   return `infograi-${slugify(STATE.topic)}.${ext}`;
 }
-
 function download(href, filename) {
   const a = document.createElement('a');
   a.href = href; a.download = filename;
@@ -532,7 +591,6 @@ async function waitForFrame() {
     if (frame.contentDocument?.readyState === 'complete') { resolve(); return; }
     frame.addEventListener('load', resolve, { once: true });
   });
-  // Extra settle time for images/fonts
   await new Promise(r => setTimeout(r, 600));
   return (
     frame.contentDocument?.querySelector('.ig-page') ||
@@ -541,30 +599,68 @@ async function waitForFrame() {
   );
 }
 
+// Convert external image URL → base64 data URL (CORS fix for html-to-image)
+async function toBase64(url) {
+  try {
+    const res = await fetch(url, { mode: 'cors', cache: 'no-store' });
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror   = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
+// Prefetch all iframe images as base64, return a restore function
+async function prefetchFrameImages() {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return () => {};
+  const imgs    = [...doc.querySelectorAll('img')];
+  const origSrc = imgs.map(img => img.src);
+
+  await Promise.all(imgs.map(async (img, i) => {
+    if (!origSrc[i] || origSrc[i].startsWith('data:')) return;
+    const b64 = await toBase64(origSrc[i]);
+    if (b64) img.src = b64;
+  }));
+
+  // Return restore function
+  return () => imgs.forEach((img, i) => { img.src = origSrc[i]; });
+}
+
 // ── EXPORT PNG ─────────────────────────────────────────────
 async function exportPNG() {
+  $('dlMenu').classList.remove('open');
   const el = await waitForFrame();
   if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
+
+  const restore = await prefetchFrameImages();
   try {
     const dataUrl = await htmlToImage.toPng(el, {
       pixelRatio: 2,
-      cacheBust: true,
       backgroundColor: '#ffffff',
     });
     download(dataUrl, exportFilename('png'));
   } catch (e) {
-    alert('PNG export failed: ' + e.message + '\n\nTip: Export as HTML and screenshot in your browser for best results.');
+    alert('PNG export failed: ' + e.message + '\n\nTip: Export as HTML and open in a browser to screenshot.');
+  } finally {
+    restore();
   }
 }
 
 // ── EXPORT PDF ─────────────────────────────────────────────
 async function exportPDF() {
+  $('dlMenu').classList.remove('open');
   const el = await waitForFrame();
   if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
+
+  const restore = await prefetchFrameImages();
   try {
-    const dataUrl = await htmlToImage.toPng(el, { pixelRatio: 2, cacheBust: true });
+    const dataUrl = await htmlToImage.toPng(el, { pixelRatio: 2 });
     const img = new Image();
     img.onload = () => {
       const sz = SIZES[STATE.size];
@@ -581,16 +677,18 @@ async function exportPDF() {
     img.src = dataUrl;
   } catch (e) {
     alert('PDF export failed: ' + e.message);
+  } finally {
+    restore();
   }
 }
 
 // ── EXPORT HTML ────────────────────────────────────────────
 function exportHTML() {
+  $('dlMenu').classList.remove('open');
   const frame = $('outputFrame');
   if (!frame) { alert('Nothing to export yet.'); return; }
   let html;
   try {
-    // Get live content (captures user edits made in edit mode)
     html = '<!DOCTYPE html>' + frame.contentDocument.documentElement.outerHTML;
   } catch {
     html = STATE.currentHTML;
@@ -605,8 +703,17 @@ function showGenerating() {
     <div class="loading-state">
       <div class="loading-ring"></div>
       <div class="loading-txt">Designer agent working…</div>
-      <div class="loading-sub">Researching topic · Designing layout · Generating HTML<br>Usually 20–45 seconds</div>
+      <div class="loading-sub">Researching · Designing layout · Generating HTML</div>
+      <div class="stream-count">Starting…</div>
     </div>`;
+}
+
+function updateStreamProgress(charCount) {
+  const el = document.querySelector('.stream-count');
+  if (el) {
+    const pct = Math.min(98, Math.round((charCount / 9500) * 100));
+    el.textContent = `${charCount.toLocaleString()} characters · ${pct}%`;
+  }
 }
 
 function showError(msg) {
@@ -620,14 +727,12 @@ function showError(msg) {
 
 // ── UTILS ──────────────────────────────────────────────────
 function escHTML(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-
 function hexToAlpha(hex, alpha) {
   const h = (hex || '#000000').replace('#', '');
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }

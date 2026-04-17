@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Infogr.ai — AI Infographic Generator</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div class="logo">Infogr<span>.</span>ai</div>
   <div class="header-right">
-    <div class="badge">Designer v2.0 · Full HTML Generation</div>
+    <div class="badge">Designer v2.1</div>
   </div>
 </header>
 
@@ -23,16 +23,16 @@
         <input class="api-in" type="password" id="apiKey" placeholder="sk-ant-api03-..."/>
         <div class="api-dot" id="apiDot"></div>
       </div>
-      <div class="api-note">Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> — stored in your browser only.</div>
+      <div class="api-note">Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> — stored locally only.</div>
     </section>
 
     <section class="sec">
       <div class="lbl">Describe Your Document</div>
-      <textarea class="prompt-in" id="promptIn" placeholder="e.g. How to set up Claude Cowork completely in 1 hour for non-technical users — steps, tips, prerequisites, folder structure..."></textarea>
+      <textarea class="prompt-in" id="promptIn" placeholder="e.g. How to set up Claude Cowork for non-technical users — steps, tips, prerequisites, folder structure..."></textarea>
     </section>
 
     <section class="sec">
-      <div class="lbl">Master Layout</div>
+      <div class="lbl">Layout</div>
       <div class="tpl-grid" id="layoutGrid"></div>
     </section>
 
@@ -65,21 +65,101 @@
   </aside>
 
   <main class="canvas-area">
-    <div class="ctoolbar" id="toolbar" style="display:none">
-      <div class="ctoolbar-l">
-        <span class="edit-hint">Toggle Edit to click any text and modify it inline</span>
-      </div>
-      <div class="toolbar-right">
-        <label class="accent-picker" title="Change accent color">
+
+    <!-- ── Ribbon toolbar (shown after generation) ── -->
+    <div class="ribbon" id="ribbon" style="display:none">
+
+      <div class="ribbon-tools">
+        <!-- Font family -->
+        <select class="ribbon-select ribbon-font" id="rbFont" title="Font family">
+          <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+          <option value="Space Grotesk">Space Grotesk</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Arial">Arial</option>
+          <option value="Helvetica Neue">Helvetica</option>
+          <option value="Times New Roman">Times New Roman</option>
+        </select>
+        <!-- Font size -->
+        <select class="ribbon-select ribbon-size" id="rbSize" title="Font size">
+          <option>10</option><option>11</option><option>12</option>
+          <option>13</option><option selected>14</option><option>16</option>
+          <option>18</option><option>20</option><option>24</option>
+          <option>28</option><option>32</option><option>36</option>
+          <option>48</option><option>64</option>
+        </select>
+
+        <div class="ribbon-sep"></div>
+
+        <!-- B I U S -->
+        <button class="rbtn fmt" data-cmd="bold"          title="Bold"><strong>B</strong></button>
+        <button class="rbtn fmt" data-cmd="italic"        title="Italic"><em>I</em></button>
+        <button class="rbtn fmt" data-cmd="underline"     title="Underline"><span style="text-decoration:underline">U</span></button>
+        <button class="rbtn fmt" data-cmd="strikethrough" title="Strikethrough"><span style="text-decoration:line-through">S</span></button>
+
+        <div class="ribbon-sep"></div>
+
+        <!-- Text color — A with color underline -->
+        <label class="rbtn color-btn" title="Text color">
+          <span class="color-a">A</span>
+          <input type="color" id="rbColor" value="#1A1A2E">
+        </label>
+
+        <div class="ribbon-sep"></div>
+
+        <!-- Alignment -->
+        <button class="rbtn fmt" data-cmd="justifyLeft"   title="Align left">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="3.5" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="10.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>
+        </button>
+        <button class="rbtn fmt" data-cmd="justifyCenter" title="Center">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="3.5" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="10.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>
+        </button>
+        <button class="rbtn fmt" data-cmd="justifyRight"  title="Align right">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="4" y="3.5" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="6" y="10.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>
+        </button>
+
+        <div class="ribbon-sep"></div>
+
+        <!-- Lists -->
+        <button class="rbtn fmt" data-cmd="insertUnorderedList" title="Bullet list">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><circle cx="1.5" cy="2"  r="1.5" fill="currentColor"/><rect x="4.5" y="1"   width="9.5" height="1.5" rx="0.75" fill="currentColor"/><circle cx="1.5" cy="6"  r="1.5" fill="currentColor"/><rect x="4.5" y="5"   width="9.5" height="1.5" rx="0.75" fill="currentColor"/><circle cx="1.5" cy="10" r="1.5" fill="currentColor"/><rect x="4.5" y="9"   width="7"   height="1.5" rx="0.75" fill="currentColor"/></svg>
+        </button>
+        <button class="rbtn fmt" data-cmd="insertOrderedList" title="Numbered list">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><text x="0" y="4"  font-size="4.5" fill="currentColor" font-family="sans-serif" font-weight="600">1.</text><rect x="5" y="1"  width="9" height="1.5" rx="0.75" fill="currentColor"/><text x="0" y="8"  font-size="4.5" fill="currentColor" font-family="sans-serif" font-weight="600">2.</text><rect x="5" y="5"  width="9" height="1.5" rx="0.75" fill="currentColor"/><text x="0" y="12" font-size="4.5" fill="currentColor" font-family="sans-serif" font-weight="600">3.</text><rect x="5" y="9"  width="7" height="1.5" rx="0.75" fill="currentColor"/></svg>
+        </button>
+      </div><!-- /ribbon-tools -->
+
+      <div class="ribbon-right">
+        <!-- Accent color -->
+        <label class="accent-picker" title="Document accent color">
           <span>Accent</span>
           <input type="color" id="accentPicker" value="#2563EB"/>
         </label>
-        <button class="tbtn" id="btnEdit">✏ Edit</button>
-        <button class="tbtn" id="btnPNG">↓ PNG</button>
-        <button class="tbtn" id="btnPDF">↓ PDF</button>
-        <button class="tbtn" id="btnHTML">↓ HTML</button>
-      </div>
-    </div>
+
+        <div class="ribbon-sep"></div>
+
+        <!-- Zoom -->
+        <div class="zoom-group">
+          <button class="rbtn" id="btnZoomOut" title="Zoom out">−</button>
+          <span class="zoom-label" id="zoomLabel">100%</span>
+          <button class="rbtn" id="btnZoomIn" title="Zoom in">+</button>
+        </div>
+
+        <div class="ribbon-sep"></div>
+
+        <!-- Download dropdown -->
+        <div class="dl-wrap" id="dlWrap">
+          <button class="tbtn primary" id="btnDownload">↓ Export ▾</button>
+          <div class="dl-menu" id="dlMenu">
+            <button id="btnPNG">↓ PNG <span class="dl-hint">high-res 2×</span></button>
+            <button id="btnPDF">↓ PDF</button>
+            <button id="btnHTML">↓ HTML <span class="dl-hint">with edits</span></button>
+          </div>
+        </div>
+      </div><!-- /ribbon-right -->
+
+    </div><!-- /ribbon -->
+
+    <!-- Canvas body -->
     <div class="cbody">
       <div id="outputWrap">
         <div class="empty">
@@ -89,13 +169,13 @@
         </div>
       </div>
     </div>
+
   </main>
 </div>
 
 <!-- Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-
 <script type="module" src="app.js"></script>
 </body>
 </html>
