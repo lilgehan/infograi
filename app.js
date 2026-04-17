@@ -1,24 +1,23 @@
 /* ============================================================
-   Infogr.ai v1.0 — Application Logic
-   - Agent call + JSON validator + retry
-   - DOMParser-based renderer (no regex)
-   - Click-to-edit text, drag-to-reorder, asset swap
-   - Export: PNG, SVG, PDF, HTML snapshot
+   Infogr.ai v2.0 — Full HTML Generation Architecture
+   - One-shot HTML via Claude claude-sonnet-4-6 (max_tokens: 16000)
+   - Iframe renderer (srcdoc)
+   - Icons8 Fluency illustrated icons + Clearbit brand logos
+   - Live accent color injection into iframe
+   - Edit mode (contenteditable toggle)
+   - Export: PNG, PDF, HTML
    ============================================================ */
 
 // ── STATE ──────────────────────────────────────────────────
 const STATE = {
-  apiKey: '',
-  topic: '',
-  layout: 'auto',
-  tone: 'professional',
-  size: 'a4',
-  accent: '#2563EB',
-  plan: null,           // current rendered plan
-  assetCatalog: null,   // loaded from /assets/catalog.json
-  blockCache: {},       // blockId -> HTML string
-  layoutCache: {},      // layoutId -> HTML string
-  assetCache: {},       // assetId -> SVG string
+  apiKey:      '',
+  topic:       '',
+  layout:      'auto',
+  tone:        'professional',
+  size:        'a4',
+  accent:      '#2563EB',
+  currentHTML: null,   // last generated HTML string
+  editMode:    false,
 };
 
 const TONE_COLORS = {
@@ -28,129 +27,33 @@ const TONE_COLORS = {
   playful:      '#7C3AED',
 };
 
-// ── CDN ASSET MAPPINGS ─────────────────────────────────────
-// Icons → Phosphor Icons (jsDelivr CDN, regular weight)
-const CDN_ICONS = {
-  'check-circle':  'check-circle',
-  'x-circle':      'x-circle',
-  'alert-triangle':'warning',
-  'info-circle':   'info',
-  'lightbulb':     'lightbulb',
-  'rocket':        'rocket',
-  'target':        'target',
-  'trophy':        'trophy',
-  'star':          'star',
-  'heart':         'heart',
-  'bolt':          'lightning',
-  'chart-line-up': 'chart-line-up',
-  'chart-bar':     'chart-bar',
-  'chart-pie':     'chart-pie',
-  'user':          'user',
-  'users':         'users',
-  'gear':          'gear',
-  'lock':          'lock-simple',
-  'key':           'key',
-  'shield':        'shield',
-  'globe':         'globe',
-  'map-pin':       'map-pin',
-  'calendar':      'calendar',
-  'clock':         'clock',
-  'mail':          'envelope',
-  'message':       'chat',
-  'phone':         'phone',
-  'search':        'magnifying-glass',
-  'book':          'book',
-  'file-text':     'file-text',
-  'folder':        'folder',
-  'download':      'download',
-  'upload':        'upload',
-  'code':          'code',
-  'terminal':      'terminal-window',
-  'database':      'database',
-  'server':        'hard-drives',
-  'cloud':         'cloud',
-  'briefcase':     'briefcase',
-  'dollar':        'currency-dollar',
-  'credit-card':   'credit-card',
-  'shopping-cart': 'shopping-cart',
-  'link':          'link',
-  'eye':           'eye',
-  'puzzle':        'puzzle-piece',
-  'book-open':     'book-open',
-  'thumbs-up':     'thumbs-up',
-  'thumbs-down':   'thumbs-down',
-};
-
-// Logos → Simple Icons CDN slugs
-const CDN_LOGOS = {
-  'claude':    'anthropic',
-  'github':    'github',
-  'openai':    'openai',
-  'notion':    'notion',
-  'slack':     'slack',
-  'figma':     'figma',
-  'vercel':    'vercel',
-  'google':    'google',
-  'microsoft': 'microsoft',
-  'apple':     'apple',
-  'amazon':    'amazon',
-  'stripe':    'stripe',
-  'discord':   'discord',
-  'youtube':   'youtube',
-  'x-twitter': 'x',
-};
-
 const SIZES = {
-  a4:        { w: 800,  h: 1131, label: 'A4',   ratio: '1:1.414' },
-  portrait:  { w: 800,  h: 1422, label: '9:16', ratio: '9:16'    },
-  square:    { w: 800,  h: 800,  label: '1:1',  ratio: '1:1'     },
-  landscape: { w: 1100, h: 800,  label: '16:9', ratio: '16:9'    },
+  a4:        { w: 800,  h: 1131, label: 'A4',   sections: '6-8' },
+  portrait:  { w: 800,  h: 1422, label: '9:16', sections: '7-9' },
+  square:    { w: 800,  h: 800,  label: '1:1',  sections: '4-5' },
+  landscape: { w: 1100, h: 800,  label: '16:9', sections: '3-4' },
 };
 
 const LAYOUTS = [
-  { id: 'auto',         name: 'Auto (AI picks)', thumb: 'auto' },
-  { id: 'steps-guide',  name: 'Steps Guide',  thumb: 'steps' },
-  { id: 'mixed-grid',   name: 'Mixed Grid',   thumb: 'grid' },
-  { id: 'timeline',     name: 'Timeline',     thumb: 'timeline' },
-  { id: 'funnel',       name: 'Funnel',       thumb: 'funnel' },
-  { id: 'comparison',   name: 'Comparison',   thumb: 'comparison' },
-  { id: 'flowchart',    name: 'Flowchart',    thumb: 'flowchart' },
+  { id: 'auto',        name: 'Auto (AI picks)', thumb: 'auto'       },
+  { id: 'steps-guide', name: 'Steps Guide',     thumb: 'steps'      },
+  { id: 'mixed-grid',  name: 'Mixed Grid',      thumb: 'grid'       },
+  { id: 'timeline',    name: 'Timeline',        thumb: 'timeline'   },
+  { id: 'funnel',      name: 'Funnel',          thumb: 'funnel'     },
+  { id: 'comparison',  name: 'Comparison',      thumb: 'comparison' },
+  { id: 'flowchart',   name: 'Flowchart',       thumb: 'flowchart'  },
 ];
-
-// Block registry — single source of truth for valid block IDs and their slots
-const BLOCK_REGISTRY = {
-  'header-hero':          { slots: ['pretitle', 'title_line1', 'title_line2', 'title_accent'],     assets: ['icon', 'decorative'] },
-  'header-simple':        { slots: ['title', 'subtitle'],                                            assets: [] },
-  'section-divider':      { slots: ['label', 'title', 'body'],                                       assets: [] },
-  'prerequisites-strip':  { slots: ['label', 'items'],                                               assets: [] },
-  'stat-quartet':         { slots: ['stats'],                                                        assets: [] },
-  'step-row':             { slots: ['number', 'title', 'body', 'body2'],                             assets: ['icon', 'logo'] },
-  'step-row-compact':     { slots: ['number', 'title', 'body'],                                      assets: ['icon'] },
-  'callout-tip':          { slots: ['label', 'body'],                                                assets: [] },
-  'callout-warning':      { slots: ['label', 'body'],                                                assets: [] },
-  'quote-block':          { slots: ['quote', 'attribution'],                                         assets: [] },
-  'two-col-equal':        { slots: ['col1_title', 'col1_bullets', 'col2_title', 'col2_bullets'],     assets: ['col1_icon', 'col2_icon'] },
-  'two-col-wide-narrow':  { slots: ['wide_title', 'wide_bullets', 'wide_note', 'narrow_label', 'narrow_items'], assets: ['wide_icon', 'narrow_icon'] },
-  'three-card-grid':      { slots: ['cards'],                                                        assets: [] },
-  'funnel-layer':         { slots: ['layer', 'label', 'sub'],                                        assets: ['icon'] },
-  'comparison-row':       { slots: ['from', 'arrow_label', 'to'],                                    assets: [] },
-  'timeline-node':        { slots: ['side', 'date', 'title'],                                        assets: [] },
-  'acronym-row':          { slots: ['letter', 'word', 'detail'],                                     assets: [] },
-  'footer-tagline':       { slots: ['label', 'text_lead', 'text_accent'],                            assets: [] },
-  'footer-brand':         { slots: ['brand', 'tagline', 'cta'],                                      assets: [] },
-};
 
 // ── DOM ────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // ── INIT ───────────────────────────────────────────────────
-window.addEventListener('load', async () => {
+window.addEventListener('load', () => {
   // Restore API key
   const k = localStorage.getItem('infograi_key');
   if (k) { $('apiKey').value = k; $('apiDot').className = 'api-dot ok'; }
 
-  // Wire API key input
   $('apiKey').addEventListener('input', (e) => {
     const v = e.target.value.trim();
     if (v.startsWith('sk-ant') && v.length > 20) {
@@ -162,68 +65,37 @@ window.addEventListener('load', async () => {
     }
   });
 
-  // Wire layout picker
   renderLayoutPicker();
 
-  // Wire tone chips
   $$('#toneRow .chip').forEach(el => {
     el.addEventListener('click', () => {
       $$('#toneRow .chip').forEach(b => b.classList.remove('on'));
       el.classList.add('on');
-      STATE.tone = el.dataset.tone;
+      STATE.tone   = el.dataset.tone;
       STATE.accent = TONE_COLORS[STATE.tone];
       $('accentPicker').value = STATE.accent;
-      applyToneToCanvas();
+      applyAccentToFrame();
     });
   });
 
-  // Wire size buttons
   $$('#sizeRow .sz-btn').forEach(el => {
     el.addEventListener('click', () => {
       $$('#sizeRow .sz-btn').forEach(b => b.classList.remove('on'));
       el.classList.add('on');
       STATE.size = el.dataset.size;
-      applySizeToCanvas();
+      applyFrameSize();
     });
   });
 
-  // Generate button
   $('genBtn').addEventListener('click', generate);
-
-  // Export buttons
   $('btnPNG').addEventListener('click', exportPNG);
-  $('btnSVG').addEventListener('click', exportSVG);
   $('btnPDF').addEventListener('click', exportPDF);
   $('btnHTML').addEventListener('click', exportHTML);
+  $('btnEdit').addEventListener('click', toggleEditMode);
 
-  // Accent picker
   $('accentPicker').addEventListener('input', (e) => {
     STATE.accent = e.target.value;
-    const canvas = document.querySelector('.ig-canvas');
-    if (canvas) {
-      canvas.style.setProperty('--accent', STATE.accent);
-      canvas.style.setProperty('--accent-soft', hexToAlpha(STATE.accent, 0.12));
-    }
-  });
-
-  // Load asset catalog
-  try {
-    const r = await fetch('assets/catalog.json');
-    STATE.assetCatalog = await r.json();
-  } catch (e) {
-    console.warn('Asset catalog not loaded:', e);
-    STATE.assetCatalog = { icons: {}, logos: {}, decorative: {} };
-  }
-
-  // Asset popover wiring
-  setupAssetPopover();
-
-  // Click outside to close popover
-  document.addEventListener('click', (e) => {
-    const pop = $('assetPopover');
-    if (pop.style.display === 'block' && !pop.contains(e.target) && !e.target.closest('[data-asset-slot]')) {
-      pop.style.display = 'none';
-    }
+    applyAccentToFrame();
   });
 });
 
@@ -238,11 +110,9 @@ function renderLayoutPicker() {
   `).join('');
   grid.querySelectorAll('.tpl-card').forEach(el => {
     el.addEventListener('click', () => {
-      // Click an already-selected non-auto tile to deselect (falls back to auto)
       if (el.classList.contains('on') && el.dataset.layout !== 'auto') {
         el.classList.remove('on');
-        const autoCard = grid.querySelector('[data-layout="auto"]');
-        if (autoCard) autoCard.classList.add('on');
+        grid.querySelector('[data-layout="auto"]')?.classList.add('on');
         STATE.layout = 'auto';
         return;
       }
@@ -266,804 +136,446 @@ function layoutThumb(kind) {
   return thumbs[kind] || '';
 }
 
-// ── AGENT ──────────────────────────────────────────────────
+// ── GENERATE ───────────────────────────────────────────────
 async function generate() {
   const apiKey = $('apiKey').value.trim();
-  const topic = $('promptIn').value.trim();
+  const topic  = $('promptIn').value.trim();
   if (!apiKey) { alert('Please enter your Anthropic API key.'); return; }
-  if (!topic) { alert('Please describe your document topic.'); return; }
+  if (!topic)  { alert('Please describe your document topic.'); return; }
 
-  STATE.apiKey = apiKey;
-  STATE.topic = topic;
+  STATE.apiKey   = apiKey;
+  STATE.topic    = topic;
+  STATE.editMode = false;
 
   const btn = $('genBtn');
   btn.disabled = true;
   btn.classList.add('loading');
   $('toolbar').style.display = 'none';
 
-  showProgress(['Analyzing topic...', 'Designing layout...', 'Fetching blocks...', 'Resolving assets...', 'Rendering document...'], 0);
+  showGenerating();
 
   try {
-    updateProgress(0);
-    let plan = await callAgent(topic);
-
-    updateProgress(1);
-    plan = validatePlan(plan);
-
-    updateProgress(2);
-    await preloadBlocks(plan.blocks);
-
-    updateProgress(3);
-    await preloadAssets(plan);
-
-    updateProgress(4);
-    await renderPlan(plan);
-
-    STATE.plan = plan;
+    const html = await callAgent(topic);
+    STATE.currentHTML = html;
+    renderHTML(html);
     $('toolbar').style.display = 'flex';
-    $('accentPicker').value = plan.theme?.accent || STATE.accent;
-
+    updateEditButton();
   } catch (err) {
     console.error(err);
-    $('outputWrap').innerHTML = `
-      <div class="empty">
-        <div class="empty-ico">⚠</div>
-        <div class="empty-ttl">Generation failed</div>
-        <div class="empty-sub">${err.message || String(err)}</div>
-      </div>`;
+    showError(err.message || String(err));
   }
 
   btn.disabled = false;
   btn.classList.remove('loading');
 }
 
-async function callAgent(topic, retryWithCorrection = false, prevResponse = '') {
-  const canvas = SIZES[STATE.size];
-  const prompt = buildAgentPrompt(topic, canvas, retryWithCorrection, prevResponse);
+// ── AGENT ──────────────────────────────────────────────────
+async function callAgent(topic) {
+  const sz     = SIZES[STATE.size];
+  const prompt = buildPrompt(topic, sz);
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': STATE.apiKey,
+      'Content-Type':  'application/json',
+      'x-api-key':     STATE.apiKey,
       'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
+      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      // Sonnet 4.6 — matches Opus quality for structured JSON at a fraction of the cost.
-      model: 'claude-sonnet-4-6',
-      max_tokens: 12000,
-      messages: [{ role: 'user', content: prompt }]
-    })
+      model:      'claude-sonnet-4-6',
+      max_tokens: 16000,
+      messages:   [{ role: 'user', content: prompt }],
+    }),
   });
 
   const data = await res.json();
   if (data.error) throw new Error(`API error: ${data.error.message}`);
-  if (!data.content || !data.content[0]) throw new Error('Empty response from API');
+  if (!data.content?.[0]) throw new Error('Empty response from API');
 
   const text = data.content[0].text.trim()
-    .replace(/^```json\s*/i, '')
+    .replace(/^```html\s*/i, '')
     .replace(/^```\s*/i, '')
     .replace(/```\s*$/i, '')
     .trim();
 
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    if (!retryWithCorrection) {
-      console.warn('First JSON parse failed, retrying with correction...');
-      return callAgent(topic, true, text);
-    }
-    throw new Error(`Agent returned invalid JSON: ${e.message}`);
+  if (!text.includes('<html') && !text.includes('<!DOCTYPE')) {
+    throw new Error('Agent did not return valid HTML. Please try again.');
   }
+
+  return text;
 }
 
-function buildAgentPrompt(topic, canvas, retry, prevResponse) {
-  const blockCatalog = Object.entries(BLOCK_REGISTRY).map(([id, def]) => {
-    const slotList = def.slots.join(', ');
-    const assetList = def.assets.length ? ` | assets: ${def.assets.join(', ')}` : '';
-    return `- ${id}: slots [${slotList}]${assetList}`;
-  }).join('\n');
+// ── PROMPT BUILDER ─────────────────────────────────────────
+function buildPrompt(topic, sz) {
 
-  const iconIndex = STATE.assetCatalog?.icons
-    ? Object.entries(STATE.assetCatalog.icons).map(([name, def]) => `${name}(${(def.tags || []).join('/')})`).join(', ')
-    : '';
+  const toneAccent = TONE_COLORS[STATE.tone];
 
-  const logoIndex = STATE.assetCatalog?.logos
-    ? Object.keys(STATE.assetCatalog.logos).join(', ')
-    : '';
+  const toneGuides = {
+    professional: `TONE — Professional (clean, authoritative, corporate-grade)
+  Background: #FFFFFF main, #F8FAFC for alternating sections
+  Accent CSS variable: --accent (${toneAccent}) — use for headers, borders, icon badges, highlights
+  Text: #0F172A headings, #334155 body, #64748B captions
+  Cards: white, 1px solid #E2E8F0 border, 8px radius, subtle box-shadow
+  Feel: crisp lines, generous whitespace, data-forward`,
 
-  const decoIndex = STATE.assetCatalog?.decorative
-    ? Object.keys(STATE.assetCatalog.decorative).join(', ')
-    : '';
+    bold: `TONE — Bold (dark, punchy, high-contrast)
+  Background: #0F172A main, #1E293B cards/sections
+  Accent CSS variable: --accent (${toneAccent}) — use for glowing borders, labels, stat numbers
+  Text: #FFFFFF headings, #CBD5E1 body, #94A3B8 captions
+  Labels: uppercase, accent color, letter-spacing 0.08em, 11px font-size
+  Feel: editorial magazine, dark-mode-native, large impactful type`,
 
-  const retryHeader = retry
-    ? `\n\nYOUR PREVIOUS RESPONSE WAS NOT VALID JSON. Here is what you returned:\n---\n${prevResponse.slice(0, 1000)}\n---\nReturn ONLY valid JSON matching the schema below. No markdown, no explanation.\n\n`
-    : '';
+    minimal: `TONE — Minimal (editorial, spare, every pixel earns its place)
+  Background: #FAFAF8 main, #F5F3EF alternating
+  Accent CSS variable: --accent (${toneAccent}) — use sparingly (1px borders, underlines, one highlight element)
+  Text: #1C1917 headings, #57534E body, #A8A29E captions
+  Borders: 1px solid #E7E5E4 — no drop shadows, flat design
+  Feel: refined, airy, typography-led — let content breathe`,
 
-  const layoutRecipes = {
-    'steps-guide': 'header-hero → prerequisites-strip → section-divider → 6–9× step-row → 2–3× callout-tip → callout-warning → quote-block → footer-tagline → footer-brand',
-    'mixed-grid':  'header-hero → section-divider → stat-quartet → two-col-equal → three-card-grid → quote-block → callout-tip → section-divider → three-card-grid → footer-tagline → footer-brand',
-    'timeline':    'header-hero → section-divider → 6–8× timeline-node (alternating left/right sides) → stat-quartet → callout-tip → footer-tagline → footer-brand',
-    'funnel':      'header-hero → stat-quartet → 5× funnel-layer (layer 1→5) → three-card-grid → callout-tip → footer-tagline → footer-brand',
-    'comparison':  'header-hero → two-col-equal → 4–5× comparison-row → section-divider → three-card-grid → quote-block → footer-tagline → footer-brand',
-    'flowchart':   'header-hero → step-row → comparison-row → step-row → callout-tip → step-row → comparison-row → three-card-grid → footer-tagline → footer-brand',
+    playful: `TONE — Playful (warm, energetic, friendly — but data-rich, not childish)
+  Background: #FFFBEB main, #FEF3C7 alternating sections
+  Accent CSS variable: --accent (${toneAccent}) — use for headers, badges, highlights
+  Text: #1C1917 headings, #44403C body
+  Cards: rounded-2xl corners (16px), gentle box-shadows (0 2px 12px rgba(0,0,0,0.08))
+  Secondary accent: #F59E0B amber for stat numbers, callout borders
+  Feel: bright, motivated, premium learning content`,
   };
 
   const layoutDirective = STATE.layout === 'auto'
-    ? `LAYOUT: AUTO — You choose the single best layout from the list below, based on the TOPIC's nature. Prefer picking an existing layout; only diverge if none fit, in which case assemble a custom block sequence using blocks from the catalog. Report your chosen layout id in the "layout" field.
-Candidates (pick one):
-  • steps-guide    — sequential how-to, tutorial, process, playbook
-  • mixed-grid     — overview, explainer, "what is X" article, feature roundup
-  • timeline       — history, roadmap, evolution, chronology, milestones
-  • funnel         — stages, conversion, tiers, hierarchy, narrowing progression
-  • comparison     — X vs Y, before/after, pros/cons, old way vs new way
-  • flowchart      — decision tree, branching workflow, if-then logic`
-    : `LAYOUT: ⚠ HARD REQUIREMENT — "${STATE.layout}" IS THE MANDATORY LAYOUT. You MUST follow this recipe as the backbone of your block sequence:
-  ${layoutRecipes[STATE.layout] || STATE.layout}
-You may enrich this recipe by adding extra blocks between the anchors, but you must not replace the core block types defined by this layout. Set "layout": "${STATE.layout}" in your JSON output.`;
+    ? `LAYOUT — Auto: choose the single best layout for this topic.
+  • steps-guide   → numbered tutorial, how-to, process (sequential topics)
+  • mixed-grid    → overview, explainer, feature roundup ("what is X")
+  • timeline      → history, roadmap, chronology, milestones
+  • funnel        → stages, tiers, conversion, narrowing hierarchy
+  • comparison    → X vs Y, before/after, pros/cons
+  • flowchart     → decision tree, branching workflow, if-then logic`
+    : `LAYOUT — MANDATORY: You MUST use the "${STATE.layout}" layout pattern described below.`;
 
-  return `${retryHeader}You are a senior infographic designer + subject-matter researcher producing a professional, Figma/Canva-grade document.
+  const layoutRecipes = {
+    'steps-guide': `STEPS-GUIDE pattern:
+  Header (full-width, dark or accent bg): category label + main title (Syne, 36-40px) + subtitle
+  Prerequisites strip: 3-4 small chips in a row, each with 24px icon + short label
+  Numbered steps (5-8 steps): large step-number (56px, accent color) left + title + 2-sentence description right + optional 40px icon top-right
+    Alternate white/very-light-accent row backgrounds
+  Key stats strip: 3-4 boxes, each with big number + label + icon
+  Callout box: left accent border, light bg, tip or warning text
+  Footer: brand + attribution`,
 
-Your job has TWO phases (do them internally, output only the JSON):
+    'mixed-grid': `MIXED-GRID pattern:
+  Hero header (full-width): title (Syne, 40px) + subtitle + optional hero icon (64px) right-aligned
+  Stats row: 3-4 equal boxes, each with big number (36px Syne) + label + 40px icon
+  2-column feature section: wider left (title + 4-5 bullets + icon) + narrow right (key points or callout)
+  3-column card grid: each card = 48px icon + bold title + 3 bullet points
+  Quote or summary callout
+  Footer`,
 
-PHASE 1 — SILENT RESEARCH (think before writing):
-  • Brainstorm everything a knowledgeable expert would include on this topic: definitions, key numbers, named tools, real-world examples, step-by-step procedures, common pitfalls, best practices, notable people or companies, historical context, counter-intuitive facts.
-  • Gather concrete specifics: real statistics, named frameworks, exact versions, dates, price points, named products.
-  • Identify the document's single sharpest thesis — what is the ONE insight a reader should walk away with?
+    'timeline': `TIMELINE pattern:
+  Header with title + subtitle
+  Central vertical bar (3px, accent color) centered horizontally
+  5-7 alternating nodes left/right:
+    Each node: circle dot (12px) on the bar + date label (accent color) + title (bold) + 1-sentence description
+    Left nodes: text right-aligned ending at bar; right nodes: text left-aligned starting from bar
+  Stats or summary row at bottom
+  Footer`,
 
-PHASE 2 — DESIGN THE DOCUMENT:
-  • Translate your research into 14-18 blocks of dense, specific content.
-  • Every slot must be filled with real, specific, non-generic copy. No Lorem Ipsum. No "your content here". No vague filler.
-  • Facts > adjectives. Numbers > hand-waving. Named things > abstractions.
+    'funnel': `FUNNEL pattern:
+  Header with title + subtitle
+  5 layers, each narrower than the previous (use border-width trick or clip-path):
+    Colors: --accent at opacity 1.0, 0.85, 0.70, 0.55, 0.40
+    Each: centered stage label (bold, white) + stage name + 1-line description on the right
+  Outcome/result box below the funnel
+  Footer`,
+
+    'comparison': `COMPARISON pattern:
+  Header framing the two options being compared
+  2-column layout (side by side, equal width):
+    Left column: red-tinted header (#FEE2E2) + "Before" or "Option A" label + 4-5 points
+    Right column: green-tinted header (#DCFCE7) + "After" or "Option B" label + 4-5 points
+  3-4 comparison rows between them: left point ←→ right point with arrow/divider in center
+  Summary / recommendation section
+  Footer`,
+
+    'flowchart': `FLOWCHART pattern:
+  Header
+  Flowchart with connected elements (use flexbox columns + connector lines via ::after pseudo-elements or SVG):
+    Rounded rectangles for process steps (accent bg, white text)
+    Diamond shapes for decisions (rotate 45deg square, yellow/amber)
+    Arrows with text labels between elements
+  Legend or key
+  Footer`,
+  };
+
+  const recipe = layoutRecipes[STATE.layout] || '';
+
+  return `You are a world-class infographic designer. Generate a single, complete, beautiful, self-contained HTML infographic.
 
 TOPIC: ${topic}
+CANVAS: Exactly ${sz.w}px × ${sz.h}px — no overflow, no scrollbars
+SECTIONS: ${sz.sections} visual sections to fill the canvas height perfectly
+
+══════════════════════════════════════
+CANVAS SIZE — ABSOLUTE RULE
+══════════════════════════════════════
+The root container (.ig-page) MUST be:
+  width: ${sz.w}px;
+  height: ${sz.h}px;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+
+Use flex-grow on sections to distribute vertical space perfectly.
+If content would overflow, shrink fonts or shorten text — do NOT let the page scroll.
+Body style: margin:0; background:#f0f2f5; display:flex; justify-content:center; align-items:flex-start; min-height:100vh;
+
+══════════════════════════════════════
+FONTS
+══════════════════════════════════════
+Include in <head>:
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+Use "Syne" for ALL main headings and section titles.
+Use "Plus Jakarta Sans" for body text, bullets, labels, captions.
+
+══════════════════════════════════════
+CSS VARIABLES — required for live theming
+══════════════════════════════════════
+Define at :root:
+  :root {
+    --accent: ${toneAccent};
+    --accent-soft: ${hexToAlpha(toneAccent, 0.12)};
+  }
+Use var(--accent) and var(--accent-soft) throughout for all accent-colored elements
+(headers, borders, icon badges, stat numbers, highlights).
+This allows the user to live-preview accent color changes.
+
+══════════════════════════════════════
+ILLUSTRATED ICONS — Icons8 Fluency (PRIMARY)
+══════════════════════════════════════
+Use colorful illustrated Icons8 Fluency icons for all content icons.
+Pattern: <img src="https://img.icons8.com/fluency/96/{name}.png" width="{px}" height="{px}" alt="" loading="lazy">
+
+Sizes: hero = 64px, section icons = 48px, card icons = 40px, inline/small = 24-32px
+
+Icon name examples (use exact lowercase, hyphens):
+rocket, idea, lightning-bolt, gear, calendar-3, user-group, shield, checkmark, star,
+trophy, target, key, lock, internet, database, source-code, console, cloud-storage,
+briefcase, dollar-coin, search, open-book, folder, link, chart-increasing, analytics,
+pie-chart, clock, mail, smartphone, home, leaf, brain, artificial-intelligence,
+robot-2, settings, teamwork, strategy, growth, workflow, checklist, approval,
+time-management, deadline, project-management, meeting, handshake, networking,
+statistics, report, presentation, resume, refresh, warning, info, layers,
+color-palette, image, video, music, microphone, chat, collaboration, creativity
+
+Pick the closest-matching name. Use 3-6 different icons spread across the document.
+REQUIRED in footer: <small style="color:#94A3B8;font-size:10px;">Icons by <a href="https://icons8.com" style="color:inherit;text-decoration:none;">Icons8</a></small>
+
+══════════════════════════════════════
+BRAND LOGOS — Clearbit (use when topic names real brands)
+══════════════════════════════════════
+Pattern: <img src="https://logo.clearbit.com/{domain}" width="28" height="28" alt="{Brand}" style="border-radius:5px;object-fit:contain;" loading="lazy">
+
+Domains: anthropic.com, github.com, notion.so, slack.com, figma.com, vercel.com,
+openai.com, google.com, microsoft.com, apple.com, amazon.com, stripe.com,
+discord.com, youtube.com, twitter.com, linear.app, airtable.com, zapier.com,
+hubspot.com, salesforce.com, shopify.com, netflix.com, spotify.com
+
+Use ONLY when the topic explicitly mentions these brands — max 3-4 logos total.
+
+══════════════════════════════════════
+${toneGuides[STATE.tone]}
+
+══════════════════════════════════════
 ${layoutDirective}
-TONE: ${STATE.tone}
-CANVAS: ${canvas.w}x${canvas.h} (${canvas.label})
+${recipe}
 
-AVAILABLE BLOCKS (pick by id — only these ids are valid):
-${blockCatalog}
+══════════════════════════════════════
+CONTENT QUALITY — NON-NEGOTIABLE
+══════════════════════════════════════
+1. Research first: gather real facts, specific numbers, named tools, exact versions, real examples.
+2. Every text element contains specific, real, non-generic content. Zero filler.
+3. Numbers beat adjectives: "saves 3.2 hrs/day" beats "saves lots of time".
+4. Section titles: ≤ 50 chars, punchy. Body: 1-2 tight sentences. Bullets: ≤ 70 chars.
+5. Active voice only. Cut every word you can.
+6. Density: Canva/Gemini quality level — every section earns its space.
 
-AVAILABLE ICONS (semantic names — pick the closest match by tag):
-${iconIndex}
+══════════════════════════════════════
+EDIT MODE SUPPORT
+══════════════════════════════════════
+Add contenteditable="true" to EVERY text element: headings, paragraphs, list items, labels, numbers, captions.
+This allows users to click and edit any text inline.
 
-AVAILABLE BRAND LOGOS (use when topic mentions these brands):
-${logoIndex}
+══════════════════════════════════════
+OUTPUT
+══════════════════════════════════════
+Return ONLY the complete <!DOCTYPE html> document.
+• All CSS in <style> inside <head>. No external stylesheets. No JavaScript.
+• Beautiful, polished, pixel-perfect — publication-ready.
+• The page must be visually complete and balanced at exactly ${sz.w}×${sz.h}px.
 
-AVAILABLE DECORATIVE SHAPES:
-${decoIndex}
-
-LAYOUT RECIPES (starting points — enrich with extra blocks as needed):
-- steps-guide:  header-hero → prerequisites-strip → section-divider → 6-9 step-row → 2-3 callout-tip → callout-warning → quote-block → footer-tagline → footer-brand
-- mixed-grid:   header-hero → section-divider → stat-quartet → two-col-equal → three-card-grid → quote-block → callout-tip → section-divider → three-card-grid → footer-tagline → footer-brand
-- timeline:     header-hero → section-divider → 6-8 timeline-node (alternating side) → stat-quartet → callout-tip → footer-tagline → footer-brand
-- funnel:       header-hero → stat-quartet → 5 funnel-layer (layer 1→5) → three-card-grid → callout-tip → footer-tagline → footer-brand
-- comparison:   header-hero → two-col-equal → 4-5 comparison-row → section-divider → three-card-grid → quote-block → footer-tagline → footer-brand
-- flowchart:    header-hero → step-row → comparison-row → step-row → callout-tip → step-row → comparison-row → three-card-grid → footer-tagline → footer-brand
-
-UNIVERSAL RULES:
-1. Always start with header-hero. Always end with footer-tagline + footer-brand.
-2. Target 14-18 blocks. MINIMUM 12. Richness wins.
-3. Mix block types. A good infographic alternates dense text with visual variety (stats, cards, callouts, comparisons) — never 10 of the same block in a row.
-4. Every text slot contains real, topic-specific copy. Concrete numbers, named tools, specific tactics, exact versions.
-5. Body text in step-row: 2 short paragraphs (body + body2), each 1-2 sentences. Keep lines tight so text fits without overflow.
-6. Titles and headings: ≤ 60 characters. Bullets: ≤ 80 characters each. Step bodies: ≤ 180 chars each.
-7. Every icon reference must match a name from the ICONS list EXACTLY. If no perfect match, pick the closest by tag.
-8. If topic names a listed brand (claude, github, notion, slack, figma, vercel, openai, etc.), use that LOGO in the header-hero "icon" slot.
-9. For stat-quartet: exactly 4 stats, each with {number (e.g. "87%", "3.2x", "$240B"), label, sub, icon}.
-10. For three-card-grid: exactly 3 cards, each with {title, bullets: [3 strings], icon}.
-11. For prerequisites-strip: exactly 4 items, each {text, icon}.
-12. For two-col-equal: 4-6 bullets per column.
-13. For funnel-layer: set "layer" to 1-5 (numeric).
-14. For timeline-node: set "side" to "left" or "right", alternating.
-15. For acronym-row: "letter" is a single uppercase letter; use a set (e.g. S-E-R-V-E, S-M-A-R-T).
-16. Write in active voice. No filler ("in today's world", "it's important to note", "at the end of the day"). Cut every word you can.
-17. Tone presets: professional = authoritative + crisp; bold = punchy + declarative; minimal = spare + elegant; playful = warm + specific-not-cute.
-
-OUTPUT — return ONLY valid JSON, no prose, no markdown fences:
-{
-  "title": "specific title — the real thesis of the doc",
-  "subtitle": "optional one-line subtitle",
-  "layout": "one of: steps-guide | mixed-grid | timeline | funnel | comparison | flowchart | custom",
-  "theme": { "accent": "#hex matching the tone" },
-  "brand": { "name": "brand or author", "tagline": "url or tagline", "cta": "Follow for more →" },
-  "blocks": [
-    { "id": "block-id-from-catalog", "props": { "slot_name": "real specific content", "icon": "icon-name" } }
-  ]
-}`;
-}
-
-// ── VALIDATOR ──────────────────────────────────────────────
-function validatePlan(plan) {
-  if (!plan || typeof plan !== 'object') throw new Error('Plan is not an object');
-  if (!Array.isArray(plan.blocks)) throw new Error('Plan has no blocks array');
-  if (plan.blocks.length === 0) throw new Error('Plan has zero blocks');
-
-  // Filter to valid block IDs only
-  plan.blocks = plan.blocks.filter(b => BLOCK_REGISTRY[b.id]);
-
-  // If a specific layout was chosen (not auto), stamp it into the plan
-  if (STATE.layout !== 'auto') {
-    plan.layout = STATE.layout;
-  }
-
-  // Default theme
-  plan.theme = plan.theme || {};
-  if (!plan.theme.accent) plan.theme.accent = TONE_COLORS[STATE.tone];
-
-  // Ensure props are objects
-  plan.blocks.forEach(b => {
-    b.props = b.props || {};
-  });
-
-  return plan;
-}
-
-// ── BLOCK + LAYOUT + ASSET LOADERS ─────────────────────────
-async function fetchBlock(blockId) {
-  if (STATE.blockCache[blockId]) return STATE.blockCache[blockId];
-  const r = await fetch(`blocks/${blockId}.html`);
-  if (!r.ok) throw new Error(`Block not found: ${blockId}`);
-  const html = await r.text();
-  STATE.blockCache[blockId] = html;
-  return html;
-}
-
-async function fetchAsset(type, name) {
-  const key = `${type}/${name}`;
-  if (STATE.assetCache[key]) return STATE.assetCache[key];
-
-  let svgText = null;
-
-  // Try CDN first (real icons/logos)
-  if (type === 'icons' && CDN_ICONS[name]) {
-    svgText = await fetchCDNIcon(CDN_ICONS[name]);
-  } else if (type === 'logos' && CDN_LOGOS[name]) {
-    svgText = await fetchCDNLogo(CDN_LOGOS[name]);
-  }
-
-  // Fall back to local hand-drawn if CDN failed
-  if (!svgText) {
-    const def = STATE.assetCatalog?.[type]?.[name];
-    if (def) {
-      try {
-        const r = await fetch(`assets/${def.path}`);
-        if (r.ok) svgText = await r.text();
-      } catch {}
-    }
-  }
-
-  if (svgText) {
-    STATE.assetCache[key] = svgText;
-    return svgText;
-  }
-  return null;
-}
-
-async function fetchCDNIcon(phosphorName) {
-  try {
-    const url = `https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2.1.1/assets/regular/${phosphorName}.svg`;
-    const r = await fetch(url);
-    if (!r.ok) return null;
-    const svg = await r.text();
-    return sanitizeSVGColors(svg);
-  } catch {
-    return null;
-  }
-}
-
-async function fetchCDNLogo(simpleSlug) {
-  try {
-    const url = `https://cdn.simpleicons.org/${simpleSlug}`;
-    const r = await fetch(url);
-    if (!r.ok) return null;
-    const svg = await r.text();
-    return sanitizeSVGColors(svg);
-  } catch {
-    return null;
-  }
-}
-
-// Make any SVG respect CSS currentColor so it adapts to container color
-function sanitizeSVGColors(svg) {
-  return svg
-    .replace(/fill="(?!none\b)[^"]*"/g, 'fill="currentColor"')
-    .replace(/stroke="(?!none\b)[^"]*"/g, 'stroke="currentColor"');
-}
-
-async function preloadBlocks(blocks) {
-  const ids = [...new Set(blocks.map(b => b.id))];
-  await Promise.all(ids.map(id => fetchBlock(id).catch(() => null)));
-}
-
-async function preloadAssets(plan) {
-  const tasks = [];
-  for (const block of plan.blocks) {
-    walkAssetRefs(block.props, (type, name) => {
-      tasks.push(fetchAsset(type, name));
-    });
-  }
-  await Promise.all(tasks);
-}
-
-function walkAssetRefs(obj, fn) {
-  if (!obj || typeof obj !== 'object') return;
-  for (const [key, val] of Object.entries(obj)) {
-    if (Array.isArray(val)) {
-      val.forEach(item => walkAssetRefs(item, fn));
-    } else if (val && typeof val === 'object') {
-      walkAssetRefs(val, fn);
-    } else if (typeof val === 'string') {
-      // Detect asset references by key convention
-      if (key === 'icon' || key === 'col1_icon' || key === 'col2_icon' || key === 'wide_icon' || key === 'narrow_icon') {
-        fn('icons', val);
-        // Also try logos
-        fn('logos', val);
-      } else if (key === 'logo') {
-        fn('logos', val);
-      } else if (key === 'decorative') {
-        fn('decorative', val);
-      }
-    }
-  }
-}
-
-function resolveAssetSVG(name) {
-  // Try icons, then logos, then decorative
-  return STATE.assetCache[`icons/${name}`] ||
-         STATE.assetCache[`logos/${name}`] ||
-         STATE.assetCache[`decorative/${name}`] ||
-         null;
+Do NOT include markdown fences, explanations, or any text before or after the HTML.`;
 }
 
 // ── RENDERER ───────────────────────────────────────────────
-async function renderPlan(plan) {
-  const canvas = document.createElement('div');
-  canvas.className = 'ig-canvas';
-  canvas.setAttribute('data-tone', STATE.tone);
-  canvas.setAttribute('data-size', STATE.size);
+function renderHTML(html) {
+  const sz    = SIZES[STATE.size];
+  const frame = document.createElement('iframe');
+  frame.id    = 'outputFrame';
+  frame.style.cssText = `
+    width:${sz.w}px; height:${sz.h}px;
+    border:none; display:block;
+    box-shadow:0 4px 40px rgba(0,0,0,0.18);
+    border-radius:4px; flex-shrink:0;
+  `;
+  frame.srcdoc = html;
 
-  // Apply canvas size (width from SIZES; height flows with content)
+  const wrap = $('outputWrap');
+  wrap.innerHTML = '';
+  wrap.appendChild(frame);
+}
+
+function applyFrameSize() {
+  const frame = $('outputFrame');
+  if (!frame) return;
   const sz = SIZES[STATE.size];
-  canvas.style.width = sz.w + 'px';
-  canvas.style.maxWidth = '100%';
+  frame.style.width  = sz.w + 'px';
+  frame.style.height = sz.h + 'px';
+}
 
-  // Apply accent
-  const accent = plan.theme?.accent || STATE.accent;
-  STATE.accent = accent;
-  canvas.style.setProperty('--accent', accent);
-  canvas.style.setProperty('--accent-soft', hexToAlpha(accent, 0.12));
-  canvas.style.setProperty('--accent-dark', darken(accent, 0.2));
-
-  const blocksWrap = document.createElement('div');
-  blocksWrap.className = 'ig-blocks';
-
-  // Render each block
-  for (const blockData of plan.blocks) {
-    const el = await renderBlock(blockData, plan);
-    if (el) blocksWrap.appendChild(el);
+function applyAccentToFrame() {
+  const frame = $('outputFrame');
+  if (!frame?.contentDocument) return;
+  const doc = frame.contentDocument;
+  let styleEl = doc.getElementById('ig-accent-override');
+  if (!styleEl) {
+    styleEl = doc.createElement('style');
+    styleEl.id = 'ig-accent-override';
+    doc.head?.appendChild(styleEl);
   }
-
-  canvas.appendChild(blocksWrap);
-
-  // Mount
-  $('outputWrap').innerHTML = '';
-  $('outputWrap').appendChild(canvas);
-
-  // Wire editor
-  wireEditor(canvas);
+  styleEl.textContent = `:root { --accent: ${STATE.accent}; --accent-soft: ${hexToAlpha(STATE.accent, 0.12)}; }`;
 }
 
-async function renderBlock(blockData, plan) {
-  const { id, props } = blockData;
-  const def = BLOCK_REGISTRY[id];
-  if (!def) return null;
+// ── EDIT MODE ──────────────────────────────────────────────
+function toggleEditMode() {
+  const frame = $('outputFrame');
+  if (!frame?.contentDocument) return;
 
-  const html = STATE.blockCache[id];
-  if (!html) return null;
+  STATE.editMode = !STATE.editMode;
+  const doc = frame.contentDocument;
 
-  // Parse the block HTML into a DOM element
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const el = doc.body.firstElementChild;
-  if (!el) return null;
-
-  // Fill text slots
-  fillBlockSlots(el, id, props, plan);
-
-  // Fill asset slots
-  fillBlockAssets(el, id, props);
-
-  return el;
-}
-
-// Normalize a slot item that might be a plain string or an object {text, label, ...}
-function itemText(item) {
-  if (item == null) return '';
-  if (typeof item === 'string') return item;
-  if (typeof item === 'object') return item.text || item.label || item.title || item.body || '';
-  return String(item);
-}
-
-function fillBlockSlots(el, blockId, props, plan) {
-  // Block-specific fillers
-  switch (blockId) {
-    case 'header-hero':
-      setSlot(el, 'pretitle', props.pretitle);
-      setSlot(el, 'title_line1', props.title_line1);
-      setSlot(el, 'title_line2', props.title_line2);
-      setSlot(el, 'title_accent', props.title_accent);
-      break;
-
-    case 'header-simple':
-      setSlot(el, 'title', props.title);
-      setSlot(el, 'subtitle', props.subtitle);
-      break;
-
-    case 'section-divider':
-      setSlot(el, 'label', props.label);
-      setSlot(el, 'title', props.title);
-      setSlot(el, 'body', props.body);
-      break;
-
-    case 'prerequisites-strip':
-      setSlot(el, 'label', props.label || 'PREREQUISITES');
-      const preItems = Array.isArray(props.items) ? props.items.slice(0, 4) : [];
-      const preContainer = el.querySelector('[data-slot="items"]');
-      if (preContainer) {
-        preContainer.innerHTML = preItems.map((item, i) => `
-          <div class="ig-pre-item">
-            <span data-asset-slot data-asset-type="icon" data-asset-name="${escAttr(item.icon || 'check-circle')}"></span>
-            <span data-editable="true" contenteditable="true">${escHTML(itemText(item))}</span>
-          </div>
-        `).join('');
-      }
-      break;
-
-    case 'stat-quartet':
-      const stats = Array.isArray(props.stats) ? props.stats.slice(0, 4) : [];
-      const statContainer = el.querySelector('[data-slot="stats"]');
-      if (statContainer) {
-        statContainer.innerHTML = stats.map((s, i) => `
-          <div class="ig-stat ${i === 1 ? 'dark' : i === 3 ? 'accent' : ''}">
-            <div class="ig-stat-icon"><span data-asset-slot data-asset-type="icon" data-asset-name="${escAttr(s.icon || 'chart-line-up')}"></span></div>
-            <div class="ig-stat-number" data-editable="true" contenteditable="true">${escHTML(s.number || '')}</div>
-            <div class="ig-stat-label" data-editable="true" contenteditable="true">${escHTML(s.label || '')}</div>
-            <div class="ig-stat-sub" data-editable="true" contenteditable="true">${escHTML(s.sub || '')}</div>
-          </div>
-        `).join('');
-      }
-      break;
-
-    case 'step-row':
-    case 'step-row-compact':
-      setSlot(el, 'number', props.number);
-      setSlot(el, 'title', props.title);
-      setSlot(el, 'body', props.body);
-      if (blockId === 'step-row') setSlot(el, 'body2', props.body2);
-      break;
-
-    case 'callout-tip':
-    case 'callout-warning':
-      setSlot(el, 'label', props.label || (blockId === 'callout-tip' ? 'TIP' : 'WARNING'));
-      setSlot(el, 'body', props.body);
-      break;
-
-    case 'quote-block':
-      setSlot(el, 'quote', props.quote);
-      setSlot(el, 'attribution', props.attribution);
-      break;
-
-    case 'two-col-equal':
-      setSlot(el, 'col1_title', props.col1_title);
-      setSlot(el, 'col2_title', props.col2_title);
-      const b1 = Array.isArray(props.col1_bullets) ? props.col1_bullets : [];
-      const b2 = Array.isArray(props.col2_bullets) ? props.col2_bullets : [];
-      const c1 = el.querySelector('[data-slot="col1_bullets"]');
-      const c2 = el.querySelector('[data-slot="col2_bullets"]');
-      if (c1) c1.innerHTML = b1.map(t => `<li data-editable="true" contenteditable="true">${escHTML(itemText(t))}</li>`).join('');
-      if (c2) c2.innerHTML = b2.map(t => `<li data-editable="true" contenteditable="true">${escHTML(itemText(t))}</li>`).join('');
-      break;
-
-    case 'two-col-wide-narrow':
-      setSlot(el, 'wide_title', props.wide_title);
-      setSlot(el, 'wide_note', props.wide_note);
-      setSlot(el, 'narrow_label', props.narrow_label || 'KEY POINTS');
-      const wb = Array.isArray(props.wide_bullets) ? props.wide_bullets : [];
-      const ni = Array.isArray(props.narrow_items) ? props.narrow_items : [];
-      const wbEl = el.querySelector('[data-slot="wide_bullets"]');
-      const niEl = el.querySelector('[data-slot="narrow_items"]');
-      if (wbEl) wbEl.innerHTML = wb.map(t => `<li data-editable="true" contenteditable="true">${escHTML(itemText(t))}</li>`).join('');
-      if (niEl) niEl.innerHTML = ni.map(t => `<li data-editable="true" contenteditable="true">${escHTML(itemText(t))}</li>`).join('');
-      break;
-
-    case 'three-card-grid':
-      const cards = Array.isArray(props.cards) ? props.cards.slice(0, 3) : [];
-      const cardContainer = el.querySelector('[data-slot="cards"]');
-      if (cardContainer) {
-        cardContainer.innerHTML = cards.map((c, i) => {
-          const bullets = Array.isArray(c.bullets) ? c.bullets : [];
-          return `
-            <div class="ig-card ${i === 1 ? 'dark' : ''}">
-              <div class="ig-card-icon"><span data-asset-slot data-asset-type="icon" data-asset-name="${escAttr(c.icon || 'star')}"></span></div>
-              <div class="ig-card-title" data-editable="true" contenteditable="true">${escHTML(c.title || '')}</div>
-              <ul class="ig-card-body">
-                ${bullets.map(b => `<li data-editable="true" contenteditable="true">${escHTML(itemText(b))}</li>`).join('')}
-              </ul>
-            </div>
-          `;
-        }).join('');
-      }
-      break;
-
-    case 'funnel-layer':
-      el.setAttribute('data-layer', String(props.layer || 1));
-      setSlot(el, 'label', props.label);
-      setSlot(el, 'sub', props.sub);
-      break;
-
-    case 'comparison-row':
-      setSlot(el, 'from', props.from);
-      setSlot(el, 'to', props.to);
-      setSlot(el, 'arrow_label', props.arrow_label || 'TO');
-      break;
-
-    case 'timeline-node': {
-      const side = props.side === 'right' ? 'right' : 'left';
-      const leftPanel = el.querySelector('.ig-tl-panel.left');
-      const rightPanel = el.querySelector('.ig-tl-panel.right');
-      const activePanel = side === 'left' ? leftPanel : rightPanel;
-      const emptyPanel = side === 'left' ? rightPanel : leftPanel;
-      if (activePanel) {
-        const dEl = activePanel.querySelector('[data-slot="date"]');
-        const tEl = activePanel.querySelector('[data-slot="title"]');
-        if (dEl) dEl.textContent = props.date == null ? '' : String(props.date);
-        if (tEl) tEl.textContent = props.title == null ? '' : String(props.title);
-      }
-      if (emptyPanel) emptyPanel.classList.add('empty');
-      break;
+  let styleEl = doc.getElementById('ig-edit-style');
+  if (STATE.editMode) {
+    if (!styleEl) {
+      styleEl = doc.createElement('style');
+      styleEl.id = 'ig-edit-style';
+      doc.head?.appendChild(styleEl);
     }
-
-    case 'acronym-row':
-      setSlot(el, 'letter', props.letter);
-      setSlot(el, 'word', props.word);
-      setSlot(el, 'detail', props.detail);
-      break;
-
-    case 'footer-tagline':
-      setSlot(el, 'label', props.label || 'THE REAL UNLOCK');
-      setSlot(el, 'text_lead', props.text_lead);
-      setSlot(el, 'text_accent', props.text_accent);
-      break;
-
-    case 'footer-brand':
-      const b = plan.brand || {};
-      setSlot(el, 'brand', props.brand || b.name || 'Infogr.ai');
-      setSlot(el, 'tagline', props.tagline || b.tagline || '');
-      setSlot(el, 'cta', props.cta || b.cta || 'Follow for more →');
-      break;
-  }
-}
-
-function setSlot(root, slotName, value) {
-  const el = root.querySelector(`[data-slot="${slotName}"]`);
-  if (!el) return;
-  const text = value == null ? '' : String(value);
-  // Clear existing children and set text safely
-  el.textContent = text;
-}
-
-function fillBlockAssets(root, blockId, props) {
-  const slots = root.querySelectorAll('[data-asset-slot]');
-  slots.forEach(slot => {
-    // If already has a data-asset-name (from innerHTML injection), use that
-    let name = slot.getAttribute('data-asset-name');
-    if (!name) {
-      name = pickAssetName(blockId, props, slot);
-      slot.setAttribute('data-asset-name', name || '');
-    }
-    if (name) {
-      const svg = resolveAssetSVG(name);
-      slot.innerHTML = svg || fallbackSVG();
-    }
-  });
-}
-
-function pickAssetName(blockId, props, slot) {
-  if (blockId === 'header-hero') return props.icon || props.logo;
-  if (blockId === 'step-row' || blockId === 'step-row-compact') return props.logo || props.icon;
-  if (blockId === 'two-col-equal') {
-    // Differentiate by parent column class
-    const card = slot.closest('.ig-tc-card');
-    if (card && card.classList.contains('right')) return props.col2_icon || props.icon;
-    return props.col1_icon || props.icon;
-  }
-  if (blockId === 'two-col-wide-narrow') {
-    if (slot.closest('.ig-narrow')) return props.narrow_icon || props.icon;
-    return props.wide_icon || props.icon;
-  }
-  if (blockId === 'funnel-layer') return props.icon;
-  return props.icon || null;
-}
-
-function fallbackSVG() {
-  return `<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg"><circle cx="128" cy="128" r="96" fill="none" stroke="currentColor" stroke-width="16"/></svg>`;
-}
-
-// ── EDITOR ─────────────────────────────────────────────────
-function wireEditor(canvas) {
-  const blocksWrap = canvas.querySelector('.ig-blocks');
-
-  // Add drag handles and delete buttons to each block
-  $$('.ig-blocks > *', canvas).forEach((block, i) => {
-    // Drag handle
-    const handle = document.createElement('div');
-    handle.className = 'ig-drag-handle';
-    handle.textContent = '⋮⋮';
-    block.appendChild(handle);
-    // Delete button
-    const del = document.createElement('button');
-    del.className = 'ig-block-delete';
-    del.textContent = '×';
-    del.title = 'Remove this block';
-    del.addEventListener('click', () => {
-      if (confirm('Remove this block?')) block.remove();
-    });
-    block.appendChild(del);
-  });
-
-  // Sortable for reordering
-  if (window.Sortable) {
-    Sortable.create(blocksWrap, {
-      handle: '.ig-drag-handle',
-      animation: 180,
-      ghostClass: 'ig-drag-ghost',
-    });
-  }
-
-  // Asset click handler for swapping
-  canvas.addEventListener('click', (e) => {
-    const slot = e.target.closest('[data-asset-slot]');
-    if (slot) {
-      e.stopPropagation();
-      openAssetPopover(slot);
-    }
-  });
-}
-
-// ── ASSET POPOVER ──────────────────────────────────────────
-let activeAssetSlot = null;
-let popoverTab = 'icons';
-
-function setupAssetPopover() {
-  $$('.ap-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      $$('.ap-tab').forEach(t => t.classList.remove('on'));
-      tab.classList.add('on');
-      popoverTab = tab.dataset.tab;
-      renderAssetGrid();
-    });
-  });
-  $('assetSearch').addEventListener('input', renderAssetGrid);
-}
-
-function openAssetPopover(slot) {
-  activeAssetSlot = slot;
-  const rect = slot.getBoundingClientRect();
-  const pop = $('assetPopover');
-  pop.style.left = Math.min(rect.left, window.innerWidth - 340) + 'px';
-  pop.style.top = (rect.bottom + 8 + window.scrollY) + 'px';
-  pop.style.display = 'block';
-  renderAssetGrid();
-}
-
-function renderAssetGrid() {
-  const pop = $('assetPopover');
-  if (pop.style.display === 'none') return;
-  const tab = popoverTab;
-  const query = $('assetSearch').value.toLowerCase().trim();
-  const catalog = STATE.assetCatalog?.[tab] || {};
-  const names = Object.keys(catalog).filter(n => !query || n.toLowerCase().includes(query) || (catalog[n].tags || []).some(t => t.includes(query)));
-
-  const grid = $('apGrid');
-  grid.innerHTML = names.map(name => {
-    const svg = STATE.assetCache[`${tab}/${name}`] || '';
-    return `<div class="ap-item" data-asset-name="${escAttr(name)}" data-asset-type="${tab}" title="${escAttr(name)}">${svg || fallbackSVG()}</div>`;
-  }).join('');
-
-  grid.querySelectorAll('.ap-item').forEach(item => {
-    item.addEventListener('click', async () => {
-      const name = item.dataset.assetName;
-      const type = item.dataset.assetType;
-      await fetchAsset(type, name);
-      if (activeAssetSlot) {
-        activeAssetSlot.setAttribute('data-asset-name', name);
-        activeAssetSlot.setAttribute('data-asset-type', type === 'icons' ? 'icon' : type);
-        const svg = STATE.assetCache[`${type}/${name}`] || fallbackSVG();
-        activeAssetSlot.innerHTML = svg;
+    styleEl.textContent = `
+      [contenteditable] {
+        outline: 2px dashed rgba(37,99,235,0.4) !important;
+        cursor: text !important;
+        border-radius: 2px !important;
+        min-width: 4px; min-height: 1em;
       }
-      $('assetPopover').style.display = 'none';
-    });
-  });
+      [contenteditable]:hover {
+        outline: 2px dashed #2563EB !important;
+        background: rgba(37,99,235,0.04) !important;
+      }
+      [contenteditable]:focus {
+        outline: 2px solid #2563EB !important;
+        background: rgba(37,99,235,0.06) !important;
+      }`;
+  } else if (styleEl) {
+    styleEl.remove();
+  }
+
+  updateEditButton();
 }
 
-// ── TONE + SIZE + ACCENT APPLICATION ──────────────────────
-function applyToneToCanvas() {
-  const canvas = document.querySelector('.ig-canvas');
-  if (!canvas) return;
-  canvas.setAttribute('data-tone', STATE.tone);
-  STATE.accent = TONE_COLORS[STATE.tone];
-  canvas.style.setProperty('--accent', STATE.accent);
-  canvas.style.setProperty('--accent-soft', hexToAlpha(STATE.accent, 0.12));
+function updateEditButton() {
+  const btn = $('btnEdit');
+  if (!btn) return;
+  if (STATE.editMode) {
+    btn.textContent    = '✓ Editing';
+    btn.style.background = '#2563EB';
+    btn.style.color    = '#fff';
+    btn.style.borderColor = '#2563EB';
+  } else {
+    btn.textContent    = '✏ Edit';
+    btn.style.background = '';
+    btn.style.color    = '';
+    btn.style.borderColor = '';
+  }
 }
 
-function applySizeToCanvas() {
-  const canvas = document.querySelector('.ig-canvas');
-  if (!canvas) return;
-  const sz = SIZES[STATE.size];
-  canvas.setAttribute('data-size', STATE.size);
-  canvas.style.width = sz.w + 'px';
-  canvas.style.maxWidth = '100%';
-}
-
-// ── EXPORT ─────────────────────────────────────────────────
-function currentCanvas() {
-  return document.querySelector('.ig-canvas');
-}
-
+// ── EXPORT HELPERS ─────────────────────────────────────────
 function slugify(s) {
   return (s || 'infograi').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 }
 
 function exportFilename(ext) {
-  return `infograi-${slugify(STATE.plan?.title || STATE.topic)}.${ext}`;
+  return `infograi-${slugify(STATE.topic)}.${ext}`;
 }
 
+function download(href, filename) {
+  const a = document.createElement('a');
+  a.href = href; a.download = filename;
+  document.body.appendChild(a);
+  a.click(); a.remove();
+}
+
+async function waitForFrame() {
+  const frame = $('outputFrame');
+  if (!frame) return null;
+  await new Promise(resolve => {
+    if (frame.contentDocument?.readyState === 'complete') { resolve(); return; }
+    frame.addEventListener('load', resolve, { once: true });
+  });
+  // Extra settle time for images/fonts
+  await new Promise(r => setTimeout(r, 600));
+  return (
+    frame.contentDocument?.querySelector('.ig-page') ||
+    frame.contentDocument?.body?.firstElementChild ||
+    frame.contentDocument?.body
+  );
+}
+
+// ── EXPORT PNG ─────────────────────────────────────────────
 async function exportPNG() {
-  const el = currentCanvas();
-  if (!el) return;
+  const el = await waitForFrame();
+  if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
   try {
     const dataUrl = await htmlToImage.toPng(el, {
       pixelRatio: 2,
       cacheBust: true,
-      backgroundColor: getComputedStyle(el).backgroundColor || '#fff',
+      backgroundColor: '#ffffff',
     });
     download(dataUrl, exportFilename('png'));
   } catch (e) {
-    alert('PNG export failed: ' + e.message);
+    alert('PNG export failed: ' + e.message + '\n\nTip: Export as HTML and screenshot in your browser for best results.');
   }
 }
 
-async function exportSVG() {
-  const el = currentCanvas();
-  if (!el) return;
-  try {
-    const svg = await htmlToImage.toSvg(el);
-    download(svg, exportFilename('svg'));
-  } catch (e) {
-    alert('SVG export failed: ' + e.message);
-  }
-}
-
+// ── EXPORT PDF ─────────────────────────────────────────────
 async function exportPDF() {
-  const el = currentCanvas();
-  if (!el) return;
+  const el = await waitForFrame();
+  if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
   try {
     const dataUrl = await htmlToImage.toPng(el, { pixelRatio: 2, cacheBust: true });
     const img = new Image();
     img.onload = () => {
-      const pdfWidth = 595; // A4 portrait pts
-      const pdfHeight = (img.height / img.width) * pdfWidth;
+      const sz = SIZES[STATE.size];
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({
-        orientation: pdfHeight > pdfWidth ? 'portrait' : 'landscape',
-        unit: 'pt',
-        format: [pdfWidth, pdfHeight],
+        orientation: sz.h > sz.w ? 'portrait' : 'landscape',
+        unit:        'px',
+        format:      [sz.w, sz.h],
+        hotfixes:    ['px_scaling'],
       });
-      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.addImage(dataUrl, 'PNG', 0, 0, sz.w, sz.h);
       pdf.save(exportFilename('pdf'));
     };
     img.src = dataUrl;
@@ -1072,62 +584,38 @@ async function exportPDF() {
   }
 }
 
+// ── EXPORT HTML ────────────────────────────────────────────
 function exportHTML() {
-  const el = currentCanvas();
-  if (!el) return;
-  const css = [...document.styleSheets]
-    .map(ss => {
-      try { return [...ss.cssRules].map(r => r.cssText).join('\n'); }
-      catch { return ''; }
-    })
-    .join('\n');
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>${escHTML(STATE.plan?.title || 'Infogr.ai export')}</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<style>${css}
-body { margin: 0; background: #f5f5f5; display: flex; justify-content: center; padding: 40px; }
-</style>
-</head>
-<body>
-${el.outerHTML}
-</body>
-</html>`;
-
+  const frame = $('outputFrame');
+  if (!frame) { alert('Nothing to export yet.'); return; }
+  let html;
+  try {
+    // Get live content (captures user edits made in edit mode)
+    html = '<!DOCTYPE html>' + frame.contentDocument.documentElement.outerHTML;
+  } catch {
+    html = STATE.currentHTML;
+  }
+  if (!html) { alert('Nothing to export yet.'); return; }
   download('data:text/html;charset=utf-8,' + encodeURIComponent(html), exportFilename('html'));
 }
 
-function download(href, filename) {
-  const a = document.createElement('a');
-  a.href = href;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-// ── PROGRESS UI ────────────────────────────────────────────
-function showProgress(steps, active) {
-  const stepsHTML = steps.map((s, i) => `
-    <div class="ps ${i < active ? 'done' : i === active ? 'active' : ''}">
-      <div class="ps-dot"></div>${s}
-    </div>`).join('');
+// ── PROGRESS / ERROR UI ────────────────────────────────────
+function showGenerating() {
   $('outputWrap').innerHTML = `
     <div class="loading-state">
       <div class="loading-ring"></div>
       <div class="loading-txt">Designer agent working…</div>
-      <div class="loading-sub">This usually takes 15 to 45 seconds</div>
-      <div class="progress-steps">${stepsHTML}</div>
+      <div class="loading-sub">Researching topic · Designing layout · Generating HTML<br>Usually 20–45 seconds</div>
     </div>`;
 }
 
-function updateProgress(active) {
-  $$('.ps').forEach((el, i) => {
-    el.className = `ps ${i < active ? 'done' : i === active ? 'active' : ''}`;
-  });
+function showError(msg) {
+  $('outputWrap').innerHTML = `
+    <div class="empty">
+      <div class="empty-ico">⚠</div>
+      <div class="empty-ttl">Generation failed</div>
+      <div class="empty-sub">${escHTML(msg)}</div>
+    </div>`;
 }
 
 // ── UTILS ──────────────────────────────────────────────────
@@ -1135,23 +623,11 @@ function escHTML(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-function escAttr(s) { return escHTML(s).replace(/"/g, '&quot;'); }
 
 function hexToAlpha(hex, alpha) {
-  const h = hex.replace('#', '');
+  const h = (hex || '#000000').replace('#', '');
   const r = parseInt(h.substring(0, 2), 16);
   const g = parseInt(h.substring(2, 4), 16);
   const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function darken(hex, amount) {
-  const h = hex.replace('#', '');
-  let r = parseInt(h.substring(0, 2), 16);
-  let g = parseInt(h.substring(2, 4), 16);
-  let b = parseInt(h.substring(4, 6), 16);
-  r = Math.max(0, Math.floor(r * (1 - amount)));
-  g = Math.max(0, Math.floor(g * (1 - amount)));
-  b = Math.max(0, Math.floor(b * (1 - amount)));
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  return `rgba(${r},${g},${b},${alpha})`;
 }

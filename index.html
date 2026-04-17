@@ -11,7 +11,7 @@
 <header class="app-header">
   <div class="logo">Infogr<span>.</span>ai</div>
   <div class="header-right">
-    <div class="badge">Designer v1.0 · Curated Library</div>
+    <div class="badge">Designer v2.0 · Full HTML Generation</div>
   </div>
 </header>
 
@@ -67,14 +67,14 @@
   <main class="canvas-area">
     <div class="ctoolbar" id="toolbar" style="display:none">
       <div class="ctoolbar-l">
-        <span class="edit-hint">Click text to edit · Drag handle to reorder · Hover block for actions</span>
+        <span class="edit-hint">Toggle Edit to click any text and modify it inline</span>
       </div>
       <div class="toolbar-right">
         <label class="accent-picker" title="Change accent color">
           <span>Accent</span>
           <input type="color" id="accentPicker" value="#2563EB"/>
         </label>
-        <button class="tbtn" id="btnSVG">↓ SVG</button>
+        <button class="tbtn" id="btnEdit">✏ Edit</button>
         <button class="tbtn" id="btnPNG">↓ PNG</button>
         <button class="tbtn" id="btnPDF">↓ PDF</button>
         <button class="tbtn" id="btnHTML">↓ HTML</button>
@@ -85,28 +85,14 @@
         <div class="empty">
           <div class="empty-ico">◈</div>
           <div class="empty-ttl">Your infographic will appear here</div>
-          <div class="empty-sub">Pick a layout, describe your topic, and the designer agent assembles a document from curated blocks and assets.</div>
+          <div class="empty-sub">Pick a layout, describe your topic, and the designer agent generates a complete, beautiful infographic as HTML — Canva level, in one shot.</div>
         </div>
       </div>
     </div>
   </main>
 </div>
 
-<!-- Asset swap popover -->
-<div id="assetPopover" class="asset-popover" style="display:none">
-  <div class="ap-head">
-    <div class="ap-tabs">
-      <button class="ap-tab on" data-tab="icons">Icons</button>
-      <button class="ap-tab" data-tab="logos">Logos</button>
-      <button class="ap-tab" data-tab="decorative">Decorative</button>
-    </div>
-    <input type="text" id="assetSearch" placeholder="Search..."/>
-  </div>
-  <div class="ap-grid" id="apGrid"></div>
-</div>
-
 <!-- Libraries -->
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
