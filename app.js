@@ -1,11 +1,15 @@
 /* ============================================================
-   Infogr.ai v2.1
+   Infogr.ai v2.2
    - Streaming API (Anthropic SSE) + prompt caching
    - Ribbon toolbar (document.execCommand on iframe)
-   - Pinch-to-zoom + +/− buttons
-   - PNG/PDF export with base64 image prefetch (CORS fix)
+   - Pinch-to-zoom + +/− buttons + A/a relative size buttons
+   - PNG/PDF export via Vercel CORS proxy + auto base64 prefetch
    - Light app theme, Space Grotesk fonts
    - Icons8 Fluency 72-96px + Clearbit/SimpleIcons logos
+   - onerror SVG fallback for broken icon images
+   - Post-render CSS overflow enforcement
+   - Icon drag-and-resize editor
+   - Export dropdown opens upward
    ============================================================ */
 
 // ── STATE ──────────────────────────────────────────────────
@@ -17,7 +21,7 @@ const STATE = {
   size:        'a4',
   accent:      '#2563EB',
   currentHTML: null,
-  savedRange:  null,   // saved iframe text selection for ribbon color picker
+  savedRange:  null,   // saved iframe text selection for ribbon
   zoomLevel:   1.0,
 };
 
@@ -109,7 +113,7 @@ window.addEventListener('load', () => {
   $('btnPDF').addEventListener('click',  exportPDF);
   $('btnHTML').addEventListener('click', exportHTML);
 
-  // Ribbon
+  // Ribbon + zoom
   setupRibbon();
   setupZoom();
 });
@@ -174,6 +178,7 @@ async function generate() {
     renderHTML(html);
     $('ribbon').style.display = 'flex';
     setupRibbonForFrame();
+    autoConvertImages(); // background: base64-ify icons for export (no await)
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
@@ -285,13 +290,21 @@ CANVAS — absolute rule:
 The .ig-page element MUST be: width:{W}px; height:{H}px; overflow:hidden; box-sizing:border-box;
   display:flex; flex-direction:column; font-family:'Plus Jakarta Sans',sans-serif;
 Body: margin:0; background:#f0f2f5; display:flex; justify-content:center; align-items:flex-start;
-Every section must have overflow:hidden. Use flex-grow to distribute height. Never use position:absolute for text near edges.
-If content is too tall: reduce font-size, shorten text, or remove bullets — NEVER let it overflow.
+
+OVERFLOW RULES — NON-NEGOTIABLE — apply every single one:
+1. .ig-page: overflow:hidden (height is fixed — nothing can escape it)
+2. Every flex/grid child: add min-height:0 (THIS IS CRITICAL — without it, flex children expand beyond allocation)
+3. Every section, column, card, row container: overflow:hidden; min-height:0;
+4. For 2-column layouts: the row needs overflow:hidden; each column needs min-height:0; overflow:hidden;
+5. Limit text lines: paragraph/body text must use max-height or -webkit-line-clamp to cap at 3-4 lines
+6. When space is tight: use 2 bullets not 3, font-size:10px not 12px — less content is always better than overflow
+7. Verify mentally before writing: does the sum of all section heights equal the canvas height? If unsure, use less.
 
 ICONS — Icons8 Fluency (primary, colorful illustrated):
-<img src="https://img.icons8.com/fluency/96/{name}.png" width="{px}" height="{px}" alt="" loading="lazy">
+<img src="https://img.icons8.com/fluency/96/{name}.png" width="{px}" height="{px}" alt="{label}" loading="lazy">
 Sizes: hero=96-128px, section card (center above text)=72-80px, stats=36-40px, inline=28-32px
 Names: rocket, idea, lightning-bolt, gear, calendar-3, user-group, shield, checkmark, star, trophy, target, key, lock, internet, database, source-code, console, cloud-storage, briefcase, dollar-coin, search, open-book, chart-increasing, analytics, pie-chart, clock, teamwork, strategy, growth, workflow, checklist, deadline, meeting, handshake, networking, statistics, report, presentation, brain, artificial-intelligence, robot-2, color-palette, image, video, collaboration, creativity, resume, approval, priority, layers, settings, home, smartphone, mail, folder, link
+ONLY use names from this exact list. Do not invent or modify icon names.
 Icons are PRIMARY visual anchors — center them above section content, use 72-80px, give them breathing room.
 Footer must include: <small style="font-size:10px;color:#94A3B8;">Icons by <a href="https://icons8.com" style="color:inherit;text-decoration:none;">Icons8</a></small>
 
@@ -422,7 +435,6 @@ function renderHTML(html) {
   wrap.innerHTML = '';
   wrap.appendChild(frame);
 
-  // Re-apply zoom after new frame
   applyZoom(false);
 }
 
@@ -447,9 +459,142 @@ function applyAccentToFrame() {
   el.textContent = `:root{--accent:${STATE.accent};--accent-soft:${hexToAlpha(STATE.accent, 0.12)};}`;
 }
 
+// ── POST-PROCESSING INJECTIONS ──────────────────────────────
+
+// Fix 1: onerror fallback for broken icon images → colored SVG with initial
+function injectIconFallbacks(doc) {
+  if (!doc) return;
+  const s = doc.createElement('script');
+  s.textContent = `(function(){
+function fixImg(img){
+  if(img.dataset.fixed)return;
+  img.dataset.fixed='1';
+  var src=img.getAttribute('src')||'';
+  var isIcon=src.includes('icons8')||src.includes('clearbit')||src.includes('simpleicons');
+  if(!isIcon)return;
+  img.dataset.icon='true';
+  img.onerror=function(){
+    var sz=this.getAttribute('width')||48;
+    var colors=['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444'];
+    var c=colors[Math.floor(Math.random()*colors.length)];
+    var lbl=(this.alt||'●').charAt(0).toUpperCase();
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="'+c+'"/><text x="24" y="31" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="700" fill="white">'+lbl+'</text></svg>';
+    this.src='data:image/svg+xml;base64,'+btoa(svg);
+    this.onerror=null;
+  };
+  if(img.complete&&(img.naturalWidth===0||img.naturalHeight===0)){img.onerror.call(img);}
+}
+document.querySelectorAll('img').forEach(fixImg);
+new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.tagName==='IMG')fixImg(n);else if(n.querySelectorAll)n.querySelectorAll('img').forEach(fixImg);});});}).observe(document.body,{childList:true,subtree:true});
+})();`;
+  doc.head.appendChild(s);
+}
+
+// Fix 2: inject overflow:hidden + min-height:0 on all flex children
+function injectOverflowFix(doc) {
+  if (!doc) return;
+  const style = doc.createElement('style');
+  style.id = 'ig-overflow-fix';
+  style.textContent = `
+    .ig-page { overflow: hidden !important; }
+    .ig-page > * { overflow: hidden !important; min-height: 0 !important; }
+    .ig-page * { min-height: 0; }
+    .ig-page [style*="display: flex"] > *,
+    .ig-page [style*="display:flex"] > *,
+    .ig-page [style*="display: grid"] > *,
+    .ig-page [style*="display:grid"] > * {
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+  `;
+  doc.head.appendChild(style);
+}
+
+// Fix 8: inject icon drag-and-resize editor into the iframe
+function injectIconEditor(doc) {
+  if (!doc) return;
+  const s = doc.createElement('script');
+  s.textContent = `(function(){
+var sel=null,ovl=null,drag=false,rsz=false,rh='',sx=0,sy=0,sw=0,sh=0,otx=0,oty=0;
+function getTr(el){var m=(el.style.transform||'').match(/translate\\(([^,]+)px,\\s*([^)]+)px\\)/);return m?[parseFloat(m[1]),parseFloat(m[2])]:[0,0];}
+function pos(){
+  if(!ovl||!sel)return;
+  var r=sel.getBoundingClientRect();
+  ovl.style.left=r.left+'px';ovl.style.top=r.top+'px';
+  ovl.style.width=r.width+'px';ovl.style.height=r.height+'px';
+}
+function mkH(dir,t,l,r,b){
+  var d=document.createElement('div');
+  d.dataset.h=dir;
+  d.style.cssText='position:absolute;width:10px;height:10px;background:#2563EB;border:2px solid #fff;border-radius:2px;pointer-events:all;z-index:10000;cursor:'+dir+'-resize;box-sizing:border-box;';
+  if(t!==null)d.style.top=t;if(l!==null)d.style.left=l;
+  if(r!==null)d.style.right=r;if(b!==null)d.style.bottom=b;
+  d.addEventListener('mousedown',function(e){
+    e.stopPropagation();e.preventDefault();
+    rsz=true;rh=dir;sx=e.clientX;sy=e.clientY;
+    sw=sel.offsetWidth;sh=sel.offsetHeight;
+  });
+  return d;
+}
+function doSelect(img){
+  desel();sel=img;
+  ovl=document.createElement('div');
+  ovl.style.cssText='position:fixed;border:2px solid #2563EB;pointer-events:none;z-index:9999;box-sizing:border-box;border-radius:2px;';
+  ovl.appendChild(mkH('nw','-5px','-5px',null,null));
+  ovl.appendChild(mkH('ne','-5px',null,'-5px',null));
+  ovl.appendChild(mkH('se',null,null,'-5px','-5px'));
+  ovl.appendChild(mkH('sw',null,'-5px',null,'-5px'));
+  document.body.appendChild(ovl);
+  pos();
+}
+function desel(){if(ovl){ovl.remove();ovl=null;}if(sel){sel.style.cursor='';}sel=null;}
+function isIconImg(img){
+  var src=img.dataset.icon==='true'||(img.src&&(img.src.includes('icons8')||img.src.includes('clearbit')||img.src.includes('simpleicons')));
+  return !!src;
+}
+document.addEventListener('click',function(e){
+  var img=e.target.closest&&e.target.closest('img');
+  if(img&&isIconImg(img)){e.stopPropagation();e.preventDefault();doSelect(img);}
+  else if(!e.target.dataset||!e.target.dataset.h){desel();}
+},true);
+document.addEventListener('mousedown',function(e){
+  if(sel&&(e.target===sel)){
+    drag=true;e.preventDefault();
+    sx=e.clientX;sy=e.clientY;
+    var t=getTr(sel);otx=t[0];oty=t[1];
+    sel.style.cursor='grabbing';
+  }
+});
+document.addEventListener('mousemove',function(e){
+  if(drag&&sel){
+    sel.style.transform='translate('+(otx+(e.clientX-sx))+'px,'+(oty+(e.clientY-sy))+'px)';
+    sel.style.position='relative';sel.style.zIndex='5';
+    pos();
+  }
+  if(rsz&&sel){
+    var dx=e.clientX-sx,dy=e.clientY-sy,w=sw,h=sh;
+    if(rh.includes('e'))w=Math.max(20,sw+dx);
+    if(rh.includes('s'))h=Math.max(20,sh+dy);
+    if(rh.includes('w'))w=Math.max(20,sw-dx);
+    if(rh.includes('n'))h=Math.max(20,sh-dy);
+    var sz=Math.max(w,h);
+    sel.style.width=sz+'px';sel.style.height=sz+'px';
+    pos();
+  }
+});
+document.addEventListener('mouseup',function(){
+  drag=false;rsz=false;rh='';
+  if(sel)sel.style.cursor='move';
+});
+document.addEventListener('scroll',pos,true);
+window.addEventListener('resize',pos);
+})();`;
+  doc.body.appendChild(s);
+}
+
 // ── RIBBON TOOLBAR ─────────────────────────────────────────
 function setupRibbon() {
-  // Format buttons — mousedown + preventDefault keeps iframe selection
+  // Format buttons — mousedown + preventDefault keeps iframe selection alive
   $$('.rbtn.fmt').forEach(btn => {
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -458,18 +603,27 @@ function setupRibbon() {
     });
   });
 
-  // Font family — save/restore selection around the dropdown change
-  $('rbFont').addEventListener('mousedown', (e) => { e.preventDefault(); });
+  // Fix 3: Font family — removed mousedown preventDefault (was blocking dropdown open)
+  // STATE.savedRange is continuously updated by selectionchange in setupRibbonForFrame
   $('rbFont').addEventListener('change', (e) => {
     restoreFrameSelection();
     ribbonCmd('fontName', e.target.value);
   });
 
-  // Font size — wrap selection in a span with font-size style
-  $('rbSize').addEventListener('mousedown', (e) => { e.preventDefault(); });
+  // Fix 3: Font size — same fix
   $('rbSize').addEventListener('change', (e) => {
     restoreFrameSelection();
     applyFontSize(parseInt(e.target.value, 10));
+  });
+
+  // A↑ A↓ relative font size buttons (Fix 7)
+  $('btnAUp').addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    adjustFontSizeRelative(+2);
+  });
+  $('btnADown').addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    adjustFontSizeRelative(-2);
   });
 
   // Text color — restore selection then apply
@@ -487,12 +641,19 @@ function setupRibbonForFrame() {
   const tryWire = () => {
     const doc = frame.contentDocument;
     if (!doc) return;
+
+    // Track selection so ribbon can restore it after dropdown interaction
     doc.addEventListener('selectionchange', () => {
       try {
         const sel = doc.getSelection();
         if (sel?.rangeCount > 0) STATE.savedRange = sel.getRangeAt(0).cloneRange();
       } catch {}
     });
+
+    // Post-render injections (Fixes 1, 2, 8)
+    injectIconFallbacks(doc);
+    injectOverflowFix(doc);
+    injectIconEditor(doc);
   };
   if (frame.contentDocument?.readyState === 'complete') tryWire();
   else frame.addEventListener('load', tryWire, { once: true });
@@ -538,10 +699,22 @@ function applyFontSize(px) {
     span.style.lineHeight = '1.35';
     range.surroundContents(span);
   } catch {
-    // fallback if selection spans multiple elements
     doc.execCommand('styleWithCSS', false, true);
     doc.execCommand('fontSize', false, '4');
   }
+}
+
+// Fix 7: A/a relative font size — reads current size, applies delta
+function adjustFontSizeRelative(delta) {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  const node  = range.commonAncestorContainer;
+  const el    = node.nodeType === 3 ? node.parentElement : node;
+  const currentPx = parseFloat(doc.defaultView?.getComputedStyle(el)?.fontSize) || 14;
+  applyFontSize(Math.max(8, Math.round(currentPx + delta)));
 }
 
 // ── ZOOM ───────────────────────────────────────────────────
@@ -562,12 +735,17 @@ function changeZoom(delta) {
   applyZoom(true);
 }
 
+// Fix 6: toggle cbody overflow so zoomed-out content doesn't create scrollbar
 function applyZoom(animate = true) {
-  const wrap = $('outputWrap');
+  const wrap  = $('outputWrap');
+  const cbody = document.querySelector('.cbody');
   if (!wrap) return;
   wrap.style.transition = animate ? 'transform 0.15s ease' : 'none';
   wrap.style.transform  = `scale(${STATE.zoomLevel})`;
   $('zoomLabel').textContent = Math.round(STATE.zoomLevel * 100) + '%';
+  // When zoomed out: overflow:hidden prevents layout-space scrollbar
+  // When zoomed in: overflow:auto allows scrolling to see enlarged content
+  if (cbody) cbody.style.overflow = STATE.zoomLevel > 1 ? 'auto' : 'hidden';
 }
 
 // ── EXPORT HELPERS ─────────────────────────────────────────
@@ -599,8 +777,26 @@ async function waitForFrame() {
   );
 }
 
-// Convert external image URL → base64 data URL (CORS fix for html-to-image)
+// Fix 5: Try CORS proxy first, fall back to direct fetch
 async function toBase64(url) {
+  if (!url || url.startsWith('data:')) return url;
+
+  // Primary: route through our Vercel proxy (no CORS restriction server-side)
+  try {
+    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl);
+    if (res.ok) {
+      const blob = await res.blob();
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror   = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch {}
+
+  // Fallback: direct CORS fetch (works if server sends CORS headers)
   try {
     const res = await fetch(url, { mode: 'cors', cache: 'no-store' });
     const blob = await res.blob();
@@ -613,7 +809,7 @@ async function toBase64(url) {
   } catch { return null; }
 }
 
-// Prefetch all iframe images as base64, return a restore function
+// Prefetch ALL iframe images as base64 at export time (safety net)
 async function prefetchFrameImages() {
   const doc = $('outputFrame')?.contentDocument;
   if (!doc) return () => {};
@@ -626,8 +822,41 @@ async function prefetchFrameImages() {
     if (b64) img.src = b64;
   }));
 
-  // Return restore function
   return () => imgs.forEach((img, i) => { img.src = origSrc[i]; });
+}
+
+// Fix 5: Auto-convert icon images to base64 in background after generation
+// By the time user clicks Export, images are already base64 — export is instant
+async function autoConvertImages() {
+  const frame = $('outputFrame');
+  if (!frame) return;
+
+  // Wait for frame to fully load + extra time for icons to load/fail
+  await new Promise(resolve => {
+    if (frame.contentDocument?.readyState === 'complete') resolve();
+    else frame.addEventListener('load', resolve, { once: true });
+  });
+  await new Promise(r => setTimeout(r, 1500));
+
+  const doc = frame.contentDocument;
+  if (!doc) return;
+
+  // Convert all external icon/logo images to base64 via proxy
+  const imgs = [...doc.querySelectorAll('img')].filter(img => {
+    const src = img.src || '';
+    return src && !src.startsWith('data:') &&
+      (src.includes('icons8') || src.includes('clearbit') || src.includes('simpleicons'));
+  });
+
+  await Promise.all(imgs.map(async img => {
+    const b64 = await toBase64(img.src);
+    if (b64) img.src = b64;
+  }));
+
+  // Trigger SVG fallback for any still-broken icons
+  [...doc.querySelectorAll('img[data-icon="true"]')]
+    .filter(img => !img.src.startsWith('data:') && img.naturalWidth === 0)
+    .forEach(img => { if (img.onerror) img.onerror.call(img); });
 }
 
 // ── EXPORT PNG ─────────────────────────────────────────────
@@ -637,6 +866,7 @@ async function exportPNG() {
   if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
 
+  // Images should already be base64 from autoConvertImages, but prefetch as safety net
   const restore = await prefetchFrameImages();
   try {
     const dataUrl = await htmlToImage.toPng(el, {
@@ -645,7 +875,8 @@ async function exportPNG() {
     });
     download(dataUrl, exportFilename('png'));
   } catch (e) {
-    alert('PNG export failed: ' + e.message + '\n\nTip: Export as HTML and open in a browser to screenshot.');
+    alert('PNG export failed: ' + (e?.message || String(e)) +
+      '\n\nTip: Export as HTML and open in browser to screenshot.');
   } finally {
     restore();
   }
@@ -676,7 +907,7 @@ async function exportPDF() {
     };
     img.src = dataUrl;
   } catch (e) {
-    alert('PDF export failed: ' + e.message);
+    alert('PDF export failed: ' + (e?.message || String(e)));
   } finally {
     restore();
   }

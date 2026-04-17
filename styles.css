@@ -403,7 +403,8 @@ body {
 .dl-menu {
   display: none;
   position: absolute;
-  top: calc(100% + 5px);
+  bottom: calc(100% + 5px);
+  top: auto;
   right: 0;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -460,14 +461,14 @@ body {
 }
 .tbtn.primary:hover { background: var(--ui-accent-h); }
 
-/* ── Canvas body (scrollable, centers iframe) ────────── */
+/* ── Canvas body (centers iframe; JS toggles overflow based on zoom) ─ */
 .cbody {
   flex: 1;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 32px;
-  overflow: auto;
+  overflow: hidden; /* JS sets to 'auto' when zoom > 1 */
 }
 
 #outputWrap {
@@ -557,4 +558,23 @@ body {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 600;
   min-height: 16px;
+}
+
+/* ── A/a relative font size buttons ─────────────────── */
+.aa-btn { min-width: 22px; padding: 0 3px; }
+.aa-big {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--t2);
+  pointer-events: none;
+}
+.aa-small {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--t2);
+  pointer-events: none;
 }
