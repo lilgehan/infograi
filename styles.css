@@ -398,21 +398,18 @@ body {
   font-weight: 600;
 }
 
-/* Download dropdown */
+/* Download dropdown — position:fixed set by JS so it escapes ribbon overflow clip */
 .dl-wrap { position: relative; }
 .dl-menu {
   display: none;
-  position: absolute;
-  bottom: calc(100% + 5px);
-  top: auto;
-  right: 0;
+  position: fixed;   /* JS sets right + bottom on open */
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.14);
   overflow: hidden;
   min-width: 160px;
-  z-index: 200;
+  z-index: 1000;
 }
 .dl-menu.open { display: block; }
 .dl-menu button {

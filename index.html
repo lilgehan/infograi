@@ -11,7 +11,7 @@
 <header class="app-header">
   <div class="logo">Infogr<span>.</span>ai</div>
   <div class="header-right">
-    <div class="badge">Designer v2.2</div>
+    <div class="badge">Designer v2.3</div>
   </div>
 </header>
 
@@ -94,6 +94,12 @@
 
         <div class="ribbon-sep"></div>
 
+        <!-- Undo / Redo -->
+        <button class="rbtn" id="btnUndo" title="Undo">⟲</button>
+        <button class="rbtn" id="btnRedo" title="Redo">⟳</button>
+
+        <div class="ribbon-sep"></div>
+
         <!-- B I U S -->
         <button class="rbtn fmt" data-cmd="bold"          title="Bold"><strong>B</strong></button>
         <button class="rbtn fmt" data-cmd="italic"        title="Italic"><em>I</em></button>
@@ -150,7 +156,7 @@
 
         <div class="ribbon-sep"></div>
 
-        <!-- Download dropdown -->
+        <!-- Download dropdown — menu uses position:fixed set by JS -->
         <div class="dl-wrap" id="dlWrap">
           <button class="tbtn primary" id="btnDownload">↓ Export ▾</button>
           <div class="dl-menu" id="dlMenu">

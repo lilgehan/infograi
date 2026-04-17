@@ -1,15 +1,12 @@
 /* ============================================================
-   Infogr.ai v2.2
-   - Streaming API (Anthropic SSE) + prompt caching
-   - Ribbon toolbar (document.execCommand on iframe)
-   - Pinch-to-zoom + +/− buttons + A/a relative size buttons
-   - PNG/PDF export via Vercel CORS proxy + auto base64 prefetch
-   - Light app theme, Space Grotesk fonts
-   - Icons8 Fluency 72-96px + Clearbit/SimpleIcons logos
-   - onerror SVG fallback for broken icon images
-   - Post-render CSS overflow enforcement
-   - Icon drag-and-resize editor
-   - Export dropdown opens upward
+   Infogr.ai v2.3
+   - Pre-process HTML before srcdoc: proxy icon URLs, inject
+     overflow CSS, embed icon editor + fallback scripts
+   - Export dropdown: position:fixed (escapes ribbon overflow)
+   - Auto-fit zoom on generation (fills viewport nicely)
+   - Undo/redo buttons
+   - Custom bullet/numbered list insertion (replaces execCommand)
+   - Removed all unreliable post-render iframe injections
    ============================================================ */
 
 // ── STATE ──────────────────────────────────────────────────
@@ -21,8 +18,8 @@ const STATE = {
   size:        'a4',
   accent:      '#2563EB',
   currentHTML: null,
-  savedRange:  null,   // saved iframe text selection for ribbon
-  zoomLevel:   1.0,
+  savedRange:  null,
+  zoomLevel:   0.7,
 };
 
 const TONE_COLORS = {
@@ -55,7 +52,6 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // ── INIT ───────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  // Restore API key
   const k = localStorage.getItem('infograi_key');
   if (k) { $('apiKey').value = k; $('apiDot').className = 'api-dot ok'; }
 
@@ -72,7 +68,6 @@ window.addEventListener('load', () => {
 
   renderLayoutPicker();
 
-  // Tone chips
   $$('#toneRow .chip').forEach(el => {
     el.addEventListener('click', () => {
       $$('#toneRow .chip').forEach(b => b.classList.remove('on'));
@@ -84,7 +79,6 @@ window.addEventListener('load', () => {
     });
   });
 
-  // Size buttons
   $$('#sizeRow .sz-btn').forEach(el => {
     el.addEventListener('click', () => {
       $$('#sizeRow .sz-btn').forEach(b => b.classList.remove('on'));
@@ -96,16 +90,21 @@ window.addEventListener('load', () => {
 
   $('genBtn').addEventListener('click', generate);
 
-  // Accent picker — live inject into iframe
   $('accentPicker').addEventListener('input', (e) => {
     STATE.accent = e.target.value;
     applyAccentToFrame();
   });
 
-  // Download dropdown
+  // Export dropdown — position:fixed so it escapes ribbon overflow clip
   $('btnDownload').addEventListener('click', (e) => {
     e.stopPropagation();
-    $('dlMenu').classList.toggle('open');
+    const menu = $('dlMenu');
+    if (menu.classList.contains('open')) {
+      menu.classList.remove('open');
+    } else {
+      positionDropdown();
+      menu.classList.add('open');
+    }
   });
   document.addEventListener('click', () => $('dlMenu')?.classList.remove('open'));
 
@@ -113,10 +112,22 @@ window.addEventListener('load', () => {
   $('btnPDF').addEventListener('click',  exportPDF);
   $('btnHTML').addEventListener('click', exportHTML);
 
-  // Ribbon + zoom
   setupRibbon();
   setupZoom();
 });
+
+// ── DROPDOWN POSITION (position:fixed — escapes all overflow clips) ─
+function positionDropdown() {
+  const btn  = $('btnDownload');
+  const menu = $('dlMenu');
+  const rect = btn.getBoundingClientRect();
+  // Align right edge of menu to right edge of button
+  menu.style.right  = (window.innerWidth - rect.right) + 'px';
+  menu.style.left   = 'auto';
+  // Position bottom of menu 5px above top of button
+  menu.style.bottom = (window.innerHeight - rect.top + 5) + 'px';
+  menu.style.top    = 'auto';
+}
 
 // ── LAYOUT PICKER ──────────────────────────────────────────
 function renderLayoutPicker() {
@@ -177,8 +188,9 @@ async function generate() {
     STATE.currentHTML = html;
     renderHTML(html);
     $('ribbon').style.display = 'flex';
+    autoFitZoom();          // fit to viewport AFTER ribbon is shown
     setupRibbonForFrame();
-    autoConvertImages(); // background: base64-ify icons for export (no await)
+    autoConvertImages();    // background: base64 icons for export safety
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
@@ -274,7 +286,6 @@ function buildPromptParts(topic, sz) {
   ];
 }
 
-// Static part — cached across generations in the same session (~75% input cost reduction)
 const STATIC_PROMPT = `You are a world-class infographic designer. Generate a single, complete, self-contained HTML infographic document.
 
 FONTS — include in <head>:
@@ -423,19 +434,190 @@ ${recipe}
 Return ONLY the complete <!DOCTYPE html> document. No markdown fences, no explanation.`;
 }
 
+// ── HTML PRE-PROCESSOR ─────────────────────────────────────
+// Runs on the raw HTML string BEFORE setting srcdoc.
+// This is the correct architectural approach — modifying the string
+// before it becomes a live document avoids all post-render injection
+// timing/security issues.
+
+function preprocessHTML(html, sz) {
+  // 1. Rewrite Icons8 URLs → proxy (fixes "?" hotlink placeholder)
+  html = html.replace(
+    /src=(["'])(https?:\/\/img\.icons8\.com\/[^"']+)\1/g,
+    (match, q, url) => `src="${'/api/proxy?url=' + encodeURIComponent(url)}" data-icon="true"`
+  );
+
+  // 2. Rewrite Clearbit logo URLs → proxy
+  html = html.replace(
+    /src=(["'])(https?:\/\/logo\.clearbit\.com\/[^"']+)\1/g,
+    (match, q, url) => `src="${'/api/proxy?url=' + encodeURIComponent(url)}" data-icon="true"`
+  );
+
+  // 3. Rewrite SimpleIcons URLs → proxy
+  html = html.replace(
+    /src=(["'])(https?:\/\/cdn\.simpleicons\.org\/[^"']+)\1/g,
+    (match, q, url) => `src="${'/api/proxy?url=' + encodeURIComponent(url)}" data-icon="true"`
+  );
+
+  // 4. Inject overflow-enforcement CSS into <head>
+  //    Targets all children universally — not just inline-style flex elements
+  const overflowCSS = `<style id="ig-overflow-fix">
+.ig-page{overflow:hidden!important;height:${sz.h}px!important;max-height:${sz.h}px!important;}
+.ig-page>*{overflow:hidden!important;min-height:0!important;flex-shrink:0;}
+.ig-page *{min-height:0;box-sizing:border-box;}
+.ig-page div,.ig-page section,.ig-page article,.ig-page aside{overflow:hidden;}
+</style>`;
+  html = html.replace(/<\/head>/i, overflowCSS + '\n</head>');
+
+  // 5. Embed icon fallback script (onerror → colored SVG initial)
+  //    Works reliably now because proxy errors return real HTTP errors,
+  //    not a 200 OK placeholder image like Icons8 hotlink detection did.
+  const fallbackScript = `<script id="ig-icon-fallback">
+(function(){
+  function applyFallback(img){
+    if(img.dataset.fallbackApplied)return;
+    img.dataset.fallbackApplied='1';
+    img.onerror=function(){
+      this.onerror=null;
+      var sz=parseInt(this.getAttribute('width')||this.offsetWidth||48);
+      var colors=['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444'];
+      var col=colors[Math.floor(Math.random()*colors.length)];
+      var lbl=(this.alt||'i').trim().charAt(0).toUpperCase();
+      var half=sz/2;
+      this.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'">'+
+        '<circle cx="'+half+'" cy="'+half+'" r="'+half+'" fill="'+col+'"/>'+
+        '<text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" fill="white" '+
+        'font-family="sans-serif" font-weight="700" font-size="'+Math.round(sz*0.42)+'">'+lbl+'</text>'+
+        '</svg>'
+      );
+    };
+  }
+  document.querySelectorAll('img[data-icon]').forEach(applyFallback);
+  new MutationObserver(function(ms){
+    ms.forEach(function(m){
+      m.addedNodes.forEach(function(n){
+        if(n.tagName==='IMG')applyFallback(n);
+        else if(n.querySelectorAll)n.querySelectorAll('img[data-icon]').forEach(applyFallback);
+      });
+    });
+  }).observe(document.body,{childList:true,subtree:true});
+})();
+</script>`;
+
+  // 6. Embed icon drag-and-resize editor script
+  const editorScript = `<script id="ig-icon-editor">
+(function(){
+  var sel=null,ovl=null,drag=false,rsz=false,rh='',sx=0,sy=0,sw=0,sh=0,otx=0,oty=0;
+  function getTr(el){
+    var m=(el.style.transform||'').match(/translate\\(([^,]+)px,\\s*([^)]+)px\\)/);
+    return m?[parseFloat(m[1]),parseFloat(m[2])]:[0,0];
+  }
+  function posOverlay(){
+    if(!ovl||!sel)return;
+    var r=sel.getBoundingClientRect();
+    ovl.style.left=r.left+'px';ovl.style.top=r.top+'px';
+    ovl.style.width=r.width+'px';ovl.style.height=r.height+'px';
+  }
+  function mkHandle(dir,t,l,r,b){
+    var d=document.createElement('div');
+    d.dataset.h=dir;
+    d.style.cssText='position:absolute;width:10px;height:10px;background:#2563EB;'+
+      'border:2px solid #fff;border-radius:2px;pointer-events:all;z-index:10000;'+
+      'cursor:'+dir+'-resize;box-sizing:border-box;';
+    if(t!==null)d.style.top=t;
+    if(l!==null)d.style.left=l;
+    if(r!==null)d.style.right=r;
+    if(b!==null)d.style.bottom=b;
+    d.addEventListener('mousedown',function(e){
+      e.stopPropagation();e.preventDefault();
+      rsz=true;rh=dir;sx=e.clientX;sy=e.clientY;
+      sw=sel.offsetWidth;sh=sel.offsetHeight;
+    });
+    return d;
+  }
+  function doSelect(img){
+    desel();sel=img;
+    ovl=document.createElement('div');
+    ovl.style.cssText='position:fixed;border:2px solid #2563EB;pointer-events:none;'+
+      'z-index:9999;box-sizing:border-box;border-radius:2px;';
+    ovl.appendChild(mkHandle('nw','-5px','-5px',null,null));
+    ovl.appendChild(mkHandle('ne','-5px',null,'-5px',null));
+    ovl.appendChild(mkHandle('se',null,null,'-5px','-5px'));
+    ovl.appendChild(mkHandle('sw',null,'-5px',null,'-5px'));
+    document.body.appendChild(ovl);
+    posOverlay();
+    img.style.cursor='move';
+  }
+  function desel(){
+    if(ovl){ovl.remove();ovl=null;}
+    if(sel){sel.style.cursor='';}
+    sel=null;
+  }
+  function isIcon(img){
+    return img.dataset.icon==='true'||
+      (img.src&&(img.src.includes('proxy')||img.src.includes('icons8')||
+                 img.src.includes('clearbit')||img.src.includes('simpleicons')));
+  }
+  document.addEventListener('click',function(e){
+    var img=e.target.closest&&e.target.closest('img');
+    if(img&&isIcon(img)){e.stopPropagation();e.preventDefault();doSelect(img);}
+    else if(!e.target.dataset||!e.target.dataset.h){desel();}
+  },true);
+  document.addEventListener('mousedown',function(e){
+    if(sel&&e.target===sel){
+      drag=true;e.preventDefault();
+      sx=e.clientX;sy=e.clientY;
+      var t=getTr(sel);otx=t[0];oty=t[1];
+      sel.style.cursor='grabbing';
+    }
+  });
+  document.addEventListener('mousemove',function(e){
+    if(drag&&sel){
+      sel.style.transform='translate('+(otx+(e.clientX-sx))+'px,'+(oty+(e.clientY-sy))+'px)';
+      sel.style.position='relative';sel.style.zIndex='5';
+      posOverlay();
+    }
+    if(rsz&&sel){
+      var dx=e.clientX-sx,dy=e.clientY-sy,w=sw,h=sh;
+      if(rh.includes('e'))w=Math.max(20,sw+dx);
+      if(rh.includes('s'))h=Math.max(20,sh+dy);
+      if(rh.includes('w'))w=Math.max(20,sw-dx);
+      if(rh.includes('n'))h=Math.max(20,sh-dy);
+      var newSz=Math.max(w,h);
+      sel.style.width=newSz+'px';sel.style.height=newSz+'px';
+      posOverlay();
+    }
+  });
+  document.addEventListener('mouseup',function(){
+    drag=false;rsz=false;rh='';
+    if(sel)sel.style.cursor='move';
+  });
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')desel();});
+  document.addEventListener('scroll',posOverlay,true);
+  window.addEventListener('resize',posOverlay);
+})();
+</script>`;
+
+  // Inject both scripts before </body>
+  html = html.replace(/<\/body>/i, fallbackScript + '\n' + editorScript + '\n</body>');
+
+  return html;
+}
+
 // ── RENDERER ───────────────────────────────────────────────
 function renderHTML(html) {
   const sz    = SIZES[STATE.size];
+  const processed = preprocessHTML(html, sz);
+
   const frame = document.createElement('iframe');
   frame.id    = 'outputFrame';
   frame.style.cssText = `width:${sz.w}px;height:${sz.h}px;border:none;display:block;flex-shrink:0;`;
-  frame.srcdoc = html;
+  frame.srcdoc = processed;
 
   const wrap = $('outputWrap');
   wrap.innerHTML = '';
   wrap.appendChild(frame);
-
-  applyZoom(false);
 }
 
 function applyFrameSize() {
@@ -459,164 +641,57 @@ function applyAccentToFrame() {
   el.textContent = `:root{--accent:${STATE.accent};--accent-soft:${hexToAlpha(STATE.accent, 0.12)};}`;
 }
 
-// ── POST-PROCESSING INJECTIONS ──────────────────────────────
+// ── AUTO-FIT ZOOM ──────────────────────────────────────────
+// Called after ribbon is shown — calculates best zoom to fit
+// canvas in the available viewport space without scrolling.
+function autoFitZoom() {
+  const sz = SIZES[STATE.size];
+  const canvasArea = document.querySelector('.canvas-area');
+  if (!canvasArea) { STATE.zoomLevel = 0.7; applyZoom(false); return; }
 
-// Fix 1: onerror fallback for broken icon images → colored SVG with initial
-function injectIconFallbacks(doc) {
-  if (!doc) return;
-  const s = doc.createElement('script');
-  s.textContent = `(function(){
-function fixImg(img){
-  if(img.dataset.fixed)return;
-  img.dataset.fixed='1';
-  var src=img.getAttribute('src')||'';
-  var isIcon=src.includes('icons8')||src.includes('clearbit')||src.includes('simpleicons');
-  if(!isIcon)return;
-  img.dataset.icon='true';
-  img.onerror=function(){
-    var sz=this.getAttribute('width')||48;
-    var colors=['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444'];
-    var c=colors[Math.floor(Math.random()*colors.length)];
-    var lbl=(this.alt||'●').charAt(0).toUpperCase();
-    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="'+c+'"/><text x="24" y="31" text-anchor="middle" font-family="sans-serif" font-size="22" font-weight="700" fill="white">'+lbl+'</text></svg>';
-    this.src='data:image/svg+xml;base64,'+btoa(svg);
-    this.onerror=null;
-  };
-  if(img.complete&&(img.naturalWidth===0||img.naturalHeight===0)){img.onerror.call(img);}
-}
-document.querySelectorAll('img').forEach(fixImg);
-new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.tagName==='IMG')fixImg(n);else if(n.querySelectorAll)n.querySelectorAll('img').forEach(fixImg);});});}).observe(document.body,{childList:true,subtree:true});
-})();`;
-  doc.head.appendChild(s);
-}
+  const ribbonEl = $('ribbon');
+  const ribbonH  = (ribbonEl && ribbonEl.offsetParent !== null) ? ribbonEl.offsetHeight : 0;
 
-// Fix 2: inject overflow:hidden + min-height:0 on all flex children
-function injectOverflowFix(doc) {
-  if (!doc) return;
-  const style = doc.createElement('style');
-  style.id = 'ig-overflow-fix';
-  style.textContent = `
-    .ig-page { overflow: hidden !important; }
-    .ig-page > * { overflow: hidden !important; min-height: 0 !important; }
-    .ig-page * { min-height: 0; }
-    .ig-page [style*="display: flex"] > *,
-    .ig-page [style*="display:flex"] > *,
-    .ig-page [style*="display: grid"] > *,
-    .ig-page [style*="display:grid"] > * {
-      min-height: 0 !important;
-      overflow: hidden !important;
-    }
-  `;
-  doc.head.appendChild(style);
-}
+  // Available space (80px total padding = 40px each side)
+  const availW = canvasArea.clientWidth  - 80;
+  const availH = canvasArea.clientHeight - ribbonH - 80;
 
-// Fix 8: inject icon drag-and-resize editor into the iframe
-function injectIconEditor(doc) {
-  if (!doc) return;
-  const s = doc.createElement('script');
-  s.textContent = `(function(){
-var sel=null,ovl=null,drag=false,rsz=false,rh='',sx=0,sy=0,sw=0,sh=0,otx=0,oty=0;
-function getTr(el){var m=(el.style.transform||'').match(/translate\\(([^,]+)px,\\s*([^)]+)px\\)/);return m?[parseFloat(m[1]),parseFloat(m[2])]:[0,0];}
-function pos(){
-  if(!ovl||!sel)return;
-  var r=sel.getBoundingClientRect();
-  ovl.style.left=r.left+'px';ovl.style.top=r.top+'px';
-  ovl.style.width=r.width+'px';ovl.style.height=r.height+'px';
-}
-function mkH(dir,t,l,r,b){
-  var d=document.createElement('div');
-  d.dataset.h=dir;
-  d.style.cssText='position:absolute;width:10px;height:10px;background:#2563EB;border:2px solid #fff;border-radius:2px;pointer-events:all;z-index:10000;cursor:'+dir+'-resize;box-sizing:border-box;';
-  if(t!==null)d.style.top=t;if(l!==null)d.style.left=l;
-  if(r!==null)d.style.right=r;if(b!==null)d.style.bottom=b;
-  d.addEventListener('mousedown',function(e){
-    e.stopPropagation();e.preventDefault();
-    rsz=true;rh=dir;sx=e.clientX;sy=e.clientY;
-    sw=sel.offsetWidth;sh=sel.offsetHeight;
-  });
-  return d;
-}
-function doSelect(img){
-  desel();sel=img;
-  ovl=document.createElement('div');
-  ovl.style.cssText='position:fixed;border:2px solid #2563EB;pointer-events:none;z-index:9999;box-sizing:border-box;border-radius:2px;';
-  ovl.appendChild(mkH('nw','-5px','-5px',null,null));
-  ovl.appendChild(mkH('ne','-5px',null,'-5px',null));
-  ovl.appendChild(mkH('se',null,null,'-5px','-5px'));
-  ovl.appendChild(mkH('sw',null,'-5px',null,'-5px'));
-  document.body.appendChild(ovl);
-  pos();
-}
-function desel(){if(ovl){ovl.remove();ovl=null;}if(sel){sel.style.cursor='';}sel=null;}
-function isIconImg(img){
-  var src=img.dataset.icon==='true'||(img.src&&(img.src.includes('icons8')||img.src.includes('clearbit')||img.src.includes('simpleicons')));
-  return !!src;
-}
-document.addEventListener('click',function(e){
-  var img=e.target.closest&&e.target.closest('img');
-  if(img&&isIconImg(img)){e.stopPropagation();e.preventDefault();doSelect(img);}
-  else if(!e.target.dataset||!e.target.dataset.h){desel();}
-},true);
-document.addEventListener('mousedown',function(e){
-  if(sel&&(e.target===sel)){
-    drag=true;e.preventDefault();
-    sx=e.clientX;sy=e.clientY;
-    var t=getTr(sel);otx=t[0];oty=t[1];
-    sel.style.cursor='grabbing';
-  }
-});
-document.addEventListener('mousemove',function(e){
-  if(drag&&sel){
-    sel.style.transform='translate('+(otx+(e.clientX-sx))+'px,'+(oty+(e.clientY-sy))+'px)';
-    sel.style.position='relative';sel.style.zIndex='5';
-    pos();
-  }
-  if(rsz&&sel){
-    var dx=e.clientX-sx,dy=e.clientY-sy,w=sw,h=sh;
-    if(rh.includes('e'))w=Math.max(20,sw+dx);
-    if(rh.includes('s'))h=Math.max(20,sh+dy);
-    if(rh.includes('w'))w=Math.max(20,sw-dx);
-    if(rh.includes('n'))h=Math.max(20,sh-dy);
-    var sz=Math.max(w,h);
-    sel.style.width=sz+'px';sel.style.height=sz+'px';
-    pos();
-  }
-});
-document.addEventListener('mouseup',function(){
-  drag=false;rsz=false;rh='';
-  if(sel)sel.style.cursor='move';
-});
-document.addEventListener('scroll',pos,true);
-window.addEventListener('resize',pos);
-})();`;
-  doc.body.appendChild(s);
+  // Fit so canvas fills space without scrolling, capped at 90%
+  const zoomW = availW / sz.w;
+  const zoomH = availH / sz.h;
+  const fitZoom = Math.min(zoomW, zoomH, 0.90);
+
+  // Round to nearest 5% for a clean number in the zoom label
+  STATE.zoomLevel = Math.max(0.30, Math.round(fitZoom * 20) / 20);
+  applyZoom(false);
 }
 
 // ── RIBBON TOOLBAR ─────────────────────────────────────────
 function setupRibbon() {
-  // Format buttons — mousedown + preventDefault keeps iframe selection alive
+  // Format buttons — mousedown + preventDefault keeps iframe selection
   $$('.rbtn.fmt').forEach(btn => {
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const cmd = btn.dataset.cmd;
+      if (cmd === 'insertUnorderedList') { insertListPrefix('• ');  return; }
+      if (cmd === 'insertOrderedList')   { insertListPrefix('1. '); return; }
       if (cmd) ribbonCmd(cmd);
     });
   });
 
-  // Fix 3: Font family — removed mousedown preventDefault (was blocking dropdown open)
-  // STATE.savedRange is continuously updated by selectionchange in setupRibbonForFrame
+  // Font family — no mousedown preventDefault (would block dropdown)
   $('rbFont').addEventListener('change', (e) => {
     restoreFrameSelection();
     ribbonCmd('fontName', e.target.value);
   });
 
-  // Fix 3: Font size — same fix
+  // Font size — same
   $('rbSize').addEventListener('change', (e) => {
     restoreFrameSelection();
     applyFontSize(parseInt(e.target.value, 10));
   });
 
-  // A↑ A↓ relative font size buttons (Fix 7)
+  // A↑ A↓ relative font size
   $('btnAUp').addEventListener('mousedown', (e) => {
     e.preventDefault();
     adjustFontSizeRelative(+2);
@@ -626,7 +701,17 @@ function setupRibbon() {
     adjustFontSizeRelative(-2);
   });
 
-  // Text color — restore selection then apply
+  // Undo / Redo
+  $('btnUndo').addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    ribbonCmd('undo');
+  });
+  $('btnRedo').addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    ribbonCmd('redo');
+  });
+
+  // Text color
   $('rbColor').addEventListener('focus',  saveFrameSelection);
   $('rbColor').addEventListener('input', (e) => {
     restoreFrameSelection();
@@ -634,26 +719,19 @@ function setupRibbon() {
   });
 }
 
-// Called after each generation to wire up the iframe's selectionchange
+// Called after each generation — wires selectionchange on the iframe
 function setupRibbonForFrame() {
   const frame = $('outputFrame');
   if (!frame) return;
   const tryWire = () => {
     const doc = frame.contentDocument;
     if (!doc) return;
-
-    // Track selection so ribbon can restore it after dropdown interaction
     doc.addEventListener('selectionchange', () => {
       try {
         const sel = doc.getSelection();
         if (sel?.rangeCount > 0) STATE.savedRange = sel.getRangeAt(0).cloneRange();
       } catch {}
     });
-
-    // Post-render injections (Fixes 1, 2, 8)
-    injectIconFallbacks(doc);
-    injectOverflowFix(doc);
-    injectIconEditor(doc);
   };
   if (frame.contentDocument?.readyState === 'complete') tryWire();
   else frame.addEventListener('load', tryWire, { once: true });
@@ -704,7 +782,6 @@ function applyFontSize(px) {
   }
 }
 
-// Fix 7: A/a relative font size — reads current size, applies delta
 function adjustFontSizeRelative(delta) {
   const doc = $('outputFrame')?.contentDocument;
   if (!doc) return;
@@ -715,6 +792,26 @@ function adjustFontSizeRelative(delta) {
   const el    = node.nodeType === 3 ? node.parentElement : node;
   const currentPx = parseFloat(doc.defaultView?.getComputedStyle(el)?.fontSize) || 14;
   applyFontSize(Math.max(8, Math.round(currentPx + delta)));
+}
+
+// Custom list insertion — replaces execCommand insertUnorderedList/insertOrderedList
+// which fail inside flex containers. Inserts a prefix at the cursor position.
+function insertListPrefix(prefix) {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  // Collapse to start of selection
+  range.collapse(true);
+  const textNode = doc.createTextNode(prefix);
+  range.insertNode(textNode);
+  // Move cursor after the inserted prefix
+  const newRange = doc.createRange();
+  newRange.setStartAfter(textNode);
+  newRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
 }
 
 // ── ZOOM ───────────────────────────────────────────────────
@@ -735,7 +832,6 @@ function changeZoom(delta) {
   applyZoom(true);
 }
 
-// Fix 6: toggle cbody overflow so zoomed-out content doesn't create scrollbar
 function applyZoom(animate = true) {
   const wrap  = $('outputWrap');
   const cbody = document.querySelector('.cbody');
@@ -743,8 +839,6 @@ function applyZoom(animate = true) {
   wrap.style.transition = animate ? 'transform 0.15s ease' : 'none';
   wrap.style.transform  = `scale(${STATE.zoomLevel})`;
   $('zoomLabel').textContent = Math.round(STATE.zoomLevel * 100) + '%';
-  // When zoomed out: overflow:hidden prevents layout-space scrollbar
-  // When zoomed in: overflow:auto allows scrolling to see enlarged content
   if (cbody) cbody.style.overflow = STATE.zoomLevel > 1 ? 'auto' : 'hidden';
 }
 
@@ -777,13 +871,11 @@ async function waitForFrame() {
   );
 }
 
-// Fix 5: Try CORS proxy first, fall back to direct fetch
 async function toBase64(url) {
   if (!url || url.startsWith('data:')) return url;
-
-  // Primary: route through our Vercel proxy (no CORS restriction server-side)
+  // Primary: our Vercel proxy (same-origin, no CORS)
   try {
-    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+    const proxyUrl = url.includes('/api/proxy') ? url : `/api/proxy?url=${encodeURIComponent(url)}`;
     const res = await fetch(proxyUrl);
     if (res.ok) {
       const blob = await res.blob();
@@ -795,8 +887,7 @@ async function toBase64(url) {
       });
     }
   } catch {}
-
-  // Fallback: direct CORS fetch (works if server sends CORS headers)
+  // Fallback: direct CORS fetch
   try {
     const res = await fetch(url, { mode: 'cors', cache: 'no-store' });
     const blob = await res.blob();
@@ -809,54 +900,39 @@ async function toBase64(url) {
   } catch { return null; }
 }
 
-// Prefetch ALL iframe images as base64 at export time (safety net)
 async function prefetchFrameImages() {
   const doc = $('outputFrame')?.contentDocument;
   if (!doc) return () => {};
   const imgs    = [...doc.querySelectorAll('img')];
   const origSrc = imgs.map(img => img.src);
-
   await Promise.all(imgs.map(async (img, i) => {
     if (!origSrc[i] || origSrc[i].startsWith('data:')) return;
     const b64 = await toBase64(origSrc[i]);
     if (b64) img.src = b64;
   }));
-
   return () => imgs.forEach((img, i) => { img.src = origSrc[i]; });
 }
 
-// Fix 5: Auto-convert icon images to base64 in background after generation
-// By the time user clicks Export, images are already base64 — export is instant
+// Background conversion — icons already go through proxy so they're
+// same-origin, but we convert to base64 as an extra safety net for export
 async function autoConvertImages() {
   const frame = $('outputFrame');
   if (!frame) return;
-
-  // Wait for frame to fully load + extra time for icons to load/fail
   await new Promise(resolve => {
     if (frame.contentDocument?.readyState === 'complete') resolve();
     else frame.addEventListener('load', resolve, { once: true });
   });
   await new Promise(r => setTimeout(r, 1500));
-
   const doc = frame.contentDocument;
   if (!doc) return;
-
-  // Convert all external icon/logo images to base64 via proxy
   const imgs = [...doc.querySelectorAll('img')].filter(img => {
     const src = img.src || '';
-    return src && !src.startsWith('data:') &&
-      (src.includes('icons8') || src.includes('clearbit') || src.includes('simpleicons'));
+    return src && !src.startsWith('data:');
   });
-
   await Promise.all(imgs.map(async img => {
     const b64 = await toBase64(img.src);
     if (b64) img.src = b64;
   }));
-
-  // Trigger SVG fallback for any still-broken icons
-  [...doc.querySelectorAll('img[data-icon="true"]')]
-    .filter(img => !img.src.startsWith('data:') && img.naturalWidth === 0)
-    .forEach(img => { if (img.onerror) img.onerror.call(img); });
 }
 
 // ── EXPORT PNG ─────────────────────────────────────────────
@@ -865,8 +941,6 @@ async function exportPNG() {
   const el = await waitForFrame();
   if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
-
-  // Images should already be base64 from autoConvertImages, but prefetch as safety net
   const restore = await prefetchFrameImages();
   try {
     const dataUrl = await htmlToImage.toPng(el, {
@@ -888,7 +962,6 @@ async function exportPDF() {
   const el = await waitForFrame();
   if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
-
   const restore = await prefetchFrameImages();
   try {
     const dataUrl = await htmlToImage.toPng(el, { pixelRatio: 2 });
