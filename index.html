@@ -166,15 +166,10 @@
 
         <div class="ribbon-sep"></div>
 
-        <!-- Download dropdown — menu uses position:fixed set by JS -->
-        <div class="dl-wrap" id="dlWrap">
-          <button class="tbtn primary" id="btnDownload">↓ Export ▾</button>
-          <div class="dl-menu" id="dlMenu">
-            <button id="btnPNG">↓ PNG <span class="dl-hint">high-res 2×</span></button>
-            <button id="btnPDF">↓ PDF</button>
-            <button id="btnHTML">↓ HTML <span class="dl-hint">with edits</span></button>
-          </div>
-        </div>
+        <!-- Export buttons — three direct buttons, no dropdown -->
+        <button class="exp-btn" id="btnPNG"  title="Export as PNG (high-res 2×)">↓ PNG</button>
+        <button class="exp-btn" id="btnPDF"  title="Export as PDF">↓ PDF</button>
+        <button class="exp-btn primary" id="btnHTML" title="Export as HTML (includes your edits)">↓ HTML</button>
       </div><!-- /ribbon-right -->
 
     </div><!-- /ribbon -->

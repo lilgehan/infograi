@@ -209,19 +209,6 @@ window.addEventListener('load', () => {
     applyAccentToFrame();
   });
 
-  // Export dropdown — position:fixed so it escapes ribbon overflow clip
-  $('btnDownload').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const menu = $('dlMenu');
-    if (menu.classList.contains('open')) {
-      menu.classList.remove('open');
-    } else {
-      positionDropdown();
-      menu.classList.add('open');
-    }
-  });
-  document.addEventListener('click', () => $('dlMenu')?.classList.remove('open'));
-
   $('btnPNG').addEventListener('click',  exportPNG);
   $('btnPDF').addEventListener('click',  exportPDF);
   $('btnHTML').addEventListener('click', exportHTML);
@@ -229,17 +216,6 @@ window.addEventListener('load', () => {
   setupRibbon();
   setupZoom();
 });
-
-// ── DROPDOWN POSITION ──────────────────────────────────────
-function positionDropdown() {
-  const btn  = $('btnDownload');
-  const menu = $('dlMenu');
-  const rect = btn.getBoundingClientRect();
-  menu.style.right  = (window.innerWidth - rect.right) + 'px';
-  menu.style.left   = 'auto';
-  menu.style.bottom = (window.innerHeight - rect.top + 5) + 'px';
-  menu.style.top    = 'auto';
-}
 
 // ── LAYOUT PICKER ──────────────────────────────────────────
 function renderLayoutPicker() {
@@ -1352,7 +1328,6 @@ async function autoConvertImages() {
 
 // ── EXPORT PNG ─────────────────────────────────────────────
 async function exportPNG() {
-  $('dlMenu').classList.remove('open');
   const el = await waitForFrame();
   if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
@@ -1368,7 +1343,6 @@ async function exportPNG() {
 
 // ── EXPORT PDF ─────────────────────────────────────────────
 async function exportPDF() {
-  $('dlMenu').classList.remove('open');
   const el = await waitForFrame();
   if (!el) { alert('Nothing to export yet.'); return; }
   await document.fonts.ready;
@@ -1396,7 +1370,6 @@ async function exportPDF() {
 
 // ── EXPORT HTML ────────────────────────────────────────────
 function exportHTML() {
-  $('dlMenu').classList.remove('open');
   const frame = $('outputFrame');
   if (!frame) { alert('Nothing to export yet.'); return; }
   let html;

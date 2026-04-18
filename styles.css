@@ -398,65 +398,30 @@ body {
   font-weight: 600;
 }
 
-/* Download dropdown — position:fixed set by JS so it escapes ribbon overflow clip */
-.dl-wrap { position: relative; }
-.dl-menu {
-  display: none;
-  position: fixed;   /* JS sets right + bottom on open */
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.14);
-  overflow: hidden;
-  min-width: 160px;
-  z-index: 1000;
-}
-.dl-menu.open { display: block; }
-.dl-menu button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  text-align: left;
-  padding: 9px 14px;
-  border: none;
-  background: none;
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  transition: background 0.1s;
-  gap: 8px;
-}
-.dl-menu button:hover { background: var(--surface2); }
-.dl-hint {
-  font-size: 9.5px;
-  color: var(--t3);
-  font-style: italic;
-}
-
-/* Toolbar button (export) */
-.tbtn {
-  font-size: 11px;
-  padding: 6px 12px;
-  border-radius: 6px;
+/* Export buttons — three direct buttons, no dropdown */
+.exp-btn {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 5px;
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--t2);
-  cursor: pointer;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 11px;
+  font-family: 'Space Grotesk', sans-serif;
   font-weight: 600;
-  transition: all 0.12s;
+  cursor: pointer;
   white-space: nowrap;
+  transition: all 0.12s;
+  flex-shrink: 0;
 }
-.tbtn:hover { border-color: var(--ui-accent); color: var(--text); }
-.tbtn.primary {
+.exp-btn:hover { border-color: var(--border2); color: var(--text); background: var(--surface3); }
+.exp-btn.primary {
   background: var(--ui-accent);
   border-color: var(--ui-accent);
   color: #fff;
   box-shadow: 0 1px 4px rgba(224,90,43,0.25);
 }
-.tbtn.primary:hover { background: var(--ui-accent-h); }
+.exp-btn.primary:hover { background: var(--ui-accent-h); }
 
 /* ── Canvas body (centers iframe; JS toggles overflow based on zoom) ─ */
 .cbody {
