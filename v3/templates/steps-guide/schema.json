@@ -1,0 +1,161 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "infograi-v3-steps-guide",
+  "title": "Steps Guide Layout — AI Output Schema",
+  "description": "The exact JSON structure Claude must return for the steps-guide layout. No HTML. No CSS. Content only.",
+
+  "type": "object",
+  "required": ["layout", "title", "hero_icon", "sections", "stats", "callout", "footer_brand"],
+
+  "properties": {
+
+    "layout": {
+      "type": "string",
+      "const": "steps-guide"
+    },
+
+    "title": {
+      "type": "string",
+      "maxLength": 72,
+      "description": "Hero title. Start with a verb when possible: 'How to...', 'Set Up...', 'Master...'. 1–2 lines max."
+    },
+
+    "subtitle": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "1–2 sentences. What the reader will be able to do after following this guide."
+    },
+
+    "label": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "Eyebrow label: 'HOW TO', '5 STEPS', '10-MINUTE GUIDE', etc."
+    },
+
+    "hero_icon": {
+      "type": "string",
+      "description": "Single icon that best represents the guide's end goal.",
+      "enum": [
+        "rocket","idea","lightning-bolt","gear","calendar-3","user-group","shield",
+        "checkmark","star","trophy","target","key","lock","internet","database",
+        "source-code","console","cloud-storage","briefcase","dollar-coin","search",
+        "open-book","chart-increasing","analytics","pie-chart","clock","teamwork",
+        "strategy","growth","workflow","checklist","deadline","meeting","handshake",
+        "networking","statistics","report","presentation","brain","artificial-intelligence",
+        "robot-2","color-palette","image","video","collaboration","creativity","resume",
+        "approval","priority","layers","settings","home","smartphone","mail","folder","link"
+      ]
+    },
+
+    "sections": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 6,
+      "description": "4–6 numbered steps. Each step has a number, title, body text, and icon. Cover the full process without skipping important steps or adding filler steps.",
+      "items": {
+        "type": "object",
+        "required": ["number", "title", "body", "icon"],
+        "properties": {
+          "number": {
+            "type": "number",
+            "description": "Step number: 1, 2, 3..."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Step title. Start with an action verb: 'Create...', 'Configure...', 'Connect...'. 3–6 words."
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 120,
+            "description": "What to do and why. Specific. No fluff. 1–2 sentences max."
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon specific to this step's action — not a repeat of other steps.",
+            "enum": [
+              "rocket","idea","lightning-bolt","gear","calendar-3","user-group","shield",
+              "checkmark","star","trophy","target","key","lock","internet","database",
+              "source-code","console","cloud-storage","briefcase","dollar-coin","search",
+              "open-book","chart-increasing","analytics","pie-chart","clock","teamwork",
+              "strategy","growth","workflow","checklist","deadline","meeting","handshake",
+              "networking","statistics","report","presentation","brain","artificial-intelligence",
+              "robot-2","color-palette","image","video","collaboration","creativity","resume",
+              "approval","priority","layers","settings","home","smartphone","mail","folder","link"
+            ]
+          }
+        }
+      }
+    },
+
+    "stats": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Exactly 3 stats. Time to complete, number of steps, or key outcome metrics.",
+      "items": {
+        "type": "object",
+        "required": ["number", "label", "icon"],
+        "properties": {
+          "number": { "type": "string", "maxLength": 10 },
+          "label":  { "type": "string", "maxLength": 36 },
+          "icon":   {
+            "type": "string",
+            "enum": [
+              "rocket","idea","lightning-bolt","gear","calendar-3","user-group","shield",
+              "checkmark","star","trophy","target","key","lock","internet","database",
+              "source-code","console","cloud-storage","briefcase","dollar-coin","search",
+              "open-book","chart-increasing","analytics","pie-chart","clock","teamwork",
+              "strategy","growth","workflow","checklist","deadline","meeting","handshake",
+              "networking","statistics","report","presentation","brain","artificial-intelligence",
+              "robot-2","color-palette","image","video","collaboration","creativity","resume",
+              "approval","priority","layers","settings","home","smartphone","mail","folder","link"
+            ]
+          }
+        }
+      }
+    },
+
+    "callout": {
+      "type": "object",
+      "required": ["title", "body"],
+      "description": "A pro tip, common mistake to avoid, or key insight. Not a summary.",
+      "properties": {
+        "title": { "type": "string", "maxLength": 20 },
+        "body":  { "type": "string", "maxLength": 200 }
+      }
+    },
+
+    "footer_brand": {
+      "type": "string",
+      "maxLength": 60
+    }
+  },
+
+  "examples": [
+    {
+      "layout": "steps-guide",
+      "title": "Deploy Your First App on Vercel",
+      "subtitle": "From zero to live in 5 steps — no DevOps experience required",
+      "label": "DEPLOYMENT GUIDE",
+      "hero_icon": "rocket",
+      "sections": [
+        { "number": 1, "title": "Create a Vercel Account", "body": "Sign up at vercel.com — the free Hobby plan covers most personal projects with no credit card needed.", "icon": "user-group" },
+        { "number": 2, "title": "Connect Your Git Repository", "body": "Import from GitHub, GitLab, or Bitbucket. Vercel reads your framework automatically and sets sensible defaults.", "icon": "source-code" },
+        { "number": 3, "title": "Configure Environment Variables", "body": "Add API keys and secrets in Project Settings → Environment Variables. Never commit these to your repo.", "icon": "lock" },
+        { "number": 4, "title": "Trigger Your First Deploy", "body": "Push any commit to main. Vercel builds and deploys in under 60 seconds — you'll see a live preview URL immediately.", "icon": "rocket" },
+        { "number": 5, "title": "Set Up a Custom Domain", "body": "Add your domain in Project Settings → Domains. SSL is provisioned automatically within minutes.", "icon": "internet" }
+      ],
+      "stats": [
+        { "number": "<60s", "label": "Deploy Time", "icon": "clock" },
+        { "number": "Free",  "label": "Hobby Plan", "icon": "dollar-coin" },
+        { "number": "Auto",  "label": "SSL Setup",  "icon": "shield" }
+      ],
+      "callout": {
+        "title": "Common Mistake",
+        "body": "Never push environment variables to Git. Use Vercel's dashboard to store secrets — even a single accidental commit exposes your API keys permanently."
+      },
+      "footer_brand": "Infogr.ai"
+    }
+  ]
+}

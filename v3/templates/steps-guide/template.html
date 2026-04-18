@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+
+/* ─────────────────────────────────────────
+   DESIGN TOKENS — Professional (default)
+───────────────────────────────────────── */
+:root {
+  --accent:            #2563EB;
+  --accent-soft:       rgba(37,99,235,0.08);
+  --accent-label-bg:   #EFF6FF;
+  --accent-label-text: #1D4ED8;
+  --canvas-bg:         #F8FAFC;
+  --card-bg:           #FFFFFF;
+  --card-border:       #E2E8F0;
+  --card-shadow:       0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.03);
+  --text-primary:      #0F172A;
+  --text-secondary:    #475569;
+  --text-muted:        #94A3B8;
+  --step-num-bg:       var(--accent);
+  --step-num-color:    #FFFFFF;
+  --step-line-color:   #CBD5E1;
+  --stat-num:          #0F172A;
+  --stat-icon-bg:      rgba(37,99,235,0.08);
+  --callout-bg:        #EFF6FF;
+  --callout-border:    #BFDBFE;
+  --callout-title:     #1E40AF;
+  --callout-body:      #1E3A8A;
+  --callout-icon-bg:   rgba(37,99,235,0.12);
+  --divider:           #E2E8F0;
+  --footer-bg:         rgba(0,0,0,0.02);
+  --footer-text:       #94A3B8;
+  --footer-border:     #E2E8F0;
+  --hero-icon-ring:    rgba(37,99,235,0.12);
+  --font-hero:         'Space Grotesk', sans-serif;
+  --font-body:         'Plus Jakarta Sans', sans-serif;
+  --radius-card:       14px;
+  --radius-pill:       999px;
+}
+
+/* ── BOLD ── */
+[data-tone="bold"] {
+  --accent:            #F59E0B;
+  --accent-soft:       rgba(245,158,11,0.12);
+  --accent-label-bg:   rgba(245,158,11,0.14);
+  --accent-label-text: #FBBF24;
+  --canvas-bg:         #0F172A;
+  --card-bg:           rgba(255,255,255,0.04);
+  --card-border:       rgba(245,158,11,0.2);
+  --card-shadow:       0 0 0 1px rgba(245,158,11,0.15), 0 4px 24px rgba(0,0,0,0.35);
+  --text-primary:      #F1F5F9;
+  --text-secondary:    #CBD5E1;
+  --text-muted:        #475569;
+  --step-num-bg:       #F59E0B;
+  --step-num-color:    #0F172A;
+  --step-line-color:   rgba(245,158,11,0.25);
+  --stat-num:          #F59E0B;
+  --stat-icon-bg:      rgba(245,158,11,0.12);
+  --callout-bg:        rgba(245,158,11,0.08);
+  --callout-border:    rgba(245,158,11,0.3);
+  --callout-title:     #FDE68A;
+  --callout-body:      #FCD34D;
+  --callout-icon-bg:   rgba(245,158,11,0.15);
+  --divider:           rgba(255,255,255,0.07);
+  --footer-bg:         rgba(0,0,0,0.2);
+  --footer-text:       #475569;
+  --footer-border:     rgba(255,255,255,0.06);
+  --hero-icon-ring:    rgba(245,158,11,0.15);
+  --radius-card:       12px;
+}
+
+/* ── MINIMAL ── */
+[data-tone="minimal"] {
+  --accent:            #0F766E;
+  --accent-soft:       rgba(15,118,110,0.06);
+  --accent-label-bg:   #F0FDFA;
+  --accent-label-text: #0F766E;
+  --canvas-bg:         #FAFAF8;
+  --card-bg:           #FFFFFF;
+  --card-border:       #E7E5E4;
+  --card-shadow:       none;
+  --text-primary:      #1C1917;
+  --text-secondary:    #57534E;
+  --text-muted:        #A8A29E;
+  --step-num-bg:       #0F766E;
+  --step-num-color:    #FFFFFF;
+  --step-line-color:   #D6D3D1;
+  --stat-num:          #1C1917;
+  --stat-icon-bg:      rgba(15,118,110,0.07);
+  --callout-bg:        #F0FDFA;
+  --callout-border:    #99F6E4;
+  --callout-title:     #0F766E;
+  --callout-body:      #134E4A;
+  --callout-icon-bg:   rgba(15,118,110,0.1);
+  --divider:           #E7E5E4;
+  --footer-bg:         transparent;
+  --footer-text:       #A8A29E;
+  --footer-border:     #E7E5E4;
+  --hero-icon-ring:    rgba(15,118,110,0.1);
+  --radius-card:       8px;
+  --radius-pill:       6px;
+}
+
+/* ── PLAYFUL ── */
+[data-tone="playful"] {
+  --accent:            #7C3AED;
+  --accent-soft:       rgba(124,58,237,0.08);
+  --accent-label-bg:   #F3E8FF;
+  --accent-label-text: #7C3AED;
+  --canvas-bg:         #FFFBEB;
+  --card-bg:           #FFFFFF;
+  --card-border:       #E9D5FF;
+  --card-shadow:       0 4px 14px rgba(124,58,237,0.1);
+  --text-primary:      #1A1A2E;
+  --text-secondary:    #57534E;
+  --text-muted:        #A78BFA;
+  --step-num-bg:       #7C3AED;
+  --step-num-color:    #FFFFFF;
+  --step-line-color:   #DDD6FE;
+  --stat-num:          #7C3AED;
+  --stat-icon-bg:      rgba(124,58,237,0.08);
+  --callout-bg:        #F3E8FF;
+  --callout-border:    #DDD6FE;
+  --callout-title:     #5B21B6;
+  --callout-body:      #4C1D95;
+  --callout-icon-bg:   rgba(124,58,237,0.12);
+  --divider:           #E9D5FF;
+  --footer-bg:         rgba(124,58,237,0.03);
+  --footer-text:       #A78BFA;
+  --footer-border:     #E9D5FF;
+  --hero-icon-ring:    rgba(124,58,237,0.12);
+  --radius-card:       20px;
+  --radius-pill:       999px;
+}
+
+/* ─────────────────────────────────────────
+   RESET
+───────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+img { display: block; }
+a { color: inherit; text-decoration: none; }
+
+/* ─────────────────────────────────────────
+   PAGE SHELL
+───────────────────────────────────────── */
+.ig-page {
+  width: 800px;
+  height: 1131px;
+  padding: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+  background: var(--canvas-bg);
+  font-family: var(--font-body);
+  color: var(--text-primary);
+}
+
+.ig-page[data-size="portrait"] { height: 1422px; }
+.ig-page[data-size="square"]   { width: 800px; height: 800px; }
+.ig-page[data-size="landscape"]{ width: 1100px; height: 800px; }
+
+/* ─────────────────────────────────────────
+   HEADER  (fixed 190px)
+───────────────────────────────────────── */
+.ig-header {
+  height: 190px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.ig-header-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ig-label-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 5px 14px;
+  background: var(--accent-label-bg);
+  color: var(--accent-label-text);
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ig-title {
+  font-family: var(--font-hero);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ig-subtitle {
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ig-hero-wrap {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--hero-icon-ring);
+  border: 2px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ig-hero-icon {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+
+/* ─────────────────────────────────────────
+   DIVIDER
+───────────────────────────────────────── */
+.ig-section-divider {
+  height: 1px;
+  background: var(--divider);
+  flex-shrink: 0;
+  margin: -4px 0;
+}
+
+/* ─────────────────────────────────────────
+   STEPS LIST  (flex: 1 — fills remaining)
+───────────────────────────────────────── */
+.ig-steps-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Step connector line running down the left side */
+.ig-steps-list::before {
+  content: '';
+  position: absolute;
+  left: 19px;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  background: var(--step-line-color);
+  z-index: 0;
+}
+
+.ig-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 10px 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.ig-step-num {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--step-num-bg);
+  color: var(--step-num-color);
+  font-family: var(--font-hero);
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.01em;
+  position: relative;
+  z-index: 2;
+}
+
+.ig-step-icon-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ig-step-icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.ig-step-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+  overflow: hidden;
+}
+
+.ig-step-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.ig-step-body-text {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ─────────────────────────────────────────
+   STATS ROW  (fixed 110px)
+───────────────────────────────────────── */
+.ig-stats-row {
+  height: 110px;
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.ig-stat {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.ig-stat-icon-wrap {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--stat-icon-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ig-stat-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.ig-stat-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ig-stat-num {
+  font-family: var(--font-hero);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--stat-num);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.ig-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ─────────────────────────────────────────
+   CALLOUT  (fixed 110px)
+───────────────────────────────────────── */
+.ig-callout {
+  height: 110px;
+  flex-shrink: 0;
+  background: var(--callout-bg);
+  border: 1px solid var(--callout-border);
+  border-radius: var(--radius-card);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.ig-callout-icon-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--callout-icon-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ig-callout-icon-wrap svg {
+  width: 20px;
+  height: 20px;
+  fill: var(--accent);
+}
+
+.ig-callout-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ig-callout-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--callout-title);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ig-callout-body {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--callout-body);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* ─────────────────────────────────────────
+   FOOTER  (fixed 48px)
+───────────────────────────────────────── */
+.ig-footer {
+  height: 48px;
+  flex-shrink: 0;
+  background: var(--footer-bg);
+  border: 1px solid var(--footer-border);
+  border-radius: 8px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.ig-footer-brand {
+  font-family: var(--font-hero);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
+}
+
+.ig-footer-attr {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--footer-text);
+  white-space: nowrap;
+}
+
+.ig-footer-attr a { color: var(--accent); font-weight: 500; }
+
+/* ── BOLD title gradient ── */
+[data-tone="bold"] .ig-title {
+  background: linear-gradient(135deg, #F8FAFC 0%, #F59E0B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+</style>
+</head>
+
+<body style="margin:0;padding:0;background:#e5e7eb;">
+
+<!--
+  ════════════════════════════════════════════════════
+  STEPS-GUIDE TEMPLATE — v3
+
+  VARIABLE (filled by renderer from AI JSON):
+     data-slot="label"         ← eyebrow pill text
+     data-slot="title"         ← hero title
+     data-slot="subtitle"      ← subtitle paragraph
+     data-slot="hero-icon"     ← <img> src = proxied Icons8 URL
+     data-slot="steps-loop"    ← ENTIRE innerHTML → 4–6 step rows
+     data-slot="stats-loop"    ← ENTIRE innerHTML → 3 stat blocks
+     data-slot="callout-title" ← callout heading
+     data-slot="callout-body"  ← callout body text
+     data-slot="footer-brand"  ← brand credit
+
+  FIXED (structural, same regardless of topic):
+     The lightbulb SVG in the callout
+     The numbered circle dots (styling only — numbers are variable)
+     The vertical connector line between steps
+     All CSS layout rules
+  ════════════════════════════════════════════════════
+-->
+
+<!-- Reusable placeholder SVG shapes (no external deps) -->
+<svg style="display:none">
+  <symbol id="ph-step-icon" viewBox="0 0 26 26">
+    <circle cx="13" cy="13" r="10" fill="currentColor" opacity="0.2"/>
+    <circle cx="13" cy="13" r="5"  fill="currentColor" opacity="0.5"/>
+  </symbol>
+  <symbol id="ph-stat-icon" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.2"/>
+    <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.5"/>
+  </symbol>
+</svg>
+
+<div class="ig-page" data-tone="professional" data-size="a4">
+
+  <!-- ── HEADER ── -->
+  <header class="ig-header">
+    <div class="ig-header-text">
+      <div class="ig-label-pill" data-slot="label">STEP-BY-STEP</div>
+      <h1 class="ig-title" data-slot="title">Your Guide Title Here</h1>
+      <p class="ig-subtitle" data-slot="subtitle">A clear subtitle explaining what this guide covers and who it's for.</p>
+    </div>
+    <div class="ig-hero-wrap">
+      <!--
+        data-slot="hero-icon" → renderer sets src to proxied Icons8 URL.
+        Placeholder uses inline SVG data URI — zero external dependency.
+      -->
+      <img class="ig-hero-icon"
+           data-slot="hero-icon"
+           data-icon-name=""
+           src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Ccircle cx='48' cy='48' r='38' fill='%232563EB' opacity='0.15'/%3E%3Ccircle cx='48' cy='48' r='22' fill='%232563EB' opacity='0.3'/%3E%3Ccircle cx='48' cy='48' r='10' fill='%232563EB' opacity='0.5'/%3E%3C/svg%3E"
+           alt="hero icon" />
+    </div>
+  </header>
+
+  <!-- ── DIVIDER ── -->
+  <div class="ig-section-divider"></div>
+
+  <!-- ── STEPS ──
+       data-slot="steps-loop": renderer replaces ENTIRE innerHTML with 4–6 step rows.
+       Placeholder step icons use inline SVG — no external dependency.
+       Step numbers, titles, body text, and icons are ALL variable (from AI JSON).
+  ── -->
+  <div class="ig-steps-list" data-slot="steps-loop">
+    <!-- Placeholder step 1 -->
+    <div class="ig-step">
+      <div class="ig-step-num">1</div>
+      <div class="ig-step-icon-wrap">
+        <svg width="26" height="26" viewBox="0 0 26 26" style="color:var(--accent)">
+          <use href="#ph-step-icon" fill="var(--accent)"/>
+        </svg>
+      </div>
+      <div class="ig-step-body">
+        <div class="ig-step-title">Step Title</div>
+        <div class="ig-step-body-text" style="background:var(--divider);color:transparent;border-radius:4px;height:10px;">·</div>
+      </div>
+    </div>
+    <!-- Placeholder step 2 -->
+    <div class="ig-step">
+      <div class="ig-step-num">2</div>
+      <div class="ig-step-icon-wrap">
+        <svg width="26" height="26" viewBox="0 0 26 26"><use href="#ph-step-icon" fill="var(--accent)"/></svg>
+      </div>
+      <div class="ig-step-body">
+        <div class="ig-step-title">Step Title</div>
+        <div class="ig-step-body-text" style="background:var(--divider);color:transparent;border-radius:4px;height:10px;">·</div>
+      </div>
+    </div>
+    <!-- Placeholder step 3 -->
+    <div class="ig-step">
+      <div class="ig-step-num">3</div>
+      <div class="ig-step-icon-wrap">
+        <svg width="26" height="26" viewBox="0 0 26 26"><use href="#ph-step-icon" fill="var(--accent)"/></svg>
+      </div>
+      <div class="ig-step-body">
+        <div class="ig-step-title">Step Title</div>
+        <div class="ig-step-body-text" style="background:var(--divider);color:transparent;border-radius:4px;height:10px;">·</div>
+      </div>
+    </div>
+    <!-- Placeholder step 4 -->
+    <div class="ig-step">
+      <div class="ig-step-num">4</div>
+      <div class="ig-step-icon-wrap">
+        <svg width="26" height="26" viewBox="0 0 26 26"><use href="#ph-step-icon" fill="var(--accent)"/></svg>
+      </div>
+      <div class="ig-step-body">
+        <div class="ig-step-title">Step Title</div>
+        <div class="ig-step-body-text" style="background:var(--divider);color:transparent;border-radius:4px;height:10px;">·</div>
+      </div>
+    </div>
+    <!-- Placeholder step 5 -->
+    <div class="ig-step">
+      <div class="ig-step-num">5</div>
+      <div class="ig-step-icon-wrap">
+        <svg width="26" height="26" viewBox="0 0 26 26"><use href="#ph-step-icon" fill="var(--accent)"/></svg>
+      </div>
+      <div class="ig-step-body">
+        <div class="ig-step-title">Step Title</div>
+        <div class="ig-step-body-text" style="background:var(--divider);color:transparent;border-radius:4px;height:10px;">·</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STATS ROW ──
+       data-slot="stats-loop": renderer replaces ENTIRE innerHTML with 3 stat blocks.
+       Numbers, labels, and icons are ALL variable (from AI JSON).
+  ── -->
+  <div class="ig-stats-row" data-slot="stats-loop">
+    <!-- Placeholder stat 1 -->
+    <div class="ig-stat">
+      <div class="ig-stat-icon-wrap">
+        <svg width="24" height="24" viewBox="0 0 24 24"><use href="#ph-stat-icon" fill="var(--accent)"/></svg>
+      </div>
+      <div class="ig-stat-text">
+        <div class="ig-stat-num" style="color:var(--accent)">—</div>
+        <div class="ig-stat-label">Stat Label</div>
+      </div>
+    </div>
+    <!-- Placeholder stat 2 -->
+    <div class="ig-stat">
+      <div class="ig-stat-icon-wrap">
+        <svg width="24" height="24" viewBox="0 0 24 24"><use href="#ph-stat-icon" fill="var(--accent)"/></svg>
+      </div>
+      <div class="ig-stat-text">
+        <div class="ig-stat-num" style="color:var(--accent)">—</div>
+        <div class="ig-stat-label">Stat Label</div>
+      </div>
+    </div>
+    <!-- Placeholder stat 3 -->
+    <div class="ig-stat">
+      <div class="ig-stat-icon-wrap">
+        <svg width="24" height="24" viewBox="0 0 24 24"><use href="#ph-stat-icon" fill="var(--accent)"/></svg>
+      </div>
+      <div class="ig-stat-text">
+        <div class="ig-stat-num" style="color:var(--accent)">—</div>
+        <div class="ig-stat-label">Stat Label</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CALLOUT ── -->
+  <div class="ig-callout">
+    <div class="ig-callout-icon-wrap">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2a7 7 0 0 1 5.292 11.584C16.498 14.72 16 15.84 16 17v1a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-1c0-1.16-.498-2.28-1.292-3.416A7 7 0 0 1 12 2zm2 18H10a1 1 0 0 0 0 2h4a1 1 0 0 0 0-2z"/>
+      </svg>
+    </div>
+    <div class="ig-callout-content">
+      <div class="ig-callout-title" data-slot="callout-title">Pro Tip</div>
+      <div class="ig-callout-body" data-slot="callout-body">Expert insight goes here — the single most actionable takeaway a reader should remember from this guide.</div>
+    </div>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <footer class="ig-footer">
+    <span class="ig-footer-brand" data-slot="footer-brand">Infogr.ai</span>
+    <span class="ig-footer-attr">Icons by <a href="https://icons8.com" target="_blank">Icons8</a></span>
+  </footer>
+
+</div><!-- /ig-page -->
+
+</body>
+</html>
