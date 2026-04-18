@@ -11,7 +11,7 @@
 <header class="app-header">
   <div class="logo">Infogr<span>.</span>ai</div>
   <div class="header-right">
-    <div class="badge">Designer v2.3</div>
+    <div class="badge">Designer v2.4 β</div>
   </div>
 </header>
 
@@ -70,6 +70,7 @@
     <div class="ribbon" id="ribbon" style="display:none">
 
       <div class="ribbon-tools">
+
         <!-- Font family -->
         <select class="ribbon-select ribbon-font" id="rbFont" title="Font family">
           <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
@@ -79,36 +80,33 @@
           <option value="Helvetica Neue">Helvetica</option>
           <option value="Times New Roman">Times New Roman</option>
         </select>
-        <!-- Font size -->
-        <select class="ribbon-select ribbon-size" id="rbSize" title="Font size">
-          <option>10</option><option>11</option><option>12</option>
-          <option>13</option><option selected>14</option><option>16</option>
-          <option>18</option><option>20</option><option>24</option>
-          <option>28</option><option>32</option><option>36</option>
-          <option>48</option><option>64</option>
-        </select>
+
+        <!-- Font size — typeable number input (v2.4) -->
+        <input class="ribbon-select ribbon-size-input" type="number"
+               id="rbSizeInput" min="8" max="96" value="14"
+               title="Font size (px)" />
 
         <!-- A↑ A↓ relative size buttons -->
-        <button class="rbtn aa-btn" id="btnAUp" title="Increase font size"><span class="aa-big">A</span></button>
+        <button class="rbtn aa-btn" id="btnAUp"   title="Increase font size"><span class="aa-big">A</span></button>
         <button class="rbtn aa-btn" id="btnADown" title="Decrease font size"><span class="aa-small">A</span></button>
 
         <div class="ribbon-sep"></div>
 
-        <!-- Undo / Redo -->
-        <button class="rbtn" id="btnUndo" title="Undo">⟲</button>
-        <button class="rbtn" id="btnRedo" title="Redo">⟳</button>
+        <!-- Undo / Redo (v2.4: custom snapshot-based) -->
+        <button class="rbtn" id="btnUndo" title="Undo (Ctrl+Z)">⟲</button>
+        <button class="rbtn" id="btnRedo" title="Redo (Ctrl+Y / Ctrl+Shift+Z)">⟳</button>
 
         <div class="ribbon-sep"></div>
 
-        <!-- B I U S -->
-        <button class="rbtn fmt" data-cmd="bold"          title="Bold"><strong>B</strong></button>
-        <button class="rbtn fmt" data-cmd="italic"        title="Italic"><em>I</em></button>
-        <button class="rbtn fmt" data-cmd="underline"     title="Underline"><span style="text-decoration:underline">U</span></button>
-        <button class="rbtn fmt" data-cmd="strikethrough" title="Strikethrough"><span style="text-decoration:line-through">S</span></button>
+        <!-- B I U S — IDs added in v2.4 for live state sync -->
+        <button class="rbtn" id="btnBold"      title="Bold"><strong>B</strong></button>
+        <button class="rbtn" id="btnItalic"    title="Italic"><em>I</em></button>
+        <button class="rbtn" id="btnUnderline" title="Underline"><span style="text-decoration:underline">U</span></button>
+        <button class="rbtn" id="btnStrike"    title="Strikethrough"><span style="text-decoration:line-through">S</span></button>
 
         <div class="ribbon-sep"></div>
 
-        <!-- Text color — A with color underline -->
+        <!-- Text color -->
         <label class="rbtn color-btn" title="Text color">
           <span class="color-a">A</span>
           <input type="color" id="rbColor" value="#1A1A2E">
@@ -116,26 +114,38 @@
 
         <div class="ribbon-sep"></div>
 
-        <!-- Alignment -->
-        <button class="rbtn fmt" data-cmd="justifyLeft"   title="Align left">
-          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="3.5" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="10.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>
+        <!-- Alignment — class=align for group wiring -->
+        <button class="rbtn align" data-cmd="justifyLeft"   title="Align left">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"    width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="3.5"  width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"    width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="10.5" width="8"  height="1.5" rx="0.75" fill="currentColor"/></svg>
         </button>
-        <button class="rbtn fmt" data-cmd="justifyCenter" title="Center">
-          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="3.5" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="10.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>
+        <button class="rbtn align" data-cmd="justifyCenter" title="Center">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"    width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="3.5"  width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"    width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="3" y="10.5" width="8"  height="1.5" rx="0.75" fill="currentColor"/></svg>
         </button>
-        <button class="rbtn fmt" data-cmd="justifyRight"  title="Align right">
-          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="4" y="3.5" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"   width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="6" y="10.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>
+        <button class="rbtn align" data-cmd="justifyRight"  title="Align right">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><rect x="0" y="0"    width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="4" y="3.5"  width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="0" y="7"    width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="6" y="10.5" width="8"  height="1.5" rx="0.75" fill="currentColor"/></svg>
         </button>
 
         <div class="ribbon-sep"></div>
 
-        <!-- Lists -->
-        <button class="rbtn fmt" data-cmd="insertUnorderedList" title="Bullet list">
+        <!-- Lists — IDs added in v2.4 -->
+        <button class="rbtn" id="btnBulletList" title="Bullet list (inserts • at line start)">
           <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><circle cx="1.5" cy="2"  r="1.5" fill="currentColor"/><rect x="4.5" y="1"   width="9.5" height="1.5" rx="0.75" fill="currentColor"/><circle cx="1.5" cy="6"  r="1.5" fill="currentColor"/><rect x="4.5" y="5"   width="9.5" height="1.5" rx="0.75" fill="currentColor"/><circle cx="1.5" cy="10" r="1.5" fill="currentColor"/><rect x="4.5" y="9"   width="7"   height="1.5" rx="0.75" fill="currentColor"/></svg>
         </button>
-        <button class="rbtn fmt" data-cmd="insertOrderedList" title="Numbered list">
+        <button class="rbtn" id="btnNumberList" title="Numbered list (auto-increments)">
           <svg width="14" height="12" viewBox="0 0 14 12" fill="none"><text x="0" y="4"  font-size="4.5" fill="currentColor" font-family="sans-serif" font-weight="600">1.</text><rect x="5" y="1"  width="9" height="1.5" rx="0.75" fill="currentColor"/><text x="0" y="8"  font-size="4.5" fill="currentColor" font-family="sans-serif" font-weight="600">2.</text><rect x="5" y="5"  width="9" height="1.5" rx="0.75" fill="currentColor"/><text x="0" y="12" font-size="4.5" fill="currentColor" font-family="sans-serif" font-weight="600">3.</text><rect x="5" y="9"  width="7" height="1.5" rx="0.75" fill="currentColor"/></svg>
         </button>
+
+        <div class="ribbon-sep"></div>
+
+        <!-- Format painter (v2.4) -->
+        <button class="rbtn" id="btnPainter" title="Format painter — click to copy style, then select text to apply">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1.5" width="8.5" height="4.5" rx="1.5" fill="currentColor" opacity="0.85"/>
+            <rect x="4.5" y="6" width="1.5" height="2.5" fill="currentColor" opacity="0.65"/>
+            <rect x="3" y="8.5" width="4.5" height="4" rx="1.2" fill="currentColor"/>
+          </svg>
+        </button>
+
       </div><!-- /ribbon-tools -->
 
       <div class="ribbon-right">

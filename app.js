@@ -1,25 +1,139 @@
 /* ============================================================
-   Infogr.ai v2.3
-   - Pre-process HTML before srcdoc: proxy icon URLs, inject
-     overflow CSS, embed icon editor + fallback scripts
-   - Export dropdown: position:fixed (escapes ribbon overflow)
-   - Auto-fit zoom on generation (fills viewport nicely)
-   - Undo/redo buttons
-   - Custom bullet/numbered list insertion (replaces execCommand)
-   - Removed all unreliable post-render iframe injections
+   Infogr.ai v2.4 — Beta Custom Toolbar
+   ─────────────────────────────────────────────────────────────
+   NEW in v2.4:
+   • LOCAL_ICON_SVGS — 25 icons as inline SVGs; checked in
+     preprocessHTML before proxy rewrite, so folder/gear/etc.
+     never fall back to a colored-circle initial.
+   • HISTORY — custom snapshot undo/redo (max 50 entries).
+     Snapshots are saved only on toolbar actions (not on
+     keystrokes). cleanupSpans() runs before each snapshot.
+     Deduplication: identical states are never double-saved.
+     Ctrl+Z / Ctrl+Y intercepted inside the iframe.
+     Cursor resets after undo (MVP trade-off, noted below).
+   • applyFormat() — Selection/Range API; surroundContents
+     primary path, extractContents fallback for cross-element
+     selections. No execCommand for text formatting.
+   • applyBold / applyItalic / applyTextDecoration — toggle
+     helpers that read computed style before deciding direction.
+   • cleanupSpans() — removes empty + bare spans, normalizes
+     text nodes. Runs before snapshot and after every format.
+   • updateToolbarState() — reads computed styles on
+     selectionchange (debounced 50ms). Updates font dropdown,
+     size input, and B/I/U/S active states live.
+   • insertBulletAtLineStart() — finds block container,
+     inserts prefix at first text position (not cursor).
+   • insertNumberedBullet() — scans siblings for numbered
+     context, auto-increments.
+   • Format painter — capture style bundle on first click,
+     apply on next selection. Click again or Escape to cancel.
+   • Typeable font-size input (number field, 8–96px).
+   • Alignment still uses execCommand (reliable for blocks).
+   ─────────────────────────────────────────────────────────────
+   UNDO/REDO BEHAVIOUR (explicit):
+   • Triggers: every toolbar action (format, bullet, painter).
+     NOT triggered by keystrokes — typed text uses the browser's
+     own contenteditable history, which handles char-by-char.
+     Our Ctrl+Z intercept overrides the browser shortcut so
+     the two histories don't conflict.
+   • Deduplication: if innerHTML equals the top snapshot,
+     no new entry is pushed.
+   • Stack limit: 50 entries (~500KB–2MB RAM, acceptable).
+   • Cursor after undo: resets to start of body. Preserving
+     cursor requires stable node references (XPath or data-ids)
+     which is out of scope for this beta.
    ============================================================ */
+
+// ── LOCAL ICON LIBRARY ─────────────────────────────────────
+// 25 critical Icons8 names as inline SVGs.
+// Checked in preprocessHTML BEFORE proxy rewrite.
+// Colors chosen to approximate Icons8 Fluency palette.
+const LOCAL_ICON_SVGS = {
+  'folder':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M4 14a4 4 0 0 1 4-4h10l4 4h22a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z" fill="#FFA726"/><path d="M4 20h40v14a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z" fill="#FFB74D"/><rect x="10" y="25" width="18" height="2" rx="1" fill="#E65100" opacity="0.35"/></svg>`,
+  'gear':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#607D8B" d="M39 21.5l-2.2-.4c-.3-1-.7-1.9-1.3-2.8l1.3-1.8c.4-.5.3-1.2-.2-1.7l-2.8-2.8c-.5-.4-1.2-.4-1.7-.1l-1.8 1.3c-.9-.5-1.8-1-2.8-1.3l-.4-2.2C26.8 9 26.2 8.5 25.5 8.5h-4c-.7 0-1.3.5-1.4 1.2l-.4 2.2c-1 .3-1.9.8-2.8 1.3l-1.8-1.3c-.5-.3-1.2-.3-1.7.1l-2.8 2.8c-.5.5-.5 1.2-.2 1.7l1.3 1.8c-.5.9-1 1.8-1.3 2.8l-2.2.4C9 21.7 8.5 22.3 8.5 23v4c0 .7.5 1.3 1.2 1.4l2.2.4c.3 1 .8 1.9 1.3 2.8l-1.3 1.8c-.3.5-.3 1.2.2 1.7l2.8 2.8c.5.4 1.2.4 1.7.1l1.8-1.3c.9.5 1.8 1 2.8 1.3l.4 2.2c.2.7.7 1.2 1.4 1.2h4c.7 0 1.3-.5 1.4-1.2l.4-2.2c1-.3 1.9-.8 2.8-1.3l1.8 1.3c.5.3 1.2.3 1.7-.1l2.8-2.8c.5-.5.5-1.2.2-1.7l-1.3-1.8c.5-.9 1-1.8 1.3-2.8l2.2-.4c.7-.2 1.2-.7 1.2-1.4v-4c0-.7-.5-1.3-1.1-1.5z"/><circle cx="24" cy="25" r="5.5" fill="#B0BEC5"/></svg>`,
+  'settings':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#607D8B" d="M39 21.5l-2.2-.4c-.3-1-.7-1.9-1.3-2.8l1.3-1.8c.4-.5.3-1.2-.2-1.7l-2.8-2.8c-.5-.4-1.2-.4-1.7-.1l-1.8 1.3c-.9-.5-1.8-1-2.8-1.3l-.4-2.2C26.8 9 26.2 8.5 25.5 8.5h-4c-.7 0-1.3.5-1.4 1.2l-.4 2.2c-1 .3-1.9.8-2.8 1.3l-1.8-1.3c-.5-.3-1.2-.3-1.7.1l-2.8 2.8c-.5.5-.5 1.2-.2 1.7l1.3 1.8c-.5.9-1 1.8-1.3 2.8l-2.2.4C9 21.7 8.5 22.3 8.5 23v4c0 .7.5 1.3 1.2 1.4l2.2.4c.3 1 .8 1.9 1.3 2.8l-1.3 1.8c-.3.5-.3 1.2.2 1.7l2.8 2.8c.5.4 1.2.4 1.7.1l1.8-1.3c.9.5 1.8 1 2.8 1.3l.4 2.2c.2.7.7 1.2 1.4 1.2h4c.7 0 1.3-.5 1.4-1.2l.4-2.2c1-.3 1.9-.8 2.8-1.3l1.8 1.3c.5.3 1.2.3 1.7-.1l2.8-2.8c.5-.5.5-1.2.2-1.7l-1.3-1.8c.5-.9 1-1.8 1.3-2.8l2.2-.4c.7-.2 1.2-.7 1.2-1.4v-4c0-.7-.5-1.3-1.1-1.5z"/><circle cx="24" cy="25" r="5.5" fill="#90A4AE"/></svg>`,
+  'home':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M24 6L4 22h7v18h10v-10h6v10h10V22h7z" fill="#42A5F5"/><rect x="18" y="30" width="12" height="10" fill="#1976D2"/><path d="M24 6L4 22h7v18h10v-10h6v10h10V22h7z" fill="none"/></svg>`,
+  'brain':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><ellipse cx="17" cy="23" rx="9" ry="13" fill="#CE93D8"/><ellipse cx="31" cy="23" rx="9" ry="13" fill="#BA68C8"/><rect x="22" y="10" width="4" height="26" rx="2" fill="#F3E5F5"/><circle cx="15" cy="17" r="3" fill="#9C27B0" opacity="0.7"/><circle cx="33" cy="19" r="3" fill="#7B1FA2" opacity="0.7"/><circle cx="14" cy="27" r="2.5" fill="#AB47BC" opacity="0.6"/><circle cx="34" cy="27" r="2.5" fill="#9C27B0" opacity="0.6"/></svg>`,
+  'rocket':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M24 4C16 12 12 22 14 30l4 4c8 2 18-2 26-10C44 12 36 4 24 4z" fill="#5C6BC0"/><circle cx="28" cy="20" r="4" fill="#E8EAF6"/><path d="M14 30c-4 0-8 4-10 8l4 2 2 4c4-2 8-6 8-10z" fill="#EF9A9A"/><path d="M18 34l-4-4c-3 3-4 7-4 8l3 1 1 3c1 0 5-1 8-4z" fill="#FFCDD2" opacity="0.7"/></svg>`,
+  'briefcase':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="8" y="18" width="32" height="22" rx="3" fill="#8D6E63"/><path d="M17 18v-4a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v4" fill="none" stroke="#5D4037" stroke-width="2.5"/><rect x="8" y="28" width="32" height="3" fill="#6D4C41"/><rect x="21" y="25" width="6" height="7" rx="1" fill="#A1887F"/></svg>`,
+  'database':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><ellipse cx="24" cy="12" rx="14" ry="5" fill="#64B5F6"/><path d="M10 12v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8c0 2.8-6.3 5-14 5s-14-2.2-14-5z" fill="#2196F3"/><path d="M10 20v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8c0 2.8-6.3 5-14 5s-14-2.2-14-5z" fill="#1976D2"/><path d="M10 28v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8c0 2.8-6.3 5-14 5s-14-2.2-14-5z" fill="#1565C0"/></svg>`,
+  'search':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="20" cy="20" r="12" fill="none" stroke="#78909C" stroke-width="4"/><line x1="30" y1="30" x2="42" y2="42" stroke="#546E7A" stroke-width="4.5" stroke-linecap="round"/></svg>`,
+  'mail':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="6" y="12" width="36" height="26" rx="3" fill="#64B5F6"/><path d="M6 15l18 13 18-13" stroke="#1976D2" stroke-width="2" fill="none"/><path d="M6 15l18 13L42 15H6z" fill="#90CAF9"/></svg>`,
+  'smartphone':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="13" y="4" width="22" height="40" rx="4" fill="#546E7A"/><rect x="16" y="9" width="16" height="25" fill="#B0BEC5"/><circle cx="24" cy="40" r="2.5" fill="#90A4AE"/></svg>`,
+  'cloud-storage':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M38 22a10 10 0 0 0-19.6-2.8A8 8 0 0 0 10 27a8 8 0 0 0 8 8h20a8 8 0 0 0 0-16z" fill="#42A5F5"/><path d="M30 31l-6 6-6-6" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="24" y1="37" x2="24" y2="26" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+  'shield':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M24 4L8 10v14c0 10.5 7 18 16 20 9-2 16-9.5 16-20V10z" fill="#42A5F5"/><path d="M16 25l5 5 11-12" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  'calendar-3':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="6" y="10" width="36" height="32" rx="3" fill="#EF5350"/><rect x="6" y="10" width="36" height="14" rx="3" fill="#E53935"/><circle cx="16" cy="8" r="3" fill="#B71C1C"/><circle cx="32" cy="8" r="3" fill="#B71C1C"/><line x1="6" y1="24" x2="42" y2="24" stroke="#EF9A9A" stroke-width="1"/><rect x="11" y="28" width="6" height="5" rx="1" fill="white" opacity="0.85"/><rect x="21" y="28" width="6" height="5" rx="1" fill="white" opacity="0.85"/><rect x="31" y="28" width="6" height="5" rx="1" fill="white" opacity="0.85"/><rect x="11" y="35" width="6" height="4" rx="1" fill="white" opacity="0.6"/><rect x="21" y="35" width="6" height="4" rx="1" fill="white" opacity="0.6"/></svg>`,
+  'chart-increasing':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="5"  y="30" width="8" height="12" rx="1.5" fill="#A5D6A7"/><rect x="15" y="22" width="8" height="20" rx="1.5" fill="#66BB6A"/><rect x="25" y="14" width="8" height="28" rx="1.5" fill="#43A047"/><rect x="35" y="6"  width="8" height="36" rx="1.5" fill="#2E7D32"/><line x1="3" y1="44" x2="47" y2="44" stroke="#1B5E20" stroke-width="2" stroke-linecap="round"/></svg>`,
+  'star':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M24 5l5.3 10.7 11.8 1.7-8.5 8.3 2 11.8L24 32l-10.6 5.5 2-11.8L7 17.4l11.8-1.7z" fill="#FFC107" stroke="#FF8F00" stroke-width="0.5"/></svg>`,
+  'key':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="16" cy="20" r="10" fill="none" stroke="#FFC107" stroke-width="4"/><line x1="24" y1="25" x2="43" y2="44" stroke="#FF8F00" stroke-width="4.5" stroke-linecap="round"/><line x1="36" y1="37" x2="36" y2="43" stroke="#FF8F00" stroke-width="3.5" stroke-linecap="round"/><line x1="41" y1="42" x2="41" y2="46" stroke="#FF8F00" stroke-width="3" stroke-linecap="round"/></svg>`,
+  'lock':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="10" y="22" width="28" height="22" rx="3" fill="#42A5F5"/><path d="M16 22v-6a8 8 0 0 1 16 0v6" fill="none" stroke="#1976D2" stroke-width="4" stroke-linecap="round"/><circle cx="24" cy="32" r="3" fill="#1565C0"/><rect x="22.5" y="32" width="3" height="6" rx="1" fill="#1565C0"/></svg>`,
+  'user-group':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="16" cy="15" r="7" fill="#64B5F6"/><path d="M4 38c0-6.6 5.4-12 12-12 6.6 0 12 5.4 12 12" fill="#42A5F5"/><circle cx="34" cy="13" r="6" fill="#90CAF9"/><path d="M28 36c0-5 3.1-9.3 7.5-11.1A12.2 12.2 0 0 1 46 36" fill="#64B5F6"/></svg>`,
+  'idea':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M24 6a13 13 0 0 0-6 24.5V36h12v-5.5A13 13 0 0 0 24 6z" fill="#FFD54F"/><path d="M24 6a13 13 0 0 0-6 24.5V36h12v-5.5A13 13 0 0 0 24 6z" fill="#FFC107" opacity="0.5"/><rect x="18" y="36" width="12" height="3" rx="1.5" fill="#FF8F00"/><rect x="19.5" y="39" width="9" height="3" rx="1.5" fill="#FF8F00"/><line x1="24" y1="12" x2="24" y2="22" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.6"/></svg>`,
+  'target':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="#EF5350" stroke-width="2.5"/><circle cx="24" cy="24" r="14" fill="none" stroke="#EF5350" stroke-width="2.5"/><circle cx="24" cy="24" r="8"  fill="none" stroke="#EF5350" stroke-width="2.5"/><circle cx="24" cy="24" r="3"  fill="#EF5350"/></svg>`,
+  'checklist':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="8" y="6" width="32" height="36" rx="3" fill="#E3F2FD"/><path d="M13 19l4 4 8-8" stroke="#1976D2" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="13" y="28" width="3" height="3" rx="1" fill="#42A5F5"/><rect x="13" y="34" width="3" height="3" rx="1" fill="#42A5F5"/><line x1="19" y1="29.5" x2="35" y2="29.5" stroke="#90CAF9" stroke-width="2" stroke-linecap="round"/><line x1="19" y1="35.5" x2="30" y2="35.5" stroke="#90CAF9" stroke-width="2" stroke-linecap="round"/></svg>`,
+  'presentation':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect x="4" y="8" width="40" height="26" rx="3" fill="#42A5F5"/><rect x="8" y="12" width="32" height="18" fill="white"/><line x1="24" y1="34" x2="24" y2="42" stroke="#1976D2" stroke-width="2.5" stroke-linecap="round"/><line x1="16" y1="42" x2="32" y2="42" stroke="#1976D2" stroke-width="2.5" stroke-linecap="round"/><rect x="12" y="16" width="11" height="10" rx="1" fill="#E3F2FD"/><rect x="25" y="14" width="11" height="14" rx="1" fill="#BBDEFB"/></svg>`,
+  'dollar-coin':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#FFD54F"/><circle cx="24" cy="24" r="16" fill="#FFCA28"/><text x="24" y="30" text-anchor="middle" font-size="20" font-weight="800" fill="#E65100" font-family="Arial, sans-serif">$</text></svg>`,
+  'teamwork':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="14" cy="16" r="6" fill="#64B5F6"/><circle cx="34" cy="16" r="6" fill="#42A5F5"/><path d="M4 36c0-5.5 4.5-10 10-10h20c5.5 0 10 4.5 10 10" fill="#90CAF9" opacity="0.7"/><path d="M4 36c0-5.5 4.5-10 10-10h20c5.5 0 10 4.5 10 10H4z" fill="#42A5F5" opacity="0.4"/><path d="M18 28l6 4 6-4" stroke="#1976D2" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`,
+  'source-code':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M16 14L6 24l10 10" stroke="#546E7A" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 14l10 10-10 10" stroke="#546E7A" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="28" y1="10" x2="20" y2="38" stroke="#90A4AE" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+  // Aliases for common Icons8 names the AI uses
+  'lightning-bolt':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M28 4L10 28h14l-4 16 22-24H28z" fill="#FFC107"/><path d="M28 4L10 28h14l-4 16 22-24H28z" fill="#FFD54F" opacity="0.5"/></svg>`,
+  'checkmark':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#66BB6A"/><path d="M14 24l8 8 12-14" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  'internet':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="#42A5F5" stroke-width="3"/><ellipse cx="24" cy="24" rx="8" ry="20" fill="none" stroke="#42A5F5" stroke-width="2"/><line x1="4" y1="24" x2="44" y2="24" stroke="#42A5F5" stroke-width="2"/><line x1="7" y1="14" x2="41" y2="14" stroke="#42A5F5" stroke-width="1.5" opacity="0.6"/><line x1="7" y1="34" x2="41" y2="34" stroke="#42A5F5" stroke-width="1.5" opacity="0.6"/></svg>`,
+  'clock':
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#EDE7F6"/><circle cx="24" cy="24" r="20" fill="none" stroke="#7E57C2" stroke-width="3"/><line x1="24" y1="24" x2="24" y2="11" stroke="#5E35B1" stroke-width="3" stroke-linecap="round"/><line x1="24" y1="24" x2="34" y2="24" stroke="#7E57C2" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="24" r="2" fill="#5E35B1"/></svg>`,
+};
 
 // ── STATE ──────────────────────────────────────────────────
 const STATE = {
-  apiKey:      '',
-  topic:       '',
-  layout:      'auto',
-  tone:        'professional',
-  size:        'a4',
-  accent:      '#2563EB',
-  currentHTML: null,
-  savedRange:  null,
-  zoomLevel:   0.7,
+  apiKey:        '',
+  topic:         '',
+  layout:        'auto',
+  tone:          'professional',
+  size:          'a4',
+  accent:        '#2563EB',
+  currentHTML:   null,
+  savedRange:    null,
+  zoomLevel:     0.7,
+  formatPainter: null,   // null | { fontFamily, fontSize, fontWeight, fontStyle, color, textDecoration }
+};
+
+// ── HISTORY (undo/redo) ─────────────────────────────────────
+// Only toolbar actions push snapshots. Keystrokes are handled
+// by the browser's native contenteditable undo. Ctrl+Z inside
+// the iframe is intercepted to use our stack instead.
+const HISTORY = {
+  stack:   [],   // array of body.innerHTML strings
+  index:   -1,   // current position (-1 = empty)
+  maxSize: 50,
 };
 
 const TONE_COLORS = {
@@ -116,15 +230,13 @@ window.addEventListener('load', () => {
   setupZoom();
 });
 
-// ── DROPDOWN POSITION (position:fixed — escapes all overflow clips) ─
+// ── DROPDOWN POSITION ──────────────────────────────────────
 function positionDropdown() {
   const btn  = $('btnDownload');
   const menu = $('dlMenu');
   const rect = btn.getBoundingClientRect();
-  // Align right edge of menu to right edge of button
   menu.style.right  = (window.innerWidth - rect.right) + 'px';
   menu.style.left   = 'auto';
-  // Position bottom of menu 5px above top of button
   menu.style.bottom = (window.innerHeight - rect.top + 5) + 'px';
   menu.style.top    = 'auto';
 }
@@ -188,9 +300,9 @@ async function generate() {
     STATE.currentHTML = html;
     renderHTML(html);
     $('ribbon').style.display = 'flex';
-    autoFitZoom();          // fit to viewport AFTER ribbon is shown
+    autoFitZoom();
     setupRibbonForFrame();
-    autoConvertImages();    // background: base64 icons for export safety
+    autoConvertImages();
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
@@ -271,18 +383,11 @@ async function callAgent(topic) {
   return text;
 }
 
-// ── PROMPT — static (cacheable) + dynamic ──────────────────
+// ── PROMPT ─────────────────────────────────────────────────
 function buildPromptParts(topic, sz) {
   return [
-    {
-      type: 'text',
-      text: STATIC_PROMPT,
-      cache_control: { type: 'ephemeral' },
-    },
-    {
-      type: 'text',
-      text: buildDynamicPrompt(topic, sz),
-    },
+    { type: 'text', text: STATIC_PROMPT, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: buildDynamicPrompt(topic, sz) },
   ];
 }
 
@@ -341,23 +446,19 @@ function buildDynamicPrompt(topic, sz) {
   Text: #0F172A headings, #334155 body, #64748B captions
   Cards: white, 1px solid #E2E8F0, border-radius:10px, box-shadow:0 1px 4px rgba(0,0,0,0.06)
   Feel: clean, authoritative, corporate-grade`,
-
     bold: `TONE — Bold (dark, high-contrast):
   Background: #0F172A main canvas, #1E293B for card sections
   --accent: ${TONE_COLORS.bold} (amber) for labels, borders, stat numbers
   Text: #FFFFFF headings, #CBD5E1 body, #94A3B8 captions
   Cards: rgba(255,255,255,0.06) glass effect, 1px solid rgba(255,255,255,0.12), border-radius:12px
   Labels: UPPERCASE, var(--accent) color, letter-spacing:0.1em, 11px
-  Icons: use Iconify SVGs with style="color:var(--accent)" for colorable icons on dark bg
   Feel: editorial dark magazine, punchy, high-contrast`,
-
     minimal: `TONE — Minimal:
   Background: #FAFAF8 main, #F5F3EF alternating
   --accent: ${TONE_COLORS.minimal} (dark teal) — use sparingly: 1px borders, a single underline accent
   Text: #1C1917 headings, #57534E body, #A8A29E captions
   Borders: 1px solid #E7E5E4. No drop-shadows. Flat design only.
   Feel: editorial, airy, refined typography — every pixel earns its place`,
-
     playful: `TONE — Playful:
   Background: #FFFBEB main, #FEF3C7 alternating sections
   --accent: ${TONE_COLORS.playful} (purple) for headers; #F59E0B amber for highlights and stat numbers
@@ -376,7 +477,6 @@ function buildDynamicPrompt(topic, sz) {
   4. Key stats strip: 3-4 boxes, each with big number (32px Space Grotesk) + label + 36px icon
   5. Callout box: left 4px accent border, light bg, tip text
   6. Footer: brand name + attribution`,
-
     'mixed-grid': `LAYOUT — Mixed Grid:
   1. Full-width hero: title (Space Grotesk 40px) + subtitle + 96px hero icon right-aligned
   2. 3-4 stat boxes row: big number (36px) + label + 40px icon
@@ -384,7 +484,6 @@ function buildDynamicPrompt(topic, sz) {
   4. 3-column card grid: each card = 72px icon centered + bold title + 3 bullets
   5. Summary callout or quote
   6. Footer`,
-
     'timeline': `LAYOUT — Timeline:
   1. Header with title + subtitle
   2. Central vertical bar (3px accent) centered horizontally, full height
@@ -392,7 +491,6 @@ function buildDynamicPrompt(topic, sz) {
      Left: text right-aligned ending at bar. Right: text left-aligned from bar.
   4. Stats or summary row
   5. Footer`,
-
     'funnel': `LAYOUT — Funnel:
   1. Header with title + subtitle
   2. 5 trapezoid layers narrowing top to bottom:
@@ -400,7 +498,6 @@ function buildDynamicPrompt(topic, sz) {
      Each: centered stage name (white bold) + 1-line description right of the shape
   3. Result/outcome box below
   4. Footer`,
-
     'comparison': `LAYOUT — Comparison:
   1. Header framing the two options
   2. Side-by-side columns (equal width):
@@ -409,7 +506,6 @@ function buildDynamicPrompt(topic, sz) {
   3. 3-4 comparison rows: left item → right item with arrow divider
   4. Summary / recommendation
   5. Footer`,
-
     'flowchart': `LAYOUT — Flowchart:
   1. Header
   2. Connected flow: rounded-rect process steps (accent bg, white text) + diamond decisions (rotated square, amber) + labeled arrows
@@ -435,32 +531,46 @@ Return ONLY the complete <!DOCTYPE html> document. No markdown fences, no explan
 }
 
 // ── HTML PRE-PROCESSOR ─────────────────────────────────────
-// Runs on the raw HTML string BEFORE setting srcdoc.
-// This is the correct architectural approach — modifying the string
-// before it becomes a live document avoids all post-render injection
-// timing/security issues.
+// Order of operations matters:
+//   1. Local SVG icons checked FIRST (by name in URL)
+//   2. Remaining icon8/clearbit/simpleicons URLs → proxy
+//   3. Overflow CSS injected into <head>
+//   4. Fallback + icon editor scripts injected before </body>
 
 function preprocessHTML(html, sz) {
-  // 1. Rewrite Icons8 URLs → proxy (fixes "?" hotlink placeholder)
+  // 1. Replace known Icons8 URLs with local SVGs (before proxy step)
+  html = html.replace(
+    /src=(["'])(https?:\/\/img\.icons8\.com\/[^"']*\/([^/.]+?)(?:\.png|\.svg|\.gif)?)(\1)/g,
+    (match, q1, url, iconName, q2) => {
+      const name = iconName.toLowerCase();
+      if (LOCAL_ICON_SVGS[name]) {
+        const encoded = encodeURIComponent(LOCAL_ICON_SVGS[name]);
+        return `src="data:image/svg+xml;charset=utf-8,${encoded}" data-icon="true" data-local="true"`;
+      }
+      // Not in local library — fall through to proxy rewrite below
+      return `src="${'/api/proxy?url=' + encodeURIComponent(url)}" data-icon="true"`;
+    }
+  );
+
+  // 2. Rewrite any remaining Icons8 URLs that the regex above may have missed
   html = html.replace(
     /src=(["'])(https?:\/\/img\.icons8\.com\/[^"']+)\1/g,
     (match, q, url) => `src="${'/api/proxy?url=' + encodeURIComponent(url)}" data-icon="true"`
   );
 
-  // 2. Rewrite Clearbit logo URLs → proxy
+  // 3. Rewrite Clearbit logo URLs → proxy
   html = html.replace(
     /src=(["'])(https?:\/\/logo\.clearbit\.com\/[^"']+)\1/g,
     (match, q, url) => `src="${'/api/proxy?url=' + encodeURIComponent(url)}" data-icon="true"`
   );
 
-  // 3. Rewrite SimpleIcons URLs → proxy
+  // 4. Rewrite SimpleIcons URLs → proxy
   html = html.replace(
     /src=(["'])(https?:\/\/cdn\.simpleicons\.org\/[^"']+)\1/g,
     (match, q, url) => `src="${'/api/proxy?url=' + encodeURIComponent(url)}" data-icon="true"`
   );
 
-  // 4. Inject overflow-enforcement CSS into <head>
-  //    Targets all children universally — not just inline-style flex elements
+  // 5. Inject overflow-enforcement CSS
   const overflowCSS = `<style id="ig-overflow-fix">
 .ig-page{overflow:hidden!important;height:${sz.h}px!important;max-height:${sz.h}px!important;}
 .ig-page>*{overflow:hidden!important;min-height:0!important;flex-shrink:0;}
@@ -469,13 +579,11 @@ function preprocessHTML(html, sz) {
 </style>`;
   html = html.replace(/<\/head>/i, overflowCSS + '\n</head>');
 
-  // 5. Embed icon fallback script (onerror → colored SVG initial)
-  //    Works reliably now because proxy errors return real HTTP errors,
-  //    not a 200 OK placeholder image like Icons8 hotlink detection did.
+  // 6. Icon fallback script (onerror → colored SVG initial)
   const fallbackScript = `<script id="ig-icon-fallback">
 (function(){
   function applyFallback(img){
-    if(img.dataset.fallbackApplied)return;
+    if(img.dataset.fallbackApplied||img.dataset.local)return;
     img.dataset.fallbackApplied='1';
     img.onerror=function(){
       this.onerror=null;
@@ -503,111 +611,35 @@ function preprocessHTML(html, sz) {
     });
   }).observe(document.body,{childList:true,subtree:true});
 })();
-</script>`;
+<\/script>`;
 
-  // 6. Embed icon drag-and-resize editor script
+  // 7. Icon drag-and-resize editor
   const editorScript = `<script id="ig-icon-editor">
 (function(){
   var sel=null,ovl=null,drag=false,rsz=false,rh='',sx=0,sy=0,sw=0,sh=0,otx=0,oty=0;
-  function getTr(el){
-    var m=(el.style.transform||'').match(/translate\\(([^,]+)px,\\s*([^)]+)px\\)/);
-    return m?[parseFloat(m[1]),parseFloat(m[2])]:[0,0];
-  }
-  function posOverlay(){
-    if(!ovl||!sel)return;
-    var r=sel.getBoundingClientRect();
-    ovl.style.left=r.left+'px';ovl.style.top=r.top+'px';
-    ovl.style.width=r.width+'px';ovl.style.height=r.height+'px';
-  }
-  function mkHandle(dir,t,l,r,b){
-    var d=document.createElement('div');
-    d.dataset.h=dir;
-    d.style.cssText='position:absolute;width:10px;height:10px;background:#2563EB;'+
-      'border:2px solid #fff;border-radius:2px;pointer-events:all;z-index:10000;'+
-      'cursor:'+dir+'-resize;box-sizing:border-box;';
-    if(t!==null)d.style.top=t;
-    if(l!==null)d.style.left=l;
-    if(r!==null)d.style.right=r;
-    if(b!==null)d.style.bottom=b;
-    d.addEventListener('mousedown',function(e){
-      e.stopPropagation();e.preventDefault();
-      rsz=true;rh=dir;sx=e.clientX;sy=e.clientY;
-      sw=sel.offsetWidth;sh=sel.offsetHeight;
-    });
-    return d;
-  }
-  function doSelect(img){
-    desel();sel=img;
-    ovl=document.createElement('div');
-    ovl.style.cssText='position:fixed;border:2px solid #2563EB;pointer-events:none;'+
-      'z-index:9999;box-sizing:border-box;border-radius:2px;';
-    ovl.appendChild(mkHandle('nw','-5px','-5px',null,null));
-    ovl.appendChild(mkHandle('ne','-5px',null,'-5px',null));
-    ovl.appendChild(mkHandle('se',null,null,'-5px','-5px'));
-    ovl.appendChild(mkHandle('sw',null,'-5px',null,'-5px'));
-    document.body.appendChild(ovl);
-    posOverlay();
-    img.style.cursor='move';
-  }
-  function desel(){
-    if(ovl){ovl.remove();ovl=null;}
-    if(sel){sel.style.cursor='';}
-    sel=null;
-  }
-  function isIcon(img){
-    return img.dataset.icon==='true'||
-      (img.src&&(img.src.includes('proxy')||img.src.includes('icons8')||
-                 img.src.includes('clearbit')||img.src.includes('simpleicons')));
-  }
-  document.addEventListener('click',function(e){
-    var img=e.target.closest&&e.target.closest('img');
-    if(img&&isIcon(img)){e.stopPropagation();e.preventDefault();doSelect(img);}
-    else if(!e.target.dataset||!e.target.dataset.h){desel();}
-  },true);
-  document.addEventListener('mousedown',function(e){
-    if(sel&&e.target===sel){
-      drag=true;e.preventDefault();
-      sx=e.clientX;sy=e.clientY;
-      var t=getTr(sel);otx=t[0];oty=t[1];
-      sel.style.cursor='grabbing';
-    }
-  });
-  document.addEventListener('mousemove',function(e){
-    if(drag&&sel){
-      sel.style.transform='translate('+(otx+(e.clientX-sx))+'px,'+(oty+(e.clientY-sy))+'px)';
-      sel.style.position='relative';sel.style.zIndex='5';
-      posOverlay();
-    }
-    if(rsz&&sel){
-      var dx=e.clientX-sx,dy=e.clientY-sy,w=sw,h=sh;
-      if(rh.includes('e'))w=Math.max(20,sw+dx);
-      if(rh.includes('s'))h=Math.max(20,sh+dy);
-      if(rh.includes('w'))w=Math.max(20,sw-dx);
-      if(rh.includes('n'))h=Math.max(20,sh-dy);
-      var newSz=Math.max(w,h);
-      sel.style.width=newSz+'px';sel.style.height=newSz+'px';
-      posOverlay();
-    }
-  });
-  document.addEventListener('mouseup',function(){
-    drag=false;rsz=false;rh='';
-    if(sel)sel.style.cursor='move';
-  });
+  function getTr(el){var m=(el.style.transform||'').match(/translate\\(([^,]+)px,\\s*([^)]+)px\\)/);return m?[parseFloat(m[1]),parseFloat(m[2])]:[0,0];}
+  function posOverlay(){if(!ovl||!sel)return;var r=sel.getBoundingClientRect();ovl.style.left=r.left+'px';ovl.style.top=r.top+'px';ovl.style.width=r.width+'px';ovl.style.height=r.height+'px';}
+  function mkHandle(dir,t,l,r,b){var d=document.createElement('div');d.dataset.h=dir;d.style.cssText='position:absolute;width:10px;height:10px;background:#2563EB;border:2px solid #fff;border-radius:2px;pointer-events:all;z-index:10000;cursor:'+dir+'-resize;box-sizing:border-box;';if(t!==null)d.style.top=t;if(l!==null)d.style.left=l;if(r!==null)d.style.right=r;if(b!==null)d.style.bottom=b;d.addEventListener('mousedown',function(e){e.stopPropagation();e.preventDefault();rsz=true;rh=dir;sx=e.clientX;sy=e.clientY;sw=sel.offsetWidth;sh=sel.offsetHeight;});return d;}
+  function doSelect(img){desel();sel=img;ovl=document.createElement('div');ovl.style.cssText='position:fixed;border:2px solid #2563EB;pointer-events:none;z-index:9999;box-sizing:border-box;border-radius:2px;';ovl.appendChild(mkHandle('nw','-5px','-5px',null,null));ovl.appendChild(mkHandle('ne','-5px',null,'-5px',null));ovl.appendChild(mkHandle('se',null,null,'-5px','-5px'));ovl.appendChild(mkHandle('sw',null,'-5px',null,'-5px'));document.body.appendChild(ovl);posOverlay();img.style.cursor='move';}
+  function desel(){if(ovl){ovl.remove();ovl=null;}if(sel){sel.style.cursor='';}sel=null;}
+  function isIcon(img){return img.dataset.icon==='true'||(img.src&&(img.src.includes('proxy')||img.src.includes('icons8')||img.src.includes('clearbit')||img.src.includes('simpleicons')||img.dataset.local));}
+  document.addEventListener('click',function(e){var img=e.target.closest&&e.target.closest('img');if(img&&isIcon(img)){e.stopPropagation();e.preventDefault();doSelect(img);}else if(!e.target.dataset||!e.target.dataset.h){desel();}},true);
+  document.addEventListener('mousedown',function(e){if(sel&&e.target===sel){drag=true;e.preventDefault();sx=e.clientX;sy=e.clientY;var t=getTr(sel);otx=t[0];oty=t[1];sel.style.cursor='grabbing';}});
+  document.addEventListener('mousemove',function(e){if(drag&&sel){sel.style.transform='translate('+(otx+(e.clientX-sx))+'px,'+(oty+(e.clientY-sy))+'px)';sel.style.position='relative';sel.style.zIndex='5';posOverlay();}if(rsz&&sel){var dx=e.clientX-sx,dy=e.clientY-sy,w=sw,h=sh;if(rh.includes('e'))w=Math.max(20,sw+dx);if(rh.includes('s'))h=Math.max(20,sh+dy);if(rh.includes('w'))w=Math.max(20,sw-dx);if(rh.includes('n'))h=Math.max(20,sh-dy);var newSz=Math.max(w,h);sel.style.width=newSz+'px';sel.style.height=newSz+'px';posOverlay();}});
+  document.addEventListener('mouseup',function(){drag=false;rsz=false;rh='';if(sel)sel.style.cursor='move';});
   document.addEventListener('keydown',function(e){if(e.key==='Escape')desel();});
   document.addEventListener('scroll',posOverlay,true);
   window.addEventListener('resize',posOverlay);
 })();
-</script>`;
+<\/script>`;
 
-  // Inject both scripts before </body>
   html = html.replace(/<\/body>/i, fallbackScript + '\n' + editorScript + '\n</body>');
-
   return html;
 }
 
 // ── RENDERER ───────────────────────────────────────────────
 function renderHTML(html) {
-  const sz    = SIZES[STATE.size];
+  const sz        = SIZES[STATE.size];
   const processed = preprocessHTML(html, sz);
 
   const frame = document.createElement('iframe');
@@ -642,8 +674,6 @@ function applyAccentToFrame() {
 }
 
 // ── AUTO-FIT ZOOM ──────────────────────────────────────────
-// Called after ribbon is shown — calculates best zoom to fit
-// canvas in the available viewport space without scrolling.
 function autoFitZoom() {
   const sz = SIZES[STATE.size];
   const canvasArea = document.querySelector('.canvas-area');
@@ -652,89 +682,536 @@ function autoFitZoom() {
   const ribbonEl = $('ribbon');
   const ribbonH  = (ribbonEl && ribbonEl.offsetParent !== null) ? ribbonEl.offsetHeight : 0;
 
-  // Available space (80px total padding = 40px each side)
   const availW = canvasArea.clientWidth  - 80;
   const availH = canvasArea.clientHeight - ribbonH - 80;
 
-  // Fit so canvas fills space without scrolling, capped at 90%
   const zoomW = availW / sz.w;
   const zoomH = availH / sz.h;
   const fitZoom = Math.min(zoomW, zoomH, 0.90);
 
-  // Round to nearest 5% for a clean number in the zoom label
   STATE.zoomLevel = Math.max(0.30, Math.round(fitZoom * 20) / 20);
   applyZoom(false);
 }
 
-// ── RIBBON TOOLBAR ─────────────────────────────────────────
-function setupRibbon() {
-  // Format buttons — mousedown + preventDefault keeps iframe selection
-  $$('.rbtn.fmt').forEach(btn => {
-    btn.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const cmd = btn.dataset.cmd;
-      if (cmd === 'insertUnorderedList') { insertListPrefix('• ');  return; }
-      if (cmd === 'insertOrderedList')   { insertListPrefix('1. '); return; }
-      if (cmd) ribbonCmd(cmd);
-    });
-  });
+// ── UNDO / REDO ────────────────────────────────────────────
+// Snapshot triggers: every toolbar action (applyFormat, bullet, painter).
+// NOT triggered by typing — the browser's contenteditable history covers that.
+// Ctrl+Z / Ctrl+Y inside the iframe are intercepted (see setupRibbonForFrame).
 
-  // Font family — no mousedown preventDefault (would block dropdown)
-  $('rbFont').addEventListener('change', (e) => {
-    restoreFrameSelection();
-    ribbonCmd('fontName', e.target.value);
-  });
+function initHistory() {
+  HISTORY.stack = [];
+  HISTORY.index = -1;
+  // Capture the initial rendered state as entry 0
+  const doc = $('outputFrame')?.contentDocument;
+  const tryCapture = () => {
+    if (!doc?.body) return;
+    HISTORY.stack = [doc.body.innerHTML];
+    HISTORY.index = 0;
+  };
+  const frame = $('outputFrame');
+  if (frame?.contentDocument?.readyState === 'complete') tryCapture();
+  else frame?.addEventListener('load', tryCapture, { once: true });
+}
 
-  // Font size — same
-  $('rbSize').addEventListener('change', (e) => {
-    restoreFrameSelection();
-    applyFontSize(parseInt(e.target.value, 10));
-  });
+function pushUndoSnapshot() {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc?.body) return;
 
-  // A↑ A↓ relative font size
-  $('btnAUp').addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    adjustFontSizeRelative(+2);
-  });
-  $('btnADown').addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    adjustFontSizeRelative(-2);
-  });
+  cleanupSpans(doc);
+  const html = doc.body.innerHTML;
 
-  // Undo / Redo
-  $('btnUndo').addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    ribbonCmd('undo');
-  });
-  $('btnRedo').addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    ribbonCmd('redo');
-  });
+  // Deduplicate: never save if identical to current top
+  if (HISTORY.index >= 0 && HISTORY.stack[HISTORY.index] === html) return;
 
-  // Text color
-  $('rbColor').addEventListener('focus',  saveFrameSelection);
-  $('rbColor').addEventListener('input', (e) => {
-    restoreFrameSelection();
-    ribbonCmd('foreColor', e.target.value);
+  // Truncate any redo states ahead of current position
+  HISTORY.stack.splice(HISTORY.index + 1);
+  HISTORY.stack.push(html);
+  HISTORY.index = HISTORY.stack.length - 1;
+
+  // Enforce max size: drop oldest entry
+  if (HISTORY.stack.length > HISTORY.maxSize) {
+    HISTORY.stack.shift();
+    HISTORY.index = HISTORY.stack.length - 1;
+  }
+}
+
+function performUndo() {
+  if (HISTORY.index <= 0) return;
+  HISTORY.index--;
+  restoreSnapshot(HISTORY.stack[HISTORY.index]);
+}
+
+function performRedo() {
+  if (HISTORY.index >= HISTORY.stack.length - 1) return;
+  HISTORY.index++;
+  restoreSnapshot(HISTORY.stack[HISTORY.index]);
+}
+
+function restoreSnapshot(html) {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc?.body) return;
+  // Restore innerHTML — cursor will reset to body start (MVP trade-off:
+  // preserving cursor requires stable node refs, out of scope for beta)
+  doc.body.innerHTML = html;
+  // Re-run fallback detection on images (icon IIFE stays attached to doc)
+  doc.querySelectorAll('img[data-icon]:not([data-local])').forEach(img => {
+    if (!img.dataset.fallbackApplied) img.dispatchEvent(new Event('load'));
   });
 }
 
-// Called after each generation — wires selectionchange on the iframe
+// ── FORMAT ENGINE ──────────────────────────────────────────
+// Core apply function using Selection/Range API.
+// Pushes undo snapshot BEFORE applying (so you can undo).
+// Primary: surroundContents (single-block selections, most common).
+// Fallback: extractContents + wrap (cross-element selections).
+//   The fallback can leave minor DOM untidiness in deeply nested
+//   structures — cleanupSpans() normalizes afterward.
+
+function applyFormat(cssProp, value) {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount || sel.isCollapsed) return;
+
+  pushUndoSnapshot();
+
+  const range = sel.getRangeAt(0).cloneRange();
+
+  try {
+    // Primary path: works when selection is inside a single element
+    const span = doc.createElement('span');
+    span.style[cssProp] = value;
+    range.surroundContents(span);
+    // Reselect the newly created span
+    sel.removeAllRanges();
+    const nr = doc.createRange();
+    nr.selectNodeContents(span);
+    sel.addRange(nr);
+  } catch {
+    // Fallback: selection spans multiple elements
+    // extractContents handles partial elements by cloning subtrees
+    const frag = range.extractContents();
+    const wrapper = doc.createElement('span');
+    wrapper.style[cssProp] = value;
+    wrapper.appendChild(frag);
+    range.insertNode(wrapper);
+    sel.removeAllRanges();
+    const nr = doc.createRange();
+    nr.selectNodeContents(wrapper);
+    sel.addRange(nr);
+  }
+
+  cleanupSpans(doc);
+}
+
+// Toggle helpers — read computed style first to decide direction
+
+function applyBold() {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  const el    = range.commonAncestorContainer;
+  const node  = el.nodeType === 3 ? el.parentElement : el;
+  const isBold = parseInt(doc.defaultView?.getComputedStyle(node)?.fontWeight || '400') >= 600;
+  applyFormat('fontWeight', isBold ? '400' : '700');
+}
+
+function applyItalic() {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  const el    = range.commonAncestorContainer;
+  const node  = el.nodeType === 3 ? el.parentElement : el;
+  const isItalic = doc.defaultView?.getComputedStyle(node)?.fontStyle === 'italic';
+  applyFormat('fontStyle', isItalic ? 'normal' : 'italic');
+}
+
+function applyTextDecoration(dec) {
+  // dec = 'underline' or 'line-through'
+  // Reads current computed decoration, toggles the target value,
+  // preserves any other active decorations.
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  const el    = range.commonAncestorContainer;
+  const node  = el.nodeType === 3 ? el.parentElement : el;
+  const current = doc.defaultView?.getComputedStyle(node)?.textDecorationLine || 'none';
+
+  let newValue;
+  if (current.includes(dec)) {
+    const parts = current.split(/\s+/).filter(p => p && p !== dec && p !== 'none');
+    newValue = parts.length ? parts.join(' ') : 'none';
+  } else {
+    const parts = current.split(/\s+/).filter(p => p && p !== 'none');
+    parts.push(dec);
+    newValue = parts.join(' ');
+  }
+  applyFormat('textDecoration', newValue);
+}
+
+// ── SPAN CLEANUP ───────────────────────────────────────────
+// Runs before each snapshot and after each format operation.
+// Prevents nested/conflicting spans from accumulating.
+
+function cleanupSpans(doc) {
+  if (!doc?.body) return;
+
+  // 1. Remove empty spans (no text content, no images)
+  doc.querySelectorAll('span').forEach(span => {
+    if (!span.dataset.icon && !span.querySelector('img') && span.textContent === '') {
+      span.remove();
+    }
+  });
+
+  // 2. Unwrap spans that have no style, no class, no data-icon
+  //    (bare wrappers created by some format operations then cleaned)
+  doc.querySelectorAll('span').forEach(span => {
+    if (!span.getAttribute('style') && !span.getAttribute('class') && !span.dataset.icon) {
+      const parent = span.parentNode;
+      if (!parent) return;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+  });
+
+  // 3. Merge adjacent text nodes
+  doc.body.normalize();
+}
+
+// ── TOOLBAR STATE SYNC ─────────────────────────────────────
+// Reads computed styles at the cursor/selection and updates
+// the ribbon controls to match. Called on selectionchange
+// with 50ms debounce to stay smooth.
+
+let _toolbarDebounce = null;
+function scheduleToolbarUpdate() {
+  if (_toolbarDebounce) clearTimeout(_toolbarDebounce);
+  _toolbarDebounce = setTimeout(updateToolbarState, 50);
+}
+
+function updateToolbarState() {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount) return;
+
+  const range    = sel.getRangeAt(0);
+  const rawNode  = range.commonAncestorContainer;
+  const el       = rawNode.nodeType === 3 ? rawNode.parentElement : rawNode;
+  if (!el || !doc.body?.contains(el)) return;
+
+  const computed = doc.defaultView?.getComputedStyle(el);
+  if (!computed) return;
+
+  // Font family — match against dropdown options
+  const ff = computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim();
+  const fontSel = $('rbFont');
+  let matched = false;
+  [...fontSel.options].forEach(opt => {
+    const match = opt.value.toLowerCase() === ff.toLowerCase();
+    opt.selected = match;
+    if (match) matched = true;
+  });
+  // If no exact match, leave current selection unchanged
+
+  // Font size — round to integer px
+  const fsPx = Math.round(parseFloat(computed.fontSize));
+  if (!isNaN(fsPx)) $('rbSizeInput').value = fsPx;
+
+  // Bold
+  const isBold   = parseInt(computed.fontWeight) >= 600;
+  const isItalic = computed.fontStyle === 'italic';
+  const tdLine   = computed.textDecorationLine || 'none';
+  const isUnder  = tdLine.includes('underline');
+  const isStrike = tdLine.includes('line-through');
+
+  $('btnBold')?.classList.toggle('active', isBold);
+  $('btnItalic')?.classList.toggle('active', isItalic);
+  $('btnUnderline')?.classList.toggle('active', isUnder);
+  $('btnStrike')?.classList.toggle('active', isStrike);
+
+  // Text color
+  const hex = rgbToHex(computed.color);
+  if (hex) $('rbColor').value = hex;
+}
+
+// ── FONT SIZE ──────────────────────────────────────────────
+function adjustFontSizeRelative(delta) {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  const el    = range.commonAncestorContainer;
+  const node  = el.nodeType === 3 ? el.parentElement : el;
+  const current = parseFloat(doc.defaultView?.getComputedStyle(node)?.fontSize) || 14;
+  applyFormat('fontSize', Math.max(8, Math.round(current + delta)) + 'px');
+}
+
+// ── BULLET INSERTION ───────────────────────────────────────
+// Inserts prefix at the very start of the containing block element,
+// not at the cursor. Handles: P, DIV, SECTION, LI, Hx, SPAN
+// when it's the outermost text container.
+
+const BLOCK_TAGS = new Set(['P','DIV','SECTION','ARTICLE','HEADER','FOOTER','MAIN','LI','H1','H2','H3','H4','H5','H6']);
+
+function findBlockAncestor(node, doc) {
+  let el = node.nodeType === 3 ? node.parentElement : node;
+  while (el && el !== doc.body) {
+    if (BLOCK_TAGS.has(el.tagName?.toUpperCase())) return el;
+    el = el.parentElement;
+  }
+  // Fallback: return the direct child of body that contains the cursor
+  el = node.nodeType === 3 ? node.parentElement : node;
+  while (el?.parentElement && el.parentElement !== doc.body) el = el.parentElement;
+  return el || doc.body;
+}
+
+function insertBulletAtLineStart(prefix) {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount) return;
+
+  pushUndoSnapshot();
+
+  const range   = sel.getRangeAt(0);
+  const blockEl = findBlockAncestor(range.startContainer, doc);
+
+  // Find the first text node via TreeWalker
+  const walker    = doc.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
+  const firstText = walker.nextNode();
+
+  if (firstText) {
+    const prefixNode = doc.createTextNode(prefix);
+    firstText.parentNode.insertBefore(prefixNode, firstText);
+  } else {
+    blockEl.insertAdjacentText('afterbegin', prefix);
+  }
+}
+
+function insertNumberedBullet() {
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount) return;
+
+  const range   = sel.getRangeAt(0);
+  const blockEl = findBlockAncestor(range.startContainer, doc);
+
+  let nextNum = 1;
+
+  // Scan previous siblings for a numbered list context
+  let prev = blockEl.previousElementSibling;
+  while (prev) {
+    const txt = prev.textContent.trim();
+    const m   = txt.match(/^(\d+)\./);
+    if (m) { nextNum = parseInt(m[1]) + 1; break; }
+    if (txt.length > 0) break; // non-empty, non-numbered sibling — reset context
+    prev = prev.previousElementSibling;
+  }
+
+  insertBulletAtLineStart(`${nextNum}. `);
+}
+
+// ── FORMAT PAINTER ─────────────────────────────────────────
+// Click to enter painter mode (captures style bundle from selection).
+// Click btnPainter again or press Escape to cancel.
+// Make a selection while active → applies captured styles.
+
+function activateFormatPainter() {
+  if (STATE.formatPainter) {
+    // Toggle off
+    STATE.formatPainter = null;
+    $('btnPainter').classList.remove('active');
+    return;
+  }
+
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount) return;
+
+  const range = sel.getRangeAt(0);
+  const el    = range.commonAncestorContainer;
+  const node  = el.nodeType === 3 ? el.parentElement : el;
+  if (!node) return;
+
+  const computed = doc.defaultView?.getComputedStyle(node);
+  if (!computed) return;
+
+  STATE.formatPainter = {
+    fontFamily:     computed.fontFamily,
+    fontSize:       computed.fontSize,
+    fontWeight:     computed.fontWeight,
+    fontStyle:      computed.fontStyle,
+    color:          computed.color,
+    textDecoration: computed.textDecorationLine,
+  };
+  $('btnPainter').classList.add('active');
+}
+
+// Called on selectionchange when format painter is active
+function tryApplyFormatPainter() {
+  if (!STATE.formatPainter) return;
+
+  const doc = $('outputFrame')?.contentDocument;
+  if (!doc) return;
+
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount || sel.isCollapsed) return;
+
+  pushUndoSnapshot();
+
+  const range = sel.getRangeAt(0).cloneRange();
+  const fp    = STATE.formatPainter;
+
+  // Build inline style string
+  const styleObj = {
+    fontFamily:     fp.fontFamily,
+    fontSize:       fp.fontSize,
+    fontWeight:     fp.fontWeight,
+    fontStyle:      fp.fontStyle,
+    color:          fp.color,
+  };
+  if (fp.textDecoration && fp.textDecoration !== 'none') {
+    styleObj.textDecoration = fp.textDecoration;
+  }
+
+  try {
+    const span = doc.createElement('span');
+    Object.assign(span.style, styleObj);
+    range.surroundContents(span);
+  } catch {
+    const frag    = range.extractContents();
+    const wrapper = doc.createElement('span');
+    Object.assign(wrapper.style, styleObj);
+    wrapper.appendChild(frag);
+    range.insertNode(wrapper);
+  }
+
+  cleanupSpans(doc);
+
+  // Deactivate after applying
+  STATE.formatPainter = null;
+  $('btnPainter').classList.remove('active');
+}
+
+// ── RIBBON SETUP ───────────────────────────────────────────
+// v2.4: all format operations use Selection/Range API.
+// Alignment still uses execCommand (reliable for block-level,
+// low risk — justify commands aren't deprecated in practice).
+
+function setupRibbon() {
+  // Font family
+  $('rbFont').addEventListener('change', (e) => {
+    restoreFrameSelection();
+    applyFormat('fontFamily', e.target.value);
+  });
+
+  // Font size number input — apply on Enter or blur
+  const rbSize = $('rbSizeInput');
+  const applySizeInput = () => {
+    const px = Math.max(8, Math.min(96, parseInt(rbSize.value, 10) || 14));
+    rbSize.value = px; // normalize display
+    restoreFrameSelection();
+    applyFormat('fontSize', px + 'px');
+  };
+  rbSize.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applySizeInput(); } });
+  rbSize.addEventListener('blur', applySizeInput);
+  // Prevent the number input from stealing iframe selection on click
+  rbSize.addEventListener('mousedown', saveFrameSelection);
+
+  // A↑ A↓ relative size
+  $('btnAUp').addEventListener('mousedown',   (e) => { e.preventDefault(); adjustFontSizeRelative(+2); });
+  $('btnADown').addEventListener('mousedown', (e) => { e.preventDefault(); adjustFontSizeRelative(-2); });
+
+  // Undo / Redo (outer-frame buttons)
+  $('btnUndo').addEventListener('mousedown', (e) => { e.preventDefault(); performUndo(); });
+  $('btnRedo').addEventListener('mousedown', (e) => { e.preventDefault(); performRedo(); });
+
+  // B I U S
+  $('btnBold').addEventListener('mousedown',      (e) => { e.preventDefault(); applyBold(); });
+  $('btnItalic').addEventListener('mousedown',    (e) => { e.preventDefault(); applyItalic(); });
+  $('btnUnderline').addEventListener('mousedown', (e) => { e.preventDefault(); applyTextDecoration('underline'); });
+  $('btnStrike').addEventListener('mousedown',    (e) => { e.preventDefault(); applyTextDecoration('line-through'); });
+
+  // Text color
+  $('rbColor').addEventListener('mousedown', saveFrameSelection);
+  $('rbColor').addEventListener('input', (e) => {
+    restoreFrameSelection();
+    applyFormat('color', e.target.value);
+  });
+
+  // Alignment — execCommand (block-level, still reliable in all browsers)
+  $$('.rbtn.align').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const cmd = btn.dataset.cmd;
+      if (!cmd) return;
+      const doc = $('outputFrame')?.contentDocument;
+      if (!doc) return;
+      doc.execCommand(cmd, false, null);
+    });
+  });
+
+  // Lists
+  $('btnBulletList').addEventListener('mousedown', (e) => { e.preventDefault(); insertBulletAtLineStart('• '); });
+  $('btnNumberList').addEventListener('mousedown', (e) => { e.preventDefault(); insertNumberedBullet(); });
+
+  // Format painter
+  $('btnPainter').addEventListener('mousedown', (e) => { e.preventDefault(); activateFormatPainter(); });
+}
+
+// Called after each generation — wires iframe-level events
 function setupRibbonForFrame() {
   const frame = $('outputFrame');
   if (!frame) return;
-  const tryWire = () => {
+
+  const wire = () => {
     const doc = frame.contentDocument;
     if (!doc) return;
+
+    // Save selection on every change (for color picker etc.)
     doc.addEventListener('selectionchange', () => {
       try {
         const sel = doc.getSelection();
         if (sel?.rangeCount > 0) STATE.savedRange = sel.getRangeAt(0).cloneRange();
       } catch {}
+      scheduleToolbarUpdate();
+      // If format painter is active and user just made a selection, apply it
+      if (STATE.formatPainter) tryApplyFormatPainter();
     });
+
+    // Intercept Ctrl+Z / Ctrl+Y inside iframe to use our history stack
+    doc.addEventListener('keydown', (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (!e.shiftKey && e.key === 'z') { e.preventDefault(); performUndo(); }
+      if ((e.shiftKey && e.key === 'z') || e.key === 'y') { e.preventDefault(); performRedo(); }
+      // Cancel format painter on Escape
+      if (e.key === 'Escape' && STATE.formatPainter) {
+        STATE.formatPainter = null;
+        $('btnPainter').classList.remove('active');
+      }
+    });
+
+    initHistory();
   };
-  if (frame.contentDocument?.readyState === 'complete') tryWire();
-  else frame.addEventListener('load', tryWire, { once: true });
+
+  if (frame.contentDocument?.readyState === 'complete') wire();
+  else frame.addEventListener('load', wire, { once: true });
 }
 
 function saveFrameSelection() {
@@ -757,69 +1234,11 @@ function restoreFrameSelection() {
   } catch {}
 }
 
-function ribbonCmd(cmd, value = null) {
-  const doc = $('outputFrame')?.contentDocument;
-  if (!doc) return;
-  doc.execCommand('styleWithCSS', false, true);
-  doc.execCommand(cmd, false, value);
-}
-
-function applyFontSize(px) {
-  const doc = $('outputFrame')?.contentDocument;
-  if (!doc) return;
-  const sel = doc.getSelection();
-  if (!sel?.rangeCount) return;
-  const range = sel.getRangeAt(0);
-  if (range.collapsed) return;
-  try {
-    const span = doc.createElement('span');
-    span.style.fontSize   = px + 'px';
-    span.style.lineHeight = '1.35';
-    range.surroundContents(span);
-  } catch {
-    doc.execCommand('styleWithCSS', false, true);
-    doc.execCommand('fontSize', false, '4');
-  }
-}
-
-function adjustFontSizeRelative(delta) {
-  const doc = $('outputFrame')?.contentDocument;
-  if (!doc) return;
-  const sel = doc.getSelection();
-  if (!sel?.rangeCount || sel.isCollapsed) return;
-  const range = sel.getRangeAt(0);
-  const node  = range.commonAncestorContainer;
-  const el    = node.nodeType === 3 ? node.parentElement : node;
-  const currentPx = parseFloat(doc.defaultView?.getComputedStyle(el)?.fontSize) || 14;
-  applyFontSize(Math.max(8, Math.round(currentPx + delta)));
-}
-
-// Custom list insertion — replaces execCommand insertUnorderedList/insertOrderedList
-// which fail inside flex containers. Inserts a prefix at the cursor position.
-function insertListPrefix(prefix) {
-  const doc = $('outputFrame')?.contentDocument;
-  if (!doc) return;
-  const sel = doc.getSelection();
-  if (!sel?.rangeCount) return;
-  const range = sel.getRangeAt(0);
-  // Collapse to start of selection
-  range.collapse(true);
-  const textNode = doc.createTextNode(prefix);
-  range.insertNode(textNode);
-  // Move cursor after the inserted prefix
-  const newRange = doc.createRange();
-  newRange.setStartAfter(textNode);
-  newRange.collapse(true);
-  sel.removeAllRanges();
-  sel.addRange(newRange);
-}
-
 // ── ZOOM ───────────────────────────────────────────────────
 function setupZoom() {
   $('btnZoomIn').addEventListener('click',  () => changeZoom(+0.1));
   $('btnZoomOut').addEventListener('click', () => changeZoom(-0.1));
 
-  // Trackpad pinch = wheel + ctrlKey on Mac
   document.querySelector('.cbody').addEventListener('wheel', (e) => {
     if (!e.ctrlKey) return;
     e.preventDefault();
@@ -873,7 +1292,6 @@ async function waitForFrame() {
 
 async function toBase64(url) {
   if (!url || url.startsWith('data:')) return url;
-  // Primary: our Vercel proxy (same-origin, no CORS)
   try {
     const proxyUrl = url.includes('/api/proxy') ? url : `/api/proxy?url=${encodeURIComponent(url)}`;
     const res = await fetch(proxyUrl);
@@ -887,7 +1305,6 @@ async function toBase64(url) {
       });
     }
   } catch {}
-  // Fallback: direct CORS fetch
   try {
     const res = await fetch(url, { mode: 'cors', cache: 'no-store' });
     const blob = await res.blob();
@@ -913,8 +1330,6 @@ async function prefetchFrameImages() {
   return () => imgs.forEach((img, i) => { img.src = origSrc[i]; });
 }
 
-// Background conversion — icons already go through proxy so they're
-// same-origin, but we convert to base64 as an extra safety net for export
 async function autoConvertImages() {
   const frame = $('outputFrame');
   if (!frame) return;
@@ -943,17 +1358,12 @@ async function exportPNG() {
   await document.fonts.ready;
   const restore = await prefetchFrameImages();
   try {
-    const dataUrl = await htmlToImage.toPng(el, {
-      pixelRatio: 2,
-      backgroundColor: '#ffffff',
-    });
+    const dataUrl = await htmlToImage.toPng(el, { pixelRatio: 2, backgroundColor: '#ffffff' });
     download(dataUrl, exportFilename('png'));
   } catch (e) {
     alert('PNG export failed: ' + (e?.message || String(e)) +
       '\n\nTip: Export as HTML and open in browser to screenshot.');
-  } finally {
-    restore();
-  }
+  } finally { restore(); }
 }
 
 // ── EXPORT PDF ─────────────────────────────────────────────
@@ -981,9 +1391,7 @@ async function exportPDF() {
     img.src = dataUrl;
   } catch (e) {
     alert('PDF export failed: ' + (e?.message || String(e)));
-  } finally {
-    restore();
-  }
+  } finally { restore(); }
 }
 
 // ── EXPORT HTML ────────────────────────────────────────────
@@ -1033,10 +1441,20 @@ function showError(msg) {
 function escHTML(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
 function hexToAlpha(hex, alpha) {
   const h = (hex || '#000000').replace('#', '');
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function rgbToHex(rgb) {
+  if (!rgb || rgb === 'transparent' || rgb === 'inherit') return null;
+  const m = rgb.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+  if (!m) return null;
+  return '#' + [m[1], m[2], m[3]]
+    .map(n => parseInt(n).toString(16).padStart(2, '0'))
+    .join('');
 }
