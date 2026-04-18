@@ -1,5 +1,10 @@
+// ── v3 IMPORTS ────────────────────────────────────────────
+import { fillTemplateAsync, initRenderer } from './v3/renderer.js';
+import { buildPrompt, detectLayout       } from './v3/prompt-builder.js';
+import { parseAndValidate                } from './v3/schema.js';
+
 /* ============================================================
-   Infogr.ai v2.4 — Beta Custom Toolbar
+   Infogr.ai v2.4 → v3 Integration
    ─────────────────────────────────────────────────────────────
    NEW in v2.4:
    • LOCAL_ICON_SVGS — 25 icons as inline SVGs; checked in
@@ -124,6 +129,7 @@ const STATE = {
   savedRange:    null,
   zoomLevel:     0.7,
   formatPainter: null,   // null | { fontFamily, fontSize, fontWeight, fontStyle, color, textDecoration }
+  isV3:          false,  // true when current output was rendered by v3 template engine
 };
 
 // ── HISTORY (undo/redo) ─────────────────────────────────────
@@ -166,6 +172,9 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // ── INIT ───────────────────────────────────────────────────
 window.addEventListener('load', () => {
+  // Pre-fetch v3 templates in the background so first generation is instant
+  initRenderer().catch(e => console.warn('[v3] Template pre-cache failed:', e));
+
   const k = localStorage.getItem('infograi_key');
   if (k) { $('apiKey').value = k; $('apiDot').className = 'api-dot ok'; }
 
@@ -288,8 +297,96 @@ async function generate() {
   btn.classList.remove('loading');
 }
 
-// ── STREAMING AGENT ────────────────────────────────────────
+// ── V3 LAYOUTS — handled by template renderer ──────────────
+const V3_LAYOUTS = new Set(['mixed-grid', 'steps-guide']);
+
+// ── AGENT DISPATCHER ───────────────────────────────────────
+// Routes to v3 (JSON → template) or v2 (raw HTML) based on layout.
 async function callAgent(topic) {
+  const rawLayout = STATE.layout;
+  const layoutId  = rawLayout === 'auto' ? detectLayout(topic) : rawLayout;
+
+  if (V3_LAYOUTS.has(layoutId)) {
+    STATE.isV3 = true;
+    return await callAgentV3(topic, layoutId);
+  } else {
+    STATE.isV3 = false;
+    return await callAgentV2(topic);
+  }
+}
+
+// ── V3 AGENT — JSON → template fill ────────────────────────
+async function callAgentV3(topic, layoutId) {
+  const { system, messages } = buildPrompt({
+    topic,
+    layoutId,
+    tone: STATE.tone,
+    size: STATE.size,
+  });
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'x-api-key':     STATE.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 2000,
+      stream:     true,
+      system,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`API error: ${err.error?.message || res.statusText}`);
+  }
+
+  const reader  = res.body.getReader();
+  const decoder = new TextDecoder();
+  let accumulated = '';
+  let lineBuffer  = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    lineBuffer += decoder.decode(value, { stream: true });
+    const lines = lineBuffer.split('\n');
+    lineBuffer  = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const raw = line.slice(6).trim();
+      if (!raw || raw === '[DONE]') continue;
+      try {
+        const ev = JSON.parse(raw);
+        if (ev.type === 'error') throw new Error(`Stream error: ${ev.error?.message}`);
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+          accumulated += ev.delta.text;
+          updateStreamProgress(accumulated.length);
+        }
+      } catch (e) {
+        if (e.message.startsWith('Stream error')) throw e;
+      }
+    }
+  }
+
+  // Parse, validate, and fill template
+  const json = parseAndValidate(accumulated.trim(), layoutId);
+
+  // Use user's accent override if they've changed it from the tone default
+  const accentOverride = (STATE.accent !== TONE_COLORS[STATE.tone]) ? STATE.accent : null;
+
+  const html = await fillTemplateAsync(json, layoutId, STATE.tone, STATE.size, accentOverride);
+  return html;
+}
+
+// ── V2.4 AGENT — raw HTML (unchanged) ──────────────────────
+async function callAgentV2(topic) {
   const sz = SIZES[STATE.size];
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -506,7 +603,60 @@ ${recipe}
 Return ONLY the complete <!DOCTYPE html> document. No markdown fences, no explanation.`;
 }
 
-// ── HTML PRE-PROCESSOR ─────────────────────────────────────
+// ── SHARED SCRIPTS (used by both v2 and v3 preprocessors) ──
+const fallbackScript = `<script id="ig-icon-fallback">
+(function(){
+  function applyFallback(img){
+    if(img.dataset.fallbackApplied||img.dataset.local)return;
+    img.dataset.fallbackApplied='1';
+    img.onerror=function(){
+      this.onerror=null;
+      var sz=parseInt(this.getAttribute('width')||this.offsetWidth||48);
+      var colors=['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444'];
+      var col=colors[Math.floor(Math.random()*colors.length)];
+      var lbl=(this.alt||'i').trim().charAt(0).toUpperCase();
+      var half=sz/2;
+      this.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'">'+
+        '<circle cx="'+half+'" cy="'+half+'" r="'+half+'" fill="'+col+'"/>'+
+        '<text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" fill="white" '+
+        'font-family="sans-serif" font-weight="700" font-size="'+Math.round(sz*0.42)+'">'+lbl+'</text>'+
+        '</svg>'
+      );
+    };
+  }
+  document.querySelectorAll('img[data-icon]').forEach(applyFallback);
+  new MutationObserver(function(ms){
+    ms.forEach(function(m){
+      m.addedNodes.forEach(function(n){
+        if(n.tagName==='IMG')applyFallback(n);
+        else if(n.querySelectorAll)n.querySelectorAll('img[data-icon]').forEach(applyFallback);
+      });
+    });
+  }).observe(document.body,{childList:true,subtree:true});
+})();
+<\/script>`;
+
+const editorScript = `<script id="ig-icon-editor">
+(function(){
+  var sel=null,ovl=null,drag=false,rsz=false,rh='',sx=0,sy=0,sw=0,sh=0,otx=0,oty=0;
+  function getTr(el){var m=(el.style.transform||'').match(/translate\\(([^,]+)px,\\s*([^)]+)px\\)/);return m?[parseFloat(m[1]),parseFloat(m[2])]:[0,0];}
+  function posOverlay(){if(!ovl||!sel)return;var r=sel.getBoundingClientRect();ovl.style.left=r.left+'px';ovl.style.top=r.top+'px';ovl.style.width=r.width+'px';ovl.style.height=r.height+'px';}
+  function mkHandle(dir,t,l,r,b){var d=document.createElement('div');d.dataset.h=dir;d.style.cssText='position:absolute;width:10px;height:10px;background:#2563EB;border:2px solid #fff;border-radius:2px;pointer-events:all;z-index:10000;cursor:'+dir+'-resize;box-sizing:border-box;';if(t!==null)d.style.top=t;if(l!==null)d.style.left=l;if(r!==null)d.style.right=r;if(b!==null)d.style.bottom=b;d.addEventListener('mousedown',function(e){e.stopPropagation();e.preventDefault();rsz=true;rh=dir;sx=e.clientX;sy=e.clientY;sw=sel.offsetWidth;sh=sel.offsetHeight;});return d;}
+  function doSelect(img){desel();sel=img;ovl=document.createElement('div');ovl.style.cssText='position:fixed;border:2px solid #2563EB;pointer-events:none;z-index:9999;box-sizing:border-box;border-radius:2px;';ovl.appendChild(mkHandle('nw','-5px','-5px',null,null));ovl.appendChild(mkHandle('ne','-5px',null,'-5px',null));ovl.appendChild(mkHandle('se',null,null,'-5px','-5px'));ovl.appendChild(mkHandle('sw',null,'-5px',null,'-5px'));document.body.appendChild(ovl);posOverlay();img.style.cursor='move';}
+  function desel(){if(ovl){ovl.remove();ovl=null;}if(sel){sel.style.cursor='';}sel=null;}
+  function isIcon(img){return img.dataset.icon==='true'||(img.src&&(img.src.includes('proxy')||img.src.includes('icons8')||img.src.includes('clearbit')||img.src.includes('simpleicons')||img.dataset.local));}
+  document.addEventListener('click',function(e){var img=e.target.closest&&e.target.closest('img');if(img&&isIcon(img)){e.stopPropagation();e.preventDefault();doSelect(img);}else if(!e.target.dataset||!e.target.dataset.h){desel();}},true);
+  document.addEventListener('mousedown',function(e){if(sel&&e.target===sel){drag=true;e.preventDefault();sx=e.clientX;sy=e.clientY;var t=getTr(sel);otx=t[0];oty=t[1];sel.style.cursor='grabbing';}});
+  document.addEventListener('mousemove',function(e){if(drag&&sel){sel.style.transform='translate('+(otx+(e.clientX-sx))+'px,'+(oty+(e.clientY-sy))+'px)';sel.style.position='relative';sel.style.zIndex='5';posOverlay();}if(rsz&&sel){var dx=e.clientX-sx,dy=e.clientY-sy,w=sw,h=sh;if(rh.includes('e'))w=Math.max(20,sw+dx);if(rh.includes('s'))h=Math.max(20,sh+dy);if(rh.includes('w'))w=Math.max(20,sw-dx);if(rh.includes('n'))h=Math.max(20,sh-dy);var newSz=Math.max(w,h);sel.style.width=newSz+'px';sel.style.height=newSz+'px';posOverlay();}});
+  document.addEventListener('mouseup',function(){drag=false;rsz=false;rh='';if(sel)sel.style.cursor='move';});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')desel();});
+  document.addEventListener('scroll',posOverlay,true);
+  window.addEventListener('resize',posOverlay);
+})();
+<\/script>`;
+
+// ── HTML PRE-PROCESSOR (v2.4) ──────────────────────────────
 // Order of operations matters:
 //   1. Local SVG icons checked FIRST (by name in URL)
 //   2. Remaining icon8/clearbit/simpleicons URLs → proxy
@@ -555,60 +705,32 @@ function preprocessHTML(html, sz) {
 </style>`;
   html = html.replace(/<\/head>/i, overflowCSS + '\n</head>');
 
-  // 6. Icon fallback script (onerror → colored SVG initial)
-  const fallbackScript = `<script id="ig-icon-fallback">
-(function(){
-  function applyFallback(img){
-    if(img.dataset.fallbackApplied||img.dataset.local)return;
-    img.dataset.fallbackApplied='1';
-    img.onerror=function(){
-      this.onerror=null;
-      var sz=parseInt(this.getAttribute('width')||this.offsetWidth||48);
-      var colors=['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444'];
-      var col=colors[Math.floor(Math.random()*colors.length)];
-      var lbl=(this.alt||'i').trim().charAt(0).toUpperCase();
-      var half=sz/2;
-      this.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'">'+
-        '<circle cx="'+half+'" cy="'+half+'" r="'+half+'" fill="'+col+'"/>'+
-        '<text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" fill="white" '+
-        'font-family="sans-serif" font-weight="700" font-size="'+Math.round(sz*0.42)+'">'+lbl+'</text>'+
-        '</svg>'
-      );
-    };
+  // 6–7. Fallback + icon editor (defined at module scope, shared with v3)
+  html = html.replace(/<\/body>/i, fallbackScript + '\n' + editorScript + '\n</body>');
+  return html;
+}
+
+// ── HTML PRE-PROCESSOR (v3) ────────────────────────────────
+// v3 templates are already styled — no overflow CSS injection,
+// no icon URL rewriting (renderer already proxied them).
+// We only add contenteditable to editable elements + inject scripts.
+function preprocessHTMLv3(html) {
+  // Text slots (filled directly by renderer into data-slot elements)
+  const textSlots = ['title','subtitle','label','callout-title','callout-body','footer-brand'];
+  for (const slot of textSlots) {
+    html = html.replace(
+      new RegExp(`(data-slot="${slot}"[^>]*)>`, 'g'),
+      `$1 contenteditable="true">`
+    );
   }
-  document.querySelectorAll('img[data-icon]').forEach(applyFallback);
-  new MutationObserver(function(ms){
-    ms.forEach(function(m){
-      m.addedNodes.forEach(function(n){
-        if(n.tagName==='IMG')applyFallback(n);
-        else if(n.querySelectorAll)n.querySelectorAll('img[data-icon]').forEach(applyFallback);
-      });
-    });
-  }).observe(document.body,{childList:true,subtree:true});
-})();
-<\/script>`;
-
-  // 7. Icon drag-and-resize editor
-  const editorScript = `<script id="ig-icon-editor">
-(function(){
-  var sel=null,ovl=null,drag=false,rsz=false,rh='',sx=0,sy=0,sw=0,sh=0,otx=0,oty=0;
-  function getTr(el){var m=(el.style.transform||'').match(/translate\\(([^,]+)px,\\s*([^)]+)px\\)/);return m?[parseFloat(m[1]),parseFloat(m[2])]:[0,0];}
-  function posOverlay(){if(!ovl||!sel)return;var r=sel.getBoundingClientRect();ovl.style.left=r.left+'px';ovl.style.top=r.top+'px';ovl.style.width=r.width+'px';ovl.style.height=r.height+'px';}
-  function mkHandle(dir,t,l,r,b){var d=document.createElement('div');d.dataset.h=dir;d.style.cssText='position:absolute;width:10px;height:10px;background:#2563EB;border:2px solid #fff;border-radius:2px;pointer-events:all;z-index:10000;cursor:'+dir+'-resize;box-sizing:border-box;';if(t!==null)d.style.top=t;if(l!==null)d.style.left=l;if(r!==null)d.style.right=r;if(b!==null)d.style.bottom=b;d.addEventListener('mousedown',function(e){e.stopPropagation();e.preventDefault();rsz=true;rh=dir;sx=e.clientX;sy=e.clientY;sw=sel.offsetWidth;sh=sel.offsetHeight;});return d;}
-  function doSelect(img){desel();sel=img;ovl=document.createElement('div');ovl.style.cssText='position:fixed;border:2px solid #2563EB;pointer-events:none;z-index:9999;box-sizing:border-box;border-radius:2px;';ovl.appendChild(mkHandle('nw','-5px','-5px',null,null));ovl.appendChild(mkHandle('ne','-5px',null,'-5px',null));ovl.appendChild(mkHandle('se',null,null,'-5px','-5px'));ovl.appendChild(mkHandle('sw',null,'-5px',null,'-5px'));document.body.appendChild(ovl);posOverlay();img.style.cursor='move';}
-  function desel(){if(ovl){ovl.remove();ovl=null;}if(sel){sel.style.cursor='';}sel=null;}
-  function isIcon(img){return img.dataset.icon==='true'||(img.src&&(img.src.includes('proxy')||img.src.includes('icons8')||img.src.includes('clearbit')||img.src.includes('simpleicons')||img.dataset.local));}
-  document.addEventListener('click',function(e){var img=e.target.closest&&e.target.closest('img');if(img&&isIcon(img)){e.stopPropagation();e.preventDefault();doSelect(img);}else if(!e.target.dataset||!e.target.dataset.h){desel();}},true);
-  document.addEventListener('mousedown',function(e){if(sel&&e.target===sel){drag=true;e.preventDefault();sx=e.clientX;sy=e.clientY;var t=getTr(sel);otx=t[0];oty=t[1];sel.style.cursor='grabbing';}});
-  document.addEventListener('mousemove',function(e){if(drag&&sel){sel.style.transform='translate('+(otx+(e.clientX-sx))+'px,'+(oty+(e.clientY-sy))+'px)';sel.style.position='relative';sel.style.zIndex='5';posOverlay();}if(rsz&&sel){var dx=e.clientX-sx,dy=e.clientY-sy,w=sw,h=sh;if(rh.includes('e'))w=Math.max(20,sw+dx);if(rh.includes('s'))h=Math.max(20,sh+dy);if(rh.includes('w'))w=Math.max(20,sw-dx);if(rh.includes('n'))h=Math.max(20,sh-dy);var newSz=Math.max(w,h);sel.style.width=newSz+'px';sel.style.height=newSz+'px';posOverlay();}});
-  document.addEventListener('mouseup',function(){drag=false;rsz=false;rh='';if(sel)sel.style.cursor='move';});
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')desel();});
-  document.addEventListener('scroll',posOverlay,true);
-  window.addEventListener('resize',posOverlay);
-})();
-<\/script>`;
-
+  // Renderer-generated inline content (stats, cards, steps)
+  html = html.replace(/(<div class="ig-stat-num">)/g,      '<div class="ig-stat-num" contenteditable="true">');
+  html = html.replace(/(<div class="ig-stat-label">)/g,    '<div class="ig-stat-label" contenteditable="true">');
+  html = html.replace(/(<div class="ig-card-title">)/g,    '<div class="ig-card-title" contenteditable="true">');
+  html = html.replace(/(<li class="ig-card-bullet">)/g,    '<li class="ig-card-bullet" contenteditable="true">');
+  html = html.replace(/(<div class="ig-step-title">)/g,    '<div class="ig-step-title" contenteditable="true">');
+  html = html.replace(/(<div class="ig-step-body-text">)/g,'<div class="ig-step-body-text" contenteditable="true">');
+  // Inject shared scripts
   html = html.replace(/<\/body>/i, fallbackScript + '\n' + editorScript + '\n</body>');
   return html;
 }
@@ -616,7 +738,7 @@ function preprocessHTML(html, sz) {
 // ── RENDERER ───────────────────────────────────────────────
 function renderHTML(html) {
   const sz        = SIZES[STATE.size];
-  const processed = preprocessHTML(html, sz);
+  const processed = STATE.isV3 ? preprocessHTMLv3(html) : preprocessHTML(html, sz);
 
   const frame = document.createElement('iframe');
   frame.id    = 'outputFrame';
