@@ -257,6 +257,7 @@ export function fillTemplate(json, layoutId, tone, size, accentColor) {
       heroEl.src = iconUrl(json.hero_icon, 128);
       heroEl.alt = json.hero_icon;
       heroEl.setAttribute('data-icon-name', json.hero_icon);
+      heroEl.setAttribute('data-icon', 'true');  // ← makes it selectable by the object editor
     }
 
     // Stats row (3 items)
@@ -291,6 +292,7 @@ export function fillTemplate(json, layoutId, tone, size, accentColor) {
       heroEl.src = iconUrl(json.hero_icon, 128);
       heroEl.alt = json.hero_icon;
       heroEl.setAttribute('data-icon-name', json.hero_icon);
+      heroEl.setAttribute('data-icon', 'true');  // ← makes it selectable by the object editor
     }
 
     // Steps loop

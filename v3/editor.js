@@ -37,10 +37,34 @@
 
   /* ── Selectors ──────────────────────────────────────────── */
 
-  /** Elements selectable as draggable groups */
-  var GRP = '.ig-stat, .ig-card, .ig-step, .ig-callout, .ig-header, .ig-footer';
+  /**
+   * Selectable elements — two tiers, both in one selector.
+   * findObj() walks UP the DOM, so the most specific (innermost) match wins.
+   *
+   * Tier 1 — individual text boxes (take priority over their parent group):
+   *   .ig-card-title, .ig-card-bullet      — each card text box is independently movable
+   *   .ig-stat-num, .ig-stat-label         — stat number and label independently
+   *   .ig-step-title, .ig-step-body-text   — step title and body independently
+   *   .ig-callout-title, .ig-callout-body  — callout text boxes
+   *   .ig-title, .ig-subtitle, .ig-label   — header text boxes
+   *   .ig-footer-brand                     — footer text
+   *
+   * Tier 2 — group containers (selected when clicking non-text areas):
+   *   .ig-stat, .ig-card, .ig-step, .ig-callout, .ig-header, .ig-footer
+   */
+  var GRP = [
+    // Tier 1: individual text boxes
+    '.ig-card-title', '.ig-card-bullet',
+    '.ig-stat-num', '.ig-stat-label',
+    '.ig-step-title', '.ig-step-body-text',
+    '.ig-callout-title', '.ig-callout-body',
+    '.ig-title', '.ig-subtitle', '.ig-label',
+    '.ig-footer-brand',
+    // Tier 2: group containers
+    '.ig-stat', '.ig-card', '.ig-step', '.ig-callout', '.ig-header', '.ig-footer',
+  ].join(', ');
 
-  /** Icon elements (take priority over groups on click) */
+  /** Icon elements (take priority over everything on click) */
   var ICO = 'img[data-icon="true"], svg[data-icon="true"]';
 
   /* ── State ──────────────────────────────────────────────── */
