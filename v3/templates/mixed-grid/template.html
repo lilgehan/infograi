@@ -210,9 +210,7 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: -0.02em;
   color: var(--text-primary);
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  max-height: 76px; /* 32px × 1.18 × 2 lines — compatible with contenteditable */
 }
 
 .ig-subtitle {
@@ -222,9 +220,7 @@ a { color: inherit; text-decoration: none; }
   line-height: 1.55;
   color: var(--text-secondary);
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  max-height: 46px; /* 14.5px × 1.55 × 2 lines */
 }
 
 /* Hero icon column */
@@ -265,6 +261,7 @@ a { color: inherit; text-decoration: none; }
   flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: minmax(0, 1fr); /* contain stat content within fixed height */
   gap: 14px;
 }
 
@@ -322,9 +319,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-secondary);
   line-height: 1.35;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  max-height: 32px; /* 11.5px × 1.35 × 2 lines */
 }
 
 /* ─────────────────────────────────────────
@@ -335,6 +330,7 @@ a { color: inherit; text-decoration: none; }
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: minmax(0, 1fr); /* force cards to stay within container height */
   gap: 14px;
   overflow: hidden;
 }
@@ -380,18 +376,17 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 10px;
   flex-shrink: 0;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  max-height: 37px; /* 14px × 1.3 × 2 lines */
 }
 
 .ig-card-bullets {
   list-style: none;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px; /* must be clearly larger than within-bullet line spacing */
   overflow: hidden;
-  min-height: 0;
 }
 
 .ig-card-bullet {
@@ -399,13 +394,11 @@ a { color: inherit; text-decoration: none; }
   font-size: 12.5px;
   font-weight: 400;
   color: var(--text-secondary);
-  line-height: 1.45;
+  line-height: 1.35; /* tighter than between-bullet gap so wrapped lines look grouped */
   padding-left: 14px;
   position: relative;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  max-height: 34px; /* 12.5px × 1.35 × 2 lines */
 }
 
 .ig-card-bullet::before {
@@ -477,9 +470,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--callout-body);
   line-height: 1.55;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  max-height: 61px; /* 13px × 1.55 × 3 lines */
 }
 
 /* ─────────────────────────────────────────
@@ -555,17 +546,25 @@ a { color: inherit; text-decoration: none; }
 .ig-page[data-size="landscape"] {
   width: 1100px;
   height: 800px;
-  padding: 32px;
-  gap: 14px;
+  padding: 28px;
+  gap: 12px;
 }
-.ig-page[data-size="landscape"] .ig-header     { height: 170px; }
-.ig-page[data-size="landscape"] .ig-stats-row  { height: 110px; }
-.ig-page[data-size="landscape"] .ig-callout    { height: 108px; }
-.ig-page[data-size="landscape"] .ig-footer     { height: 44px; }
-.ig-page[data-size="landscape"] .ig-title      { font-size: 28px; }
-.ig-page[data-size="landscape"] .ig-hero-wrap  { width: 120px; height: 120px; }
-.ig-page[data-size="landscape"] .ig-hero-icon  { width: 80px; height: 80px; }
-.ig-page[data-size="landscape"] .ig-cards-grid { grid-template-columns: repeat(3, 1fr); }
+.ig-page[data-size="landscape"] .ig-header        { height: 158px; }
+.ig-page[data-size="landscape"] .ig-stats-row     { height: 100px; }
+.ig-page[data-size="landscape"] .ig-callout       { height: 96px; }
+.ig-page[data-size="landscape"] .ig-footer        { height: 40px; }
+.ig-page[data-size="landscape"] .ig-title         { font-size: 26px; max-height: 62px; }
+.ig-page[data-size="landscape"] .ig-subtitle      { font-size: 13px; max-height: 41px; }
+.ig-page[data-size="landscape"] .ig-hero-wrap     { width: 110px; height: 110px; }
+.ig-page[data-size="landscape"] .ig-hero-icon     { width: 74px; height: 74px; }
+.ig-page[data-size="landscape"] .ig-stat-num      { font-size: 22px; }
+.ig-page[data-size="landscape"] .ig-stat-icon-wrap{ width: 34px; height: 34px; }
+.ig-page[data-size="landscape"] .ig-card-icon-wrap{ width: 48px; height: 48px; margin-bottom: 10px; }
+.ig-page[data-size="landscape"] .ig-card-icon     { width: 32px; height: 32px; }
+.ig-page[data-size="landscape"] .ig-card-title    { font-size: 13px; max-height: 34px; margin-bottom: 8px; }
+.ig-page[data-size="landscape"] .ig-card-bullet   { font-size: 11.5px; max-height: 34px; }
+.ig-page[data-size="landscape"] .ig-callout-body  { font-size: 12px; max-height: 56px; }
+.ig-page[data-size="landscape"] .ig-cards-grid    { grid-template-columns: repeat(3, 1fr); }
 
 /* ─────────────────────────────────────────
    BOLD TONE EXTRAS

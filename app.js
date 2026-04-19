@@ -713,9 +713,19 @@ function preprocessHTML(html, sz) {
 // ── HTML PRE-PROCESSOR (v3) ────────────────────────────────
 // v3 templates are already styled — no overflow CSS injection,
 // no icon URL rewriting (renderer already proxied them).
-// We only add contenteditable to editable elements + inject scripts.
+//
+// What we do here:
+//   1. Inject <base href="/"> so the srcdoc iframe resolves
+//      absolute paths like /v3/editor.js against the app origin.
+//   2. Mark all text elements with contenteditable="true" so the
+//      v3 object editor can toggle them during selection / editing.
+//   3. Inject the icon fallback script (handles broken proxy loads).
+//   4. Inject /v3/editor.js — the full PowerPoint-style object editor.
 function preprocessHTMLv3(html) {
-  // Text slots (filled directly by renderer into data-slot elements)
+  // 1. Base href — required for <script src="/v3/editor.js"> in srcdoc
+  html = html.replace('<head>', '<head><base href="/">');
+
+  // 2. Mark text slots as contenteditable (filled directly by renderer)
   const textSlots = ['title','subtitle','label','callout-title','callout-body','footer-brand'];
   for (const slot of textSlots) {
     html = html.replace(
@@ -730,8 +740,13 @@ function preprocessHTMLv3(html) {
   html = html.replace(/(<li class="ig-card-bullet">)/g,    '<li class="ig-card-bullet" contenteditable="true">');
   html = html.replace(/(<div class="ig-step-title">)/g,    '<div class="ig-step-title" contenteditable="true">');
   html = html.replace(/(<div class="ig-step-body-text">)/g,'<div class="ig-step-body-text" contenteditable="true">');
-  // Inject shared scripts
-  html = html.replace(/<\/body>/i, fallbackScript + '\n' + editorScript + '\n</body>');
+
+  // 3 + 4. Fallback script + v3 object editor (replaces old editorScript for v3)
+  html = html.replace(/<\/body>/i,
+    fallbackScript + '\n' +
+    '<script src="/v3/editor.js"><\/script>\n' +
+    '</body>'
+  );
   return html;
 }
 
@@ -1291,6 +1306,10 @@ function setupRibbonForFrame() {
       // If format painter is active and user just made a selection, apply it
       if (STATE.formatPainter) tryApplyFormatPainter();
     });
+
+    // Also update toolbar on click — ensures readout fires even without text selection
+    // (important for v3 templates where cursor placement fires selectionchange unreliably)
+    doc.addEventListener('click', scheduleToolbarUpdate);
 
     // Intercept Ctrl+Z / Ctrl+Y inside iframe to use our history stack
     doc.addEventListener('keydown', (e) => {

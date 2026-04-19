@@ -174,12 +174,21 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
   // The static system part (cacheable — never changes per session)
   const staticBlock = `${SYSTEM_PROMPT}\n\n${schemaPrompt}`;
 
+  // Canvas-size conciseness rules — prevent overflow at the source
+  const SIZE_RULES = {
+    a4:        'Canvas: A4 portrait (800×1131px). Standard density — 3 bullets per card, 5 stats words max.',
+    portrait:  'Canvas: Portrait (800×1422px). You have more vertical room — slightly richer body text OK.',
+    square:    'Canvas: Square (800×800px). VERY limited space. CRITICAL: each bullet MAX 5-6 words — single line, no wrapping. Titles ≤ 35 chars. Callout ≤ 90 chars. Be ruthlessly concise.',
+    landscape: 'Canvas: Landscape (1100×800px). Wide but SHORT. CRITICAL: each card bullet must be MAX 5-6 words — it MUST fit on a single line with no wrapping. Titles ≤ 40 chars. Callout ≤ 90 chars.',
+  };
+  const sizeRule = SIZE_RULES[size] || SIZE_RULES.a4;
+
   // The dynamic user message (changes per request)
   const userMessage = [
     `Topic: ${topic}`,
     `Layout: ${layoutId}`,
     `Tone: ${toneGuide}`,
-    `Canvas size: ${size}`,
+    sizeRule,
     '',
     'Generate the JSON now. Return only the raw JSON object.',
   ].join('\n');
