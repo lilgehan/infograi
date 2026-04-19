@@ -140,13 +140,51 @@ function renderStat(stat) {
   </div>`;
 }
 
-function renderCard(card) {
+/**
+ * Compute the card density class for a given size + tone + AI hint.
+ *
+ * Priority: AI-declared card_density (if valid) → size constraint → tone preference.
+ *
+ * Geometry rationale (bullets-container px available per bullet):
+ *   A4 portrait  → ~261px → 4.6 lines/bullet  → standard (3 lines) or detailed (4)
+ *   9:16 portrait→ ~500px → 9+ lines/bullet   → detailed (4 lines)
+ *   1:1 square   → ~120px → 1.8 lines/bullet  → compact  (1 line)
+ *   16:9 landscape→~144px → 2.5 lines/bullet  → standard (CSS caps at 2 lines via landscape override)
+ *
+ * @param {object} json    - parsed AI JSON (may contain card_density hint)
+ * @param {string} sizeId  - 'a4'|'portrait'|'square'|'landscape'
+ * @param {string} toneId  - 'professional'|'bold'|'minimal'|'playful'
+ * @returns {'compact'|'standard'|'detailed'}
+ */
+function computeCardDensity(json, sizeId, toneId) {
+  const VALID = ['compact', 'standard', 'detailed'];
+
+  // Honour AI-declared density if it passes validation
+  if (VALID.includes(json.card_density)) return json.card_density;
+
+  // Size constraints take absolute priority (geometry doesn't change with tone)
+  if (sizeId === 'square') return 'compact';
+  // Landscape: ~2.5 lines fit, but CSS `.ig-page[data-size="landscape"] .ig-card-bullet`
+  // (specificity 0,3,0) caps standard bullets at 2 lines — no extra class needed.
+  if (sizeId === 'landscape') return 'standard';
+
+  // Portrait has lots of vertical room
+  if (sizeId === 'portrait') {
+    return (toneId === 'minimal') ? 'standard' : 'detailed';
+  }
+
+  // A4: default by tone
+  // minimal = intentional whitespace; professional/bold/playful = rich content
+  return (toneId === 'minimal') ? 'compact' : 'standard';
+}
+
+function renderCard(card, density = 'standard') {
   const iconHtml = renderIconHtml(card.icon, 'ig-card-icon', 40);
   const bullets  = (card.bullets ?? [])
     .map(b => `<li class="ig-card-bullet">${escapeHtml(b)}</li>`)
     .join('');
 
-  return `<div class="ig-card">
+  return `<div class="ig-card ig-card--${density}">
     <div class="ig-card-icon-wrap">
       ${iconHtml}
     </div>
@@ -265,9 +303,10 @@ export function fillTemplate(json, layoutId, tone, size, accentColor) {
       fillSlot(doc, 'stats-loop', json.stats.map(renderStat).join(''));
     }
 
-    // Cards grid (3 items)
+    // Cards grid (3 items) — density class applied per card
     if (json.cards?.length) {
-      fillSlot(doc, 'cards-loop', json.cards.map(renderCard).join(''));
+      const density = computeCardDensity(json, sizeId, toneId);
+      fillSlot(doc, 'cards-loop', json.cards.map(c => renderCard(c, density)).join(''));
     }
 
     // Callout

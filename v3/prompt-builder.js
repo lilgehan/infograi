@@ -35,10 +35,10 @@ const ICON_LIST = [
    TONE DESCRIPTIONS
 ───────────────────────────────────────── */
 const TONE_GUIDES = {
-  professional: 'Professional — clear, authoritative, data-driven. Corporate tone. Real numbers and facts. No fluff.',
-  bold:         'Bold — high-impact, direct, punchy. UPPERCASE labels. Short sentences. Maximum density. Power words.',
-  minimal:      'Minimal — calm, precise, editorial. Every word earns its place. Whitespace is a design choice. No buzzwords.',
-  playful:      'Playful — warm, energetic, specific. Engaging without being childish. Use active voice. Surprise the reader with one unexpected insight.',
+  professional: 'Professional — authoritative, data-driven, specific. Name real tools, cite real numbers, describe concrete outcomes. Write complete sentences in bullets — not fragments. "Reduces onboarding time by 40% using structured prompts" beats "saves time".',
+  bold:         'Bold — high-impact, direct, punchy. UPPERCASE labels. Each bullet is a power statement: verb-first, one clear fact, nothing wasted. Maximum information density per word.',
+  minimal:      'Minimal — calm, precise, editorial. Fewer words, more weight. Each bullet is one precise, memorable thought. No buzzwords, no filler, no repeating the title.',
+  playful:      'Playful — warm, energetic, concrete. Write like an expert friend explaining something exciting. Active voice. Mix specific numbers with relatable examples. Include one surprising insight.',
 };
 
 /* ─────────────────────────────────────────
@@ -55,12 +55,18 @@ Output ONLY the raw JSON object, nothing else.
 
 ## CONTENT RULES (always apply)
 - Real, specific facts and data — never lorem ipsum, never vague filler
-- Active voice, concise phrasing — no "In today's world" or "It is important to"
+- Active voice — no "In today's world", "It is important to", "Leveraging synergies"
 - Numbers beat vague adjectives: "94% faster" beats "much faster"
-- Icon names: choose ONLY from the approved list provided. Pick icons that actually match the content meaning, not generic ones.
+- Icon names: choose ONLY from the approved list. Pick icons that match the content meaning.
 - Titles: no punctuation at the end, title case, 1–2 lines max
-- Bullets: 6–12 words each, scannable, specific. Each bullet is a complete thought.
-- Callout: the single most surprising or actionable insight. Not a summary of the whole doc.
+- Bullets: write to the density target in the user message. Complete thoughts, not fragments.
+- Callout: the single most surprising or actionable insight — not a summary of the document.
+
+## CARD DENSITY (mixed-grid only)
+The user message specifies a card_density. Include it as-is in your JSON and match the bullet length:
+- "compact"  → MAX 6 words per bullet. One tight line. No wrapping ever.
+- "standard" → 12–20 words per bullet. 2–3 complete, informative lines. Specific, data-backed.
+- "detailed" → 25–40 words per bullet. 3–4 full sentences. Context + explanation + outcome.
 
 ## FONT RULES (baked into templates — do not put font names in JSON)
 - Hero titles: Space Grotesk only (this is handled by the template automatically)
@@ -84,15 +90,16 @@ const MIXED_GRID_SCHEMA_PROMPT = `## JSON SCHEMA — mixed-grid
   "layout":       "mixed-grid",             // always this value
   "title":        string,                   // 72 chars max, 1–2 lines, no end punctuation
   "subtitle":     string,                   // 140 chars max, 1–2 sentences
-  "label":        string,                   // eyebrow pill: "STEP-BY-STEP GUIDE", "DATA SNAPSHOT", etc. — 40 chars max
-  "hero_icon":    string,                   // 1 icon from approved list — visually anchors the whole topic
+  "label":        string,                   // eyebrow pill: "STEP-BY-STEP GUIDE", "DATA SNAPSHOT" — 40 chars max
+  "hero_icon":    string,                   // 1 icon from approved list — visually anchors the topic
+  "card_density": string,                   // copy verbatim from the density rule in the user message: "compact" | "standard" | "detailed"
   "stats": [                                // EXACTLY 3 stat blocks
     { "number": string, "label": string, "icon": string },  // number: "94%", "5", "$2M" — label: 2-4 words
     { "number": string, "label": string, "icon": string },
     { "number": string, "label": string, "icon": string }
   ],
-  "cards": [                                // EXACTLY 3 content cards
-    { "icon": string, "title": string, "bullets": [string, string, string] },  // title: 3-6 words; bullets: EXACTLY 3, 6-12 words each
+  "cards": [                                // EXACTLY 3 content cards — ALL 3 must use the same bullet length
+    { "icon": string, "title": string, "bullets": [string, string, string] },  // title: 3-6 words; bullets: EXACTLY 3, length matches card_density
     { "icon": string, "title": string, "bullets": [string, string, string] },
     { "icon": string, "title": string, "bullets": [string, string, string] }
   ],
@@ -174,14 +181,42 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
   // The static system part (cacheable — never changes per session)
   const staticBlock = `${SYSTEM_PROMPT}\n\n${schemaPrompt}`;
 
-  // Canvas-size conciseness rules — prevent overflow at the source
+  // ── Canvas size rules ────────────────────────────────────────
+  // These govern non-text overflow only (title/callout char limits, icon sizes).
+  // Bullet length is controlled separately by the density rule below.
   const SIZE_RULES = {
-    a4:        'Canvas: A4 portrait (800×1131px). Standard density — 3 bullets per card, 5 stats words max.',
-    portrait:  'Canvas: Portrait (800×1422px). You have more vertical room — slightly richer body text OK.',
-    square:    'Canvas: Square (800×800px). VERY limited space. CRITICAL: each bullet MAX 5-6 words — single line, no wrapping. Titles ≤ 35 chars. Callout ≤ 90 chars. Be ruthlessly concise.',
-    landscape: 'Canvas: Landscape (1100×800px). Wide but SHORT. CRITICAL: each card bullet must be MAX 5-6 words — it MUST fit on a single line with no wrapping. Titles ≤ 40 chars. Callout ≤ 90 chars.',
+    a4:        'Canvas: A4 portrait (800×1131px). Titles ≤ 60 chars. Callout body ≤ 200 chars.',
+    portrait:  'Canvas: Portrait (800×1422px). Titles ≤ 65 chars. Callout body ≤ 220 chars. Extra vertical room available.',
+    square:    'Canvas: Square (800×800px). VERY limited. Titles ≤ 35 chars. Callout ≤ 90 chars. Stat labels ≤ 3 words.',
+    landscape: 'Canvas: Landscape (1100×800px). Wide but short. Titles ≤ 40 chars. Callout ≤ 90 chars. Stat labels ≤ 3 words.',
   };
   const sizeRule = SIZE_RULES[size] || SIZE_RULES.a4;
+
+  // ── Card density rule (mixed-grid only) ──────────────────────
+  // Computed here so the AI receives an explicit instruction and
+  // includes the correct card_density value in its JSON output.
+  // The renderer (computeCardDensity) also computes this independently
+  // as a fallback if the AI omits or mangles the field.
+  let densityRule = '';
+  if (layoutId === 'mixed-grid') {
+    const toneId = tone || 'professional';
+    let density;
+    if (size === 'square') {
+      // Square: ~30px per bullet — only 1 line fits
+      density = 'compact';
+    } else if (size === 'landscape') {
+      // Landscape: ~39px per bullet — 2 lines fit (CSS override caps standard at 2 lines)
+      // Use standard density so AI writes 12–15 word bullets, not 6-word fragments
+      density = 'standard';
+    } else if (size === 'portrait') {
+      // Portrait: ~157px per bullet — 4 lines easily
+      density = (toneId === 'minimal') ? 'standard' : 'detailed';
+    } else { // a4
+      // A4: ~77px per bullet — 4 lines possible, 3 lines is the sweet spot
+      density = (toneId === 'minimal') ? 'compact' : 'standard';
+    }
+    densityRule = `Card density: "${density}" — write bullets at that length (see CARD DENSITY rules above).`;
+  }
 
   // The dynamic user message (changes per request)
   const userMessage = [
@@ -189,9 +224,10 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
     `Layout: ${layoutId}`,
     `Tone: ${toneGuide}`,
     sizeRule,
+    densityRule,
     '',
     'Generate the JSON now. Return only the raw JSON object.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   return {
     // System prompt for the API call

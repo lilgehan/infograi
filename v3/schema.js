@@ -129,6 +129,15 @@ export function validateSchema(json, layoutId) {
     }
   }
 
+  // ── card_density (mixed-grid) ──
+  if (layoutId === 'mixed-grid') {
+    const VALID_DENSITIES = ['compact', 'standard', 'detailed'];
+    if (fixed.card_density && !VALID_DENSITIES.includes(fixed.card_density)) {
+      errors.push(`card_density "${fixed.card_density}" is invalid — removed (renderer will default)`);
+      delete fixed.card_density;
+    }
+  }
+
   // ── cards array (mixed-grid) ──
   if (layoutId === 'mixed-grid') {
     if (!Array.isArray(fixed.cards) || fixed.cards.length < 3) {
