@@ -53,7 +53,7 @@ export class StatBlock extends BaseObject {
    */
   _iconHTML() {
     if (!this.iconName) return '';
-    const base = 'https://img.icons8.com/fluency/96';
+    const base = 'https://img.icons8.com/3d-fluency/96';
     const raw  = `${base}/${this.iconName}.png`;
     const src  = this.useProxy
       ? `/api/proxy?url=${encodeURIComponent(raw)}`

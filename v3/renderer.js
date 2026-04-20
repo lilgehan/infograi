@@ -65,7 +65,10 @@ function localSvgDataUri(name) {
 
 /* ── Icons8 proxy helper ── */
 const PROXY_BASE = '/api/proxy?url=';
-const ICONS8_BASE = 'https://img.icons8.com/fluency';
+const ICONS8_BASE = 'https://img.icons8.com/3d-fluency';
+
+// Fallback shown when an Icons8 icon name doesn't exist — a neutral gray circle
+const ICON_FALLBACK_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='20' fill='%23e2e8f0'/%3E%3Ccircle cx='24' cy='24' r='6' fill='%23cbd5e1'/%3E%3C/svg%3E";
 
 function iconUrl(name, size = 96) {
   // Use local SVG if available — instant load, no proxy needed
@@ -94,9 +97,9 @@ function renderIconHtml(name, cssClass, px = 40) {
       `<svg class="${cssClass}" width="${px}" height="${px}" aria-label="${escapeHtml(name)}" data-icon="true" data-icon-name="${escapeHtml(name)}" `
     );
   }
-  // Remote icon — proxied Icons8 URL
+  // Remote icon — proxied Icons8 URL with graceful onerror fallback
   const src = `${PROXY_BASE}${encodeURIComponent(`${ICONS8_BASE}/${px}/${name}.png`)}`;
-  return `<img class="${cssClass}" src="${src}" alt="${escapeHtml(name)}" width="${px}" height="${px}" data-icon="true" data-icon-name="${escapeHtml(name)}" />`;
+  return `<img class="${cssClass}" src="${src}" alt="${escapeHtml(name)}" width="${px}" height="${px}" data-icon="true" data-icon-name="${escapeHtml(name)}" onerror="this.onerror=null;this.src='${ICON_FALLBACK_SRC}'" />`;
 }
 
 /* ── Slot helpers ── */
@@ -296,6 +299,7 @@ export function fillTemplate(json, layoutId, tone, size, accentColor) {
       heroEl.alt = json.hero_icon;
       heroEl.setAttribute('data-icon-name', json.hero_icon);
       heroEl.setAttribute('data-icon', 'true');  // ← makes it selectable by the object editor
+      heroEl.setAttribute('onerror', `this.onerror=null;this.src='${ICON_FALLBACK_SRC}'`);
     }
 
     // Stats row (3 items)
@@ -332,6 +336,7 @@ export function fillTemplate(json, layoutId, tone, size, accentColor) {
       heroEl.alt = json.hero_icon;
       heroEl.setAttribute('data-icon-name', json.hero_icon);
       heroEl.setAttribute('data-icon', 'true');  // ← makes it selectable by the object editor
+      heroEl.setAttribute('onerror', `this.onerror=null;this.src='${ICON_FALLBACK_SRC}'`);
     }
 
     // Steps loop

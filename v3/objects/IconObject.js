@@ -1,8 +1,9 @@
 /**
  * Infogr.ai v3 — IconObject
  *
- * An Icons8 Fluency icon. The icon name is AI-chosen from the approved list;
- * the URL is always constructed and proxied by the renderer — never raw.
+ * An Icons8 3D Fluency icon. The icon name is AI-chosen freely from Icons8's
+ * 100,000+ icon library — no approved list. The renderer falls back gracefully
+ * if a name doesn't exist.
  *
  * Size context guide (from INFOGRAI-SPECS):
  *   Hero / banner anchor       → 96–128px
@@ -13,24 +14,12 @@
 
 import { BaseObject } from './base.js';
 
-/** Full approved icon name list (must match prompt-builder.js). */
-export const APPROVED_ICONS = [
-  'rocket','idea','lightning-bolt','gear','calendar-3','user-group','shield',
-  'checkmark','star','trophy','target','key','lock','internet','database',
-  'source-code','console','cloud-storage','briefcase','dollar-coin','search',
-  'open-book','chart-increasing','analytics','pie-chart','clock','teamwork',
-  'strategy','growth','workflow','checklist','deadline','meeting','handshake',
-  'networking','statistics','report','presentation','brain','artificial-intelligence',
-  'robot-2','color-palette','image','video','collaboration','creativity','resume',
-  'approval','priority','layers','settings','home','smartphone','mail','folder','link',
-];
-
-const ICONS8_BASE = 'https://img.icons8.com/fluency';
+const ICONS8_BASE = 'https://img.icons8.com/3d-fluency';
 
 export class IconObject extends BaseObject {
   /**
    * @param {object} props — extends BaseObject props, plus:
-   * @param {string}   props.iconName      — name from APPROVED_ICONS list
+   * @param {string}   props.iconName      — any Icons8 icon name (lowercase, hyphenated)
    * @param {number}  [props.size]         — px, square (default 72)
    * @param {string}  [props.alt]          — alt text for <img> (default = iconName)
    * @param {boolean} [props.useProxy]     — route through /api/proxy (default true)

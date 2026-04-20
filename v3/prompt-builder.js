@@ -17,19 +17,12 @@
  */
 
 /* ─────────────────────────────────────────
-   APPROVED ICON LIST
-   Keep in sync with schema.js and schema.json
+   ICON NAMING CONVENTION
+   Icons8 has 100,000+ icons — the AI picks freely.
+   No approved list. The renderer handles missing icons with onerror fallback.
+   Naming rules: lowercase, hyphenated, visually literal.
+   Examples: 'pie-chart', 'fingerprint', 'neural-network', 'bar-chart', 'handshake'
 ───────────────────────────────────────── */
-const ICON_LIST = [
-  'rocket','idea','lightning-bolt','gear','calendar-3','user-group','shield',
-  'checkmark','star','trophy','target','key','lock','internet','database',
-  'source-code','console','cloud-storage','briefcase','dollar-coin','search',
-  'open-book','chart-increasing','analytics','pie-chart','clock','teamwork',
-  'strategy','growth','workflow','checklist','deadline','meeting','handshake',
-  'networking','statistics','report','presentation','brain','artificial-intelligence',
-  'robot-2','color-palette','image','video','collaboration','creativity','resume',
-  'approval','priority','layers','settings','home','smartphone','mail','folder','link',
-].join(', ');
 
 /* ─────────────────────────────────────────
    TONE DESCRIPTIONS
@@ -57,7 +50,7 @@ Output ONLY the raw JSON object, nothing else.
 - Real, specific facts and data — never lorem ipsum, never vague filler
 - Active voice — no "In today's world", "It is important to", "Leveraging synergies"
 - Numbers beat vague adjectives: "94% faster" beats "much faster"
-- Icon names: choose ONLY from the approved list. Pick icons that match the content meaning.
+- Icon names: pick any Icons8 icon name. Use lowercase, hyphenated names that literally describe the visual — words you'd type into an icon search bar. Be specific: "pie-chart" not "chart", "fingerprint" not "security", "neural-network" not "brain", "bar-chart-side" not "stats". Icons8 has 100,000+ icons, so pick the most visually precise match for each concept.
 - Titles: no punctuation at the end, title case, 1–2 lines max
 - Bullets: write to the density target in the user message. Complete thoughts, not fragments.
 - Callout: the single most surprising or actionable insight — not a summary of the document.
@@ -80,8 +73,14 @@ CARD TITLES: All 3 card titles must be 3–5 words. Keep the same word count acr
 - All other text: Plus Jakarta Sans (handled automatically)
 - NEVER output Syne, Oswald, Roboto Condensed, or any wide/condensed font names
 
-## APPROVED ICON LIST (use ONLY these exact names)
-${ICON_LIST}
+## ICONS
+Icons8 has 100,000+ icons in its library. You are free to pick ANY icon name.
+Rules:
+- Lowercase, hyphenated: "pie-chart", "fingerprint", "bar-chart-side", "brain-circuit", "handshake", "rocket-launch"
+- Visually literal — the name should describe exactly what you'd see drawn
+- Specific beats generic: "magnifying-glass" beats "search", "lightning-bolt" beats "fast"
+- Never invent compound names with 4+ parts — "ai-robot-brain-chip" won't exist
+- The renderer falls back gracefully if an icon doesn't exist, so pick the best match confidently
 
 ## OUTPUT FORMAT
 Return ONLY a raw JSON object — no prose before or after, no code fences.`;
@@ -98,7 +97,7 @@ const MIXED_GRID_SCHEMA_PROMPT = `## JSON SCHEMA — mixed-grid
   "title":        string,                   // 72 chars max, 1–2 lines, no end punctuation
   "subtitle":     string,                   // 140 chars max, 1–2 sentences
   "label":        string,                   // eyebrow pill: "STEP-BY-STEP GUIDE", "DATA SNAPSHOT" — 40 chars max
-  "hero_icon":    string,                   // 1 icon from approved list — visually anchors the topic
+  "hero_icon":    string,                   // 1 Icons8 icon name — visually anchors the topic
   "card_density": string,                   // copy verbatim from the density rule in the user message: "compact" | "standard" | "detailed"
   "stats": [                                // EXACTLY 3 stat blocks
     { "number": string, "label": string, "icon": string },  // number: "94%", "5", "$2M" — label: 2-4 words
@@ -130,7 +129,7 @@ const STEPS_GUIDE_SCHEMA_PROMPT = `## JSON SCHEMA — steps-guide
   "title":        string,                   // 72 chars max, 1–2 lines
   "subtitle":     string,                   // 140 chars max, 1–2 sentences
   "label":        string,                   // "HOW TO", "5 STEPS", etc. — 40 chars max
-  "hero_icon":    string,                   // 1 icon from approved list
+  "hero_icon":    string,                   // 1 Icons8 icon name — visually anchors the topic
   "sections": [                             // 4–6 steps (exact count based on topic)
     {
       "number":  number,                    // step number: 1, 2, 3...
@@ -299,4 +298,4 @@ export function detectLayout(topic) {
   return 'mixed-grid';
 }
 
-export { TONE_GUIDES, ICON_LIST };
+export { TONE_GUIDES };

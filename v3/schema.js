@@ -42,20 +42,11 @@ const SCHEMAS = {
   },
 };
 
-/** Icons8 approved name list — single source of truth. */
-export const APPROVED_ICONS = [
-  'rocket','idea','lightning-bolt','gear','calendar-3','user-group','shield',
-  'checkmark','star','trophy','target','key','lock','internet','database',
-  'source-code','console','cloud-storage','briefcase','dollar-coin','search',
-  'open-book','chart-increasing','analytics','pie-chart','clock','teamwork',
-  'strategy','growth','workflow','checklist','deadline','meeting','handshake',
-  'networking','statistics','report','presentation','brain','artificial-intelligence',
-  'robot-2','color-palette','image','video','collaboration','creativity','resume',
-  'approval','priority','layers','settings','home','smartphone','mail','folder','link',
-];
-
-const ICON_SET = new Set(APPROVED_ICONS);
-const SAFE_ICON_FALLBACK = 'star';
+/**
+ * Icons8 has 100,000+ icons — the AI picks freely.
+ * No approved list. Invalid icon names degrade gracefully via onerror in the renderer.
+ * Validation only checks that icon fields are non-empty strings.
+ */
 
 /**
  * Validate a parsed JSON object against a layout schema.
@@ -106,10 +97,10 @@ export function validateSchema(json, layoutId) {
     }
   }
 
-  // ── Icon fields ──
-  if (fixed.hero_icon && !ICON_SET.has(fixed.hero_icon)) {
-    errors.push(`hero_icon "${fixed.hero_icon}" is not in the approved list — replaced with "${SAFE_ICON_FALLBACK}"`);
-    fixed.hero_icon = SAFE_ICON_FALLBACK;
+  // ── Icon fields — just check non-empty; renderer handles missing icons via onerror ──
+  if (!fixed.hero_icon || typeof fixed.hero_icon !== 'string') {
+    errors.push(`hero_icon is missing or invalid`);
+    fixed.hero_icon = 'star';
   }
 
   // ── stats array ──
@@ -120,10 +111,7 @@ export function validateSchema(json, layoutId) {
       fixed.stats = fixed.stats.slice(0, 3).map((s, i) => {
         if (!s.number)   errors.push(`stats[${i}].number is missing`);
         if (!s.label)    errors.push(`stats[${i}].label is missing`);
-        if (s.icon && !ICON_SET.has(s.icon)) {
-          errors.push(`stats[${i}].icon "${s.icon}" not approved — replaced`);
-          s.icon = SAFE_ICON_FALLBACK;
-        }
+        if (!s.icon)     s.icon = 'star'; // ensure non-empty
         return s;
       });
     }
@@ -145,10 +133,7 @@ export function validateSchema(json, layoutId) {
     } else {
       fixed.cards = fixed.cards.slice(0, 3).map((c, i) => {
         if (!c.title) errors.push(`cards[${i}].title is missing`);
-        if (c.icon && !ICON_SET.has(c.icon)) {
-          errors.push(`cards[${i}].icon "${c.icon}" not approved — replaced`);
-          c.icon = SAFE_ICON_FALLBACK;
-        }
+        if (!c.icon) c.icon = 'star'; // ensure non-empty; renderer handles missing icons gracefully
         if (!Array.isArray(c.bullets) || c.bullets.length < 3) {
           errors.push(`cards[${i}].bullets must have at least 3 items`);
           c.bullets = (c.bullets ?? []).slice(0, 3);
@@ -168,10 +153,7 @@ export function validateSchema(json, layoutId) {
       fixed.sections = fixed.sections.slice(0, 6).map((s, i) => {
         if (!s.title) errors.push(`sections[${i}].title is missing`);
         if (!s.body)  errors.push(`sections[${i}].body is missing`);
-        if (s.icon && !ICON_SET.has(s.icon)) {
-          errors.push(`sections[${i}].icon "${s.icon}" not approved — replaced`);
-          s.icon = SAFE_ICON_FALLBACK;
-        }
+        if (!s.icon) s.icon = 'star'; // ensure non-empty; renderer handles missing icons gracefully
         s.number = s.number ?? i + 1;
         return s;
       });

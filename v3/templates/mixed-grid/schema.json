@@ -35,17 +35,7 @@
 
     "hero_icon": {
       "type": "string",
-      "description": "Icon name from the approved Icons8 Fluency list. This is the large (96px) icon in the top-right circle. Choose one that visually anchors the whole topic. Use only names from the approved list.",
-      "enum": [
-        "rocket","idea","lightning-bolt","gear","calendar-3","user-group","shield",
-        "checkmark","star","trophy","target","key","lock","internet","database",
-        "source-code","console","cloud-storage","briefcase","dollar-coin","search",
-        "open-book","chart-increasing","analytics","pie-chart","clock","teamwork",
-        "strategy","growth","workflow","checklist","deadline","meeting","handshake",
-        "networking","statistics","report","presentation","brain","artificial-intelligence",
-        "robot-2","color-palette","image","video","collaboration","creativity","resume",
-        "approval","priority","layers","settings","home","smartphone","mail","folder","link"
-      ]
+      "description": "Any Icons8 icon name (lowercase, hyphenated). This is the large (96px) icon in the top-right circle. Choose one that visually anchors the whole topic. Icons8 has 100,000+ icons — pick the most visually precise name. The renderer falls back gracefully if a name doesn't exist."
     },
 
     "stats": {
@@ -69,17 +59,7 @@
           },
           "icon": {
             "type": "string",
-            "description": "Icon name from approved list — contextually relevant to the stat meaning.",
-            "enum": [
-              "rocket","idea","lightning-bolt","gear","calendar-3","user-group","shield",
-              "checkmark","star","trophy","target","key","lock","internet","database",
-              "source-code","console","cloud-storage","briefcase","dollar-coin","search",
-              "open-book","chart-increasing","analytics","pie-chart","clock","teamwork",
-              "strategy","growth","workflow","checklist","deadline","meeting","handshake",
-              "networking","statistics","report","presentation","brain","artificial-intelligence",
-              "robot-2","color-palette","image","video","collaboration","creativity","resume",
-              "approval","priority","layers","settings","home","smartphone","mail","folder","link"
-            ]
+            "description": "Any Icons8 icon name (lowercase, hyphenated) — contextually relevant to the stat meaning."
           }
         }
       }
