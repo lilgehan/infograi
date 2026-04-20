@@ -397,8 +397,9 @@ a { color: inherit; text-decoration: none; }
   line-height: 1.35; /* tighter than between-bullet gap so wrapped lines look grouped */
   padding-left: 14px;
   position: relative;
-  overflow: hidden;
-  max-height: 34px; /* 12.5px × 1.35 × 2 lines */
+  /* No max-height — let text flow to its natural height.
+     The card's overflow:hidden handles any genuine overflow at the card level.
+     Per-bullet max-height would clip visible text, which is never acceptable. */
 }
 
 .ig-card-bullet::before {
@@ -425,25 +426,17 @@ a { color: inherit; text-decoration: none; }
 ───────────────────────────────────────── */
 
 /* COMPACT: single-line bullets, tighter gap — for constrained canvases */
-.ig-card--compact .ig-card-bullet {
-  max-height: 17px;   /* 12.5px × 1.35 × 1 line */
-}
+/* No max-height — gap controls spacing; AI word-count controls line count */
 .ig-card--compact .ig-card-bullets {
   gap: 10px;
 }
 
-/* STANDARD: 3-line bullets — default for A4 with real content */
-.ig-card--standard .ig-card-bullet {
-  max-height: 51px;   /* 12.5px × 1.35 × 3 lines */
-}
+/* STANDARD: ~3-line bullets — default for A4 with real content */
 .ig-card--standard .ig-card-bullets {
   gap: 14px;
 }
 
-/* DETAILED: 4-line bullets — for portrait or rich professional content */
-.ig-card--detailed .ig-card-bullet {
-  max-height: 68px;   /* 12.5px × 1.35 × 4 lines */
-}
+/* DETAILED: ~4-line bullets — for portrait or rich professional content */
 .ig-card--detailed .ig-card-bullets {
   gap: 16px;
 }
@@ -597,7 +590,7 @@ a { color: inherit; text-decoration: none; }
 .ig-page[data-size="landscape"] .ig-card-icon-wrap{ width: 48px; height: 48px; margin-bottom: 10px; }
 .ig-page[data-size="landscape"] .ig-card-icon     { width: 32px; height: 32px; }
 .ig-page[data-size="landscape"] .ig-card-title    { font-size: 13px; max-height: 34px; margin-bottom: 8px; }
-.ig-page[data-size="landscape"] .ig-card-bullet   { font-size: 11.5px; max-height: 34px; }
+.ig-page[data-size="landscape"] .ig-card-bullet   { font-size: 11.5px; }
 .ig-page[data-size="landscape"] .ig-callout-body  { font-size: 12px; max-height: 56px; }
 .ig-page[data-size="landscape"] .ig-cards-grid    { grid-template-columns: repeat(3, 1fr); }
 

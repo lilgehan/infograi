@@ -58,7 +58,7 @@
     '.ig-stat-num', '.ig-stat-label',
     '.ig-step-title', '.ig-step-body-text',
     '.ig-callout-title', '.ig-callout-body',
-    '.ig-title', '.ig-subtitle', '.ig-label',
+    '.ig-title', '.ig-subtitle', '.ig-label', '.ig-label-pill',
     '.ig-footer-brand',
     // Tier 2: group containers
     '.ig-stat', '.ig-card', '.ig-step', '.ig-callout', '.ig-header', '.ig-footer',
@@ -91,6 +91,27 @@
   var overflowParents = [];
 
   /* ── Helpers ────────────────────────────────────────────── */
+
+  /**
+   * Returns true if the text cursor is at position 0 inside el
+   * (before the very first character, regardless of whether el has text).
+   * Used to decide whether Backspace should delete the whole element.
+   */
+  function caretAtStart(el) {
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return false;
+    var range = sel.getRangeAt(0);
+    if (!range.collapsed) return false; // text is selected, not just a cursor
+    // Build a range from el's start to the cursor — if it has no text, cursor is at start
+    try {
+      var test = document.createRange();
+      test.selectNodeContents(el);
+      test.setEnd(range.startContainer, range.startOffset);
+      return test.toString().length === 0;
+    } catch (e) {
+      return false;
+    }
+  }
 
   /** Read current transform:translate() values in px */
   function getTr(el) {
@@ -436,20 +457,22 @@
     }
 
     // ── Bullet deletion in edit mode ──────────────────────────
-    // Backspace on an empty bullet <li> removes the list item entirely
-    // (instead of browser-default merging it with the one above).
-    // Works exactly like PowerPoint / Keynote: clear the text, press
-    // Backspace once more on the empty line → bullet disappears.
+    // Backspace at the very start of a bullet (cursor before the first
+    // character, whether the bullet has text or not) removes the entire
+    // <li> including its content — same as PowerPoint / Keynote behaviour.
+    //
+    // Normal Backspace anywhere else in the bullet works as usual
+    // (deletes the character to the left).
     if (mode === 'edit' && e.key === 'Backspace') {
       var active = document.activeElement;
       if (
         active &&
         active.tagName === 'LI' &&
         active.classList.contains('ig-card-bullet') &&
-        active.textContent.trim() === ''
+        caretAtStart(active)
       ) {
         e.preventDefault();
-        // Focus the previous bullet (or next if this is the first)
+        // Move focus to previous bullet; fall back to next if this is the first
         var focusTarget = active.previousElementSibling || active.nextElementSibling;
         active.remove();
         if (focusTarget) {
@@ -457,14 +480,14 @@
           try {
             var r = document.createRange();
             r.selectNodeContents(focusTarget);
-            r.collapse(false); // cursor at end
+            r.collapse(false); // place cursor at end of that bullet
             var s = window.getSelection();
             if (s) { s.removeAllRanges(); s.addRange(r); }
           } catch (ex) {}
         }
+        return; // handled — skip browser default
       }
-      // Whether we handled it or not, let the browser process the key too
-      // (so normal Backspace to delete text still works).
+      // Cursor is not at start → let browser handle (delete char to the left)
       return;
     }
 

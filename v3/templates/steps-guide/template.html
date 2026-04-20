@@ -179,7 +179,7 @@ a { color: inherit; text-decoration: none; }
 .ig-page[data-size="square"] .ig-callout     { height: 88px; }
 .ig-page[data-size="square"] .ig-footer      { height: 38px; }
 .ig-page[data-size="square"] .ig-step-title  { font-size: 12px; max-height: 16px; }
-.ig-page[data-size="square"] .ig-step-body-text { font-size: 11px; max-height: 34px; }
+.ig-page[data-size="square"] .ig-step-body-text { font-size: 11px; }
 
 /* ─────────────────────────────────────────
    LANDSCAPE SIZE OVERRIDES  (1100 × 800)
@@ -198,7 +198,7 @@ a { color: inherit; text-decoration: none; }
 .ig-page[data-size="landscape"] .ig-callout    { height: 88px; }
 .ig-page[data-size="landscape"] .ig-footer     { height: 38px; }
 .ig-page[data-size="landscape"] .ig-step-title { font-size: 12.5px; max-height: 17px; }
-.ig-page[data-size="landscape"] .ig-step-body-text { font-size: 11.5px; max-height: 35px; }
+.ig-page[data-size="landscape"] .ig-step-body-text { font-size: 11.5px; }
 
 /* ─────────────────────────────────────────
    HEADER  (fixed 190px)
@@ -372,7 +372,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-primary);
   line-height: 1.3;
   overflow: hidden;
-  max-height: 18px; /* 13.5px × 1.3 × 1 line */
+  max-height: 18px; /* title stays 1 line — structural heading */
 }
 
 .ig-step-body-text {
@@ -380,8 +380,8 @@ a { color: inherit; text-decoration: none; }
   font-weight: 400;
   color: var(--text-secondary);
   line-height: 1.5;
-  overflow: hidden;
-  max-height: 36px; /* 12px × 1.5 × 2 lines */
+  /* No max-height — body text shows fully.
+     The step's overflow:hidden handles any genuine overflow at the step level. */
 }
 
 /* ─────────────────────────────────────────
