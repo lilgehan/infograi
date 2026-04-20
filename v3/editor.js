@@ -87,6 +87,9 @@
   // hover
   var hovered  = null;
 
+  // overflow parents — elements between sel and .ig-page whose overflow we temporarily set to visible
+  var overflowParents = [];
+
   /* ── Helpers ────────────────────────────────────────────── */
 
   /** Read current transform:translate() values in px */
@@ -231,6 +234,19 @@
     el.style.cursor  = 'move';
     el.style.outline = 'none';
 
+    // Make overflow-hidden ancestors visible so the dragged element isn't clipped.
+    // Walk up from el to (but not including) .ig-page and collect every overflow:hidden parent.
+    // Restored in doDesel().
+    overflowParents = [];
+    var op = el.parentElement;
+    while (op && !op.classList.contains('ig-page')) {
+      if (window.getComputedStyle(op).overflow === 'hidden') {
+        overflowParents.push({ el: op, prev: op.style.overflow });
+        op.style.overflow = 'visible';
+      }
+      op = op.parentElement;
+    }
+
     // Freeze text editing while in sel mode
     if (!isIcon) freezeText(el);
 
@@ -249,6 +265,9 @@
       sel.style.cursor = '';
       sel.style.zIndex = '';
     }
+    // Restore overflow on parents we made visible
+    overflowParents.forEach(function (op) { op.el.style.overflow = op.prev; });
+    overflowParents = [];
     sel      = null;
     isIcon   = false;
     mode     = 'off';
@@ -413,6 +432,39 @@
     if (e.key === 'Escape') {
       if (mode === 'edit') exitEdit();
       else doDesel();
+      return;
+    }
+
+    // ── Bullet deletion in edit mode ──────────────────────────
+    // Backspace on an empty bullet <li> removes the list item entirely
+    // (instead of browser-default merging it with the one above).
+    // Works exactly like PowerPoint / Keynote: clear the text, press
+    // Backspace once more on the empty line → bullet disappears.
+    if (mode === 'edit' && e.key === 'Backspace') {
+      var active = document.activeElement;
+      if (
+        active &&
+        active.tagName === 'LI' &&
+        active.classList.contains('ig-card-bullet') &&
+        active.textContent.trim() === ''
+      ) {
+        e.preventDefault();
+        // Focus the previous bullet (or next if this is the first)
+        var focusTarget = active.previousElementSibling || active.nextElementSibling;
+        active.remove();
+        if (focusTarget) {
+          focusTarget.focus();
+          try {
+            var r = document.createRange();
+            r.selectNodeContents(focusTarget);
+            r.collapse(false); // cursor at end
+            var s = window.getSelection();
+            if (s) { s.removeAllRanges(); s.addRange(r); }
+          } catch (ex) {}
+        }
+      }
+      // Whether we handled it or not, let the browser process the key too
+      // (so normal Backspace to delete text still works).
       return;
     }
 

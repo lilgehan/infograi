@@ -63,10 +63,17 @@ Output ONLY the raw JSON object, nothing else.
 - Callout: the single most surprising or actionable insight — not a summary of the document.
 
 ## CARD DENSITY (mixed-grid only)
-The user message specifies a card_density. Include it as-is in your JSON and match the bullet length:
-- "compact"  → MAX 6 words per bullet. One tight line. No wrapping ever.
-- "standard" → 12–20 words per bullet. 2–3 complete, informative lines. Specific, data-backed.
-- "detailed" → 25–40 words per bullet. 3–4 full sentences. Context + explanation + outcome.
+The user message specifies a card_density. Include it as-is in your JSON and match the bullet length PRECISELY:
+- "compact"  → 4–6 words per bullet. One tight line only. No wrapping.
+- "standard" → Target exactly 15 words per bullet. Hard range: 13–17 words. No shorter, no longer.
+- "detailed" → Target exactly 25 words per bullet. Hard range: 23–27 words.
+
+UNIFORMITY IS MANDATORY — count your words before writing each bullet:
+All 9 bullets (3 cards × 3 bullets) must land within ±2 words of each other.
+Example: if bullet 1 is 15 words, every other bullet must be 13–17 words.
+Bullets that are 10 words in one card and 20 words in another destroy visual alignment.
+
+CARD TITLES: All 3 card titles must be 3–5 words. Keep the same word count across all 3 titles.
 
 ## FONT RULES (baked into templates — do not put font names in JSON)
 - Hero titles: Space Grotesk only (this is handled by the template automatically)
@@ -99,7 +106,7 @@ const MIXED_GRID_SCHEMA_PROMPT = `## JSON SCHEMA — mixed-grid
     { "number": string, "label": string, "icon": string }
   ],
   "cards": [                                // EXACTLY 3 content cards — ALL 3 must use the same bullet length
-    { "icon": string, "title": string, "bullets": [string, string, string] },  // title: 3-6 words; bullets: EXACTLY 3, length matches card_density
+    { "icon": string, "title": string, "bullets": [string, string, string] },  // title: 3-5 words, same count across all cards; bullets: EXACTLY 3, all within ±2 words of each other
     { "icon": string, "title": string, "bullets": [string, string, string] },
     { "icon": string, "title": string, "bullets": [string, string, string] }
   ],
