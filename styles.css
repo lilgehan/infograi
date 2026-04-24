@@ -541,28 +541,75 @@ body {
   pointer-events: none;
 }
 
-/* ── v2.4: Typeable font size number input ───────────── */
-/* Replaces the <select> — same visual footprint */
+/* ── v2.5: Font size combo-box (input + dropdown) ────── */
+.ribbon-size-combo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
 .ribbon-size-input {
-  width: 46px;
+  width: 36px;
   height: 26px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 5px 0 0 5px;
+  border-right: none;
   background: var(--surface);
   color: var(--text);
   font-size: 11px;
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 600;
-  padding: 0 5px;
+  padding: 0 4px;
   text-align: center;
   cursor: text;
   transition: border-color 0.12s;
-  /* Hide browser spinner arrows */
   -moz-appearance: textfield;
 }
 .ribbon-size-input::-webkit-inner-spin-button,
 .ribbon-size-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .ribbon-size-input:focus { outline: none; border-color: var(--ui-accent); }
+.ribbon-size-arrow {
+  width: 16px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 0 5px 5px 0;
+  background: var(--surface);
+  color: var(--t3);
+  font-size: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.12s;
+}
+.ribbon-size-arrow:hover { background: var(--surface2); }
+.ribbon-size-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 52px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 1000;
+  margin-top: 2px;
+}
+.ribbon-size-dropdown.open { display: block; }
+.ribbon-size-dropdown div {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  color: var(--text);
+}
+.ribbon-size-dropdown div:hover { background: var(--surface2); }
+.ribbon-size-dropdown div.active { background: var(--ui-accent); color: #fff; }
 
 /* ── v2.4: Format painter active state ───────────────── */
 /* Glows orange-accent to indicate painter mode is armed */

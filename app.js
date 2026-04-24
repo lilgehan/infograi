@@ -133,13 +133,14 @@ const STATE = {
 };
 
 // ── HISTORY (undo/redo) ─────────────────────────────────────
-// Only toolbar actions push snapshots. Keystrokes are handled
-// by the browser's native contenteditable undo. Ctrl+Z inside
-// the iframe is intercepted to use our stack instead.
+// Toolbar actions and editor.js events push snapshots. Keystrokes
+// are handled by the browser's native contenteditable undo.
+// Ctrl+Z / Ctrl+Y inside the iframe are intercepted to use our stack.
 const HISTORY = {
   stack:   [],   // array of body.innerHTML strings
   index:   -1,   // current position (-1 = empty)
   maxSize: 50,
+  initialHTML: null, // stored separately — undo never goes below this
 };
 
 const TONE_COLORS = {
@@ -814,16 +815,47 @@ function autoFitZoom() {
 function initHistory() {
   HISTORY.stack = [];
   HISTORY.index = -1;
-  // Capture the initial rendered state as entry 0
-  const doc = $('outputFrame')?.contentDocument;
-  const tryCapture = () => {
-    if (!doc?.body) return;
-    HISTORY.stack = [doc.body.innerHTML];
-    HISTORY.index = 0;
-  };
+  HISTORY.initialHTML = null;
+
   const frame = $('outputFrame');
-  if (frame?.contentDocument?.readyState === 'complete') tryCapture();
-  else frame?.addEventListener('load', tryCapture, { once: true });
+  if (!frame) return;
+
+  // Wait for full render (fonts + images loaded) before capturing initial state
+  const tryCapture = () => {
+    const doc = frame.contentDocument;
+    if (!doc?.body || !doc.body.innerHTML.trim()) return;
+
+    // Wait for fonts and a short settle time for images
+    const capture = () => {
+      const html = doc.body.innerHTML;
+      HISTORY.initialHTML = html;
+      HISTORY.stack = [html];
+      HISTORY.index = 0;
+      updateUndoRedoButtons();
+    };
+
+    if (doc.fonts?.ready) {
+      doc.fonts.ready.then(() => setTimeout(capture, 200));
+    } else {
+      setTimeout(capture, 400);
+    }
+  };
+
+  if (frame.contentDocument?.readyState === 'complete') tryCapture();
+  else frame.addEventListener('load', tryCapture, { once: true });
+}
+
+function updateUndoRedoButtons() {
+  const btnUndo = $('btnUndo');
+  const btnRedo = $('btnRedo');
+  if (btnUndo) {
+    btnUndo.disabled = HISTORY.index <= 0;
+    btnUndo.style.opacity = HISTORY.index <= 0 ? '0.35' : '1';
+  }
+  if (btnRedo) {
+    btnRedo.disabled = HISTORY.index >= HISTORY.stack.length - 1;
+    btnRedo.style.opacity = HISTORY.index >= HISTORY.stack.length - 1 ? '0.35' : '1';
+  }
 }
 
 function pushUndoSnapshot() {
@@ -841,31 +873,45 @@ function pushUndoSnapshot() {
   HISTORY.stack.push(html);
   HISTORY.index = HISTORY.stack.length - 1;
 
-  // Enforce max size: drop oldest entry
+  // Enforce max size: drop oldest entry (but never drop index 0 = initial)
   if (HISTORY.stack.length > HISTORY.maxSize) {
-    HISTORY.stack.shift();
+    HISTORY.stack.splice(1, 1); // remove second-oldest, keep initial
     HISTORY.index = HISTORY.stack.length - 1;
   }
+
+  updateUndoRedoButtons();
 }
 
 function performUndo() {
-  if (HISTORY.index <= 0) return;
+  if (HISTORY.index <= 0) return; // never go below initial state
   HISTORY.index--;
   restoreSnapshot(HISTORY.stack[HISTORY.index]);
+  updateUndoRedoButtons();
 }
 
 function performRedo() {
   if (HISTORY.index >= HISTORY.stack.length - 1) return;
   HISTORY.index++;
   restoreSnapshot(HISTORY.stack[HISTORY.index]);
+  updateUndoRedoButtons();
 }
 
 function restoreSnapshot(html) {
   const doc = $('outputFrame')?.contentDocument;
   if (!doc?.body) return;
-  // Restore innerHTML — cursor will reset to body start (MVP trade-off:
-  // preserving cursor requires stable node refs, out of scope for beta)
+
+  // Safety: never restore empty content
+  if (!html || !html.trim()) {
+    if (HISTORY.initialHTML) html = HISTORY.initialHTML;
+    else return;
+  }
+
+  // Tell editor.js to deselect (its state holds stale DOM references)
+  if (doc._igEditor) doc._igEditor.deselect();
+
+  // Restore innerHTML
   doc.body.innerHTML = html;
+
   // Re-run fallback detection on images (icon IIFE stays attached to doc)
   doc.querySelectorAll('img[data-icon]:not([data-local])').forEach(img => {
     if (!img.dataset.fallbackApplied) img.dispatchEvent(new Event('load'));
@@ -1002,6 +1048,11 @@ function cleanupSpans(doc) {
 // Reads computed styles at the cursor/selection and updates
 // the ribbon controls to match. Called on selectionchange
 // with 50ms debounce to stay smooth.
+// Also called when editor.js dispatches ig-editor-select/edit
+// events, which carry the selected element directly.
+
+// Tracks the element selected by editor.js (set by custom events)
+let _editorSelectedEl = null;
 
 let _toolbarDebounce = null;
 function scheduleToolbarUpdate() {
@@ -1013,12 +1064,35 @@ function updateToolbarState() {
   const doc = $('outputFrame')?.contentDocument;
   if (!doc) return;
 
-  const sel = doc.getSelection();
-  if (!sel?.rangeCount) return;
+  let el = null;
 
-  const range    = sel.getRangeAt(0);
-  const rawNode  = range.commonAncestorContainer;
-  const el       = rawNode.nodeType === 3 ? rawNode.parentElement : rawNode;
+  // Priority 1: if there's a live text selection, use that
+  const sel = doc.getSelection();
+  if (sel?.rangeCount && !sel.isCollapsed) {
+    const rawNode = sel.getRangeAt(0).commonAncestorContainer;
+    el = rawNode.nodeType === 3 ? rawNode.parentElement : rawNode;
+  }
+
+  // Priority 2: collapsed cursor inside an editable element
+  if (!el && sel?.rangeCount && sel.isCollapsed) {
+    const rawNode = sel.getRangeAt(0).startContainer;
+    const candidate = rawNode.nodeType === 3 ? rawNode.parentElement : rawNode;
+    // Only use it if inside a contenteditable
+    if (candidate && candidate.closest && candidate.closest('[contenteditable="true"]')) {
+      el = candidate;
+    }
+  }
+
+  // Priority 3: element reported by editor.js custom event
+  if (!el && _editorSelectedEl) {
+    el = _editorSelectedEl;
+    // For group elements, find the first text child for style reading
+    if (el.querySelector) {
+      const textChild = el.querySelector('[contenteditable="true"], [data-ce-frozen]');
+      if (textChild) el = textChild;
+    }
+  }
+
   if (!el || !doc.body?.contains(el)) return;
 
   const computed = doc.defaultView?.getComputedStyle(el);
@@ -1065,14 +1139,46 @@ function adjustFontSizeRelative(delta) {
   const range = sel.getRangeAt(0);
   const el    = range.commonAncestorContainer;
   const node  = el.nodeType === 3 ? el.parentElement : el;
-  const current = parseFloat(doc.defaultView?.getComputedStyle(node)?.fontSize) || 14;
-  applyFormat('fontSize', Math.max(8, Math.round(current + delta)) + 'px');
+  const computed = doc.defaultView?.getComputedStyle(node);
+  const current = parseFloat(computed?.fontSize) || 14;
+  const newSize = Math.max(8, Math.round(current + delta));
+
+  // Check if the entire element content is selected — if so, apply directly
+  // to the element instead of wrapping in a span (avoids line-height issues)
+  const editableEl = node.closest?.('[contenteditable="true"]');
+  if (editableEl) {
+    const rangeTest = doc.createRange();
+    rangeTest.selectNodeContents(editableEl);
+    const fullText = rangeTest.toString();
+    const selText  = sel.toString();
+    if (fullText && selText === fullText) {
+      // Full element selected — apply directly
+      pushUndoSnapshot();
+      editableEl.style.fontSize = newSize + 'px';
+      editableEl.style.lineHeight = '1.55';
+      cleanupSpans(doc);
+      return;
+    }
+  }
+
+  // Partial selection — use span wrapping, include line-height
+  applyFormat('fontSize', newSize + 'px');
+  // Also set line-height on the same span to keep proportional spacing
+  const newSel = doc.getSelection();
+  if (newSel?.rangeCount) {
+    const newRange = newSel.getRangeAt(0);
+    const wrapper = newRange.commonAncestorContainer;
+    const spanEl = wrapper.nodeType === 3 ? wrapper.parentElement : wrapper;
+    if (spanEl?.tagName === 'SPAN') {
+      spanEl.style.lineHeight = '1.55';
+    }
+  }
 }
 
-// ── BULLET INSERTION ───────────────────────────────────────
-// Inserts prefix at the very start of the containing block element,
-// not at the cursor. Handles: P, DIV, SECTION, LI, Hx, SPAN
-// when it's the outermost text container.
+// ── LIST ENGINE (PPT-STYLE) ────────────────────────────────
+// Proper <ul>/<ol> toggle. Click once = wrap in list. Click again = unwrap.
+// Enter inside list continues the list. Backspace at start of <li> exits.
+// Numbered lists auto-renumber via <ol> CSS counters.
 
 const BLOCK_TAGS = new Set(['P','DIV','SECTION','ARTICLE','HEADER','FOOTER','MAIN','LI','H1','H2','H3','H4','H5','H6']);
 
@@ -1082,13 +1188,19 @@ function findBlockAncestor(node, doc) {
     if (BLOCK_TAGS.has(el.tagName?.toUpperCase())) return el;
     el = el.parentElement;
   }
-  // Fallback: return the direct child of body that contains the cursor
   el = node.nodeType === 3 ? node.parentElement : node;
   while (el?.parentElement && el.parentElement !== doc.body) el = el.parentElement;
   return el || doc.body;
 }
 
-function insertBulletAtLineStart(prefix) {
+/**
+ * Toggle a list (ul or ol) on the current block.
+ * If the block is already inside that list type, unwrap it.
+ * If it's inside a different list type, convert it.
+ * If it's not in a list, wrap it.
+ */
+function toggleList(listTag) {
+  // listTag = 'UL' or 'OL'
   const doc = $('outputFrame')?.contentDocument;
   if (!doc) return;
 
@@ -1098,67 +1210,105 @@ function insertBulletAtLineStart(prefix) {
   pushUndoSnapshot();
 
   const range   = sel.getRangeAt(0);
-  const blockEl = findBlockAncestor(range.startContainer, doc);
+  const rawNode = range.startContainer;
+  const blockEl = findBlockAncestor(rawNode, doc);
 
-  // Find the first text node via TreeWalker
-  const walker    = doc.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT);
-  const firstText = walker.nextNode();
+  // Check if already inside a list
+  const parentLi   = blockEl.closest?.('li') || (blockEl.tagName === 'LI' ? blockEl : null);
+  const parentList = parentLi ? parentLi.parentElement : null;
 
-  if (firstText) {
-    const prefixNode = doc.createTextNode(prefix);
-    firstText.parentNode.insertBefore(prefixNode, firstText);
-  } else {
-    blockEl.insertAdjacentText('afterbegin', prefix);
+  if (parentList && (parentList.tagName === 'UL' || parentList.tagName === 'OL')) {
+    if (parentList.tagName === listTag) {
+      // Same list type — unwrap: convert <li> back to <div>
+      const items = [...parentList.querySelectorAll(':scope > li')];
+      const parent = parentList.parentElement;
+      items.forEach(li => {
+        const div = doc.createElement('div');
+        div.innerHTML = li.innerHTML;
+        // Copy contenteditable
+        if (li.getAttribute('contenteditable')) {
+          div.setAttribute('contenteditable', li.getAttribute('contenteditable'));
+        }
+        parent.insertBefore(div, parentList);
+      });
+      parentList.remove();
+    } else {
+      // Different list type — convert (e.g., UL→OL or OL→UL)
+      const newList = doc.createElement(listTag);
+      newList.innerHTML = parentList.innerHTML;
+      // Copy styles
+      newList.style.cssText = parentList.style.cssText;
+      parentList.parentElement.replaceChild(newList, parentList);
+    }
+    return;
   }
+
+  // Not in a list — wrap current block in one
+  const list = doc.createElement(listTag);
+  const li   = doc.createElement('li');
+
+  // Preserve the text content and styles
+  li.innerHTML = blockEl.innerHTML;
+  li.setAttribute('contenteditable', 'true');
+  li.style.cssText = blockEl.style.cssText || '';
+
+  list.appendChild(li);
+  list.style.margin = '0';
+  list.style.paddingLeft = '1.5em';
+
+  blockEl.parentElement.replaceChild(list, blockEl);
+
+  // Place cursor inside the new li
+  try {
+    const r = doc.createRange();
+    r.selectNodeContents(li);
+    r.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  } catch (e) {}
 }
 
-function insertNumberedBullet() {
-  const doc = $('outputFrame')?.contentDocument;
-  if (!doc) return;
+function toggleBulletList() {
+  toggleList('UL');
+}
 
-  const sel = doc.getSelection();
-  if (!sel?.rangeCount) return;
-
-  const range   = sel.getRangeAt(0);
-  const blockEl = findBlockAncestor(range.startContainer, doc);
-
-  let nextNum = 1;
-
-  // Scan previous siblings for a numbered list context
-  let prev = blockEl.previousElementSibling;
-  while (prev) {
-    const txt = prev.textContent.trim();
-    const m   = txt.match(/^(\d+)\./);
-    if (m) { nextNum = parseInt(m[1]) + 1; break; }
-    if (txt.length > 0) break; // non-empty, non-numbered sibling — reset context
-    prev = prev.previousElementSibling;
-  }
-
-  insertBulletAtLineStart(`${nextNum}. `);
+function toggleNumberedList() {
+  toggleList('OL');
 }
 
 // ── FORMAT PAINTER ─────────────────────────────────────────
-// Click to enter painter mode (captures style bundle from selection).
+// Click to enter painter mode (captures style from cursor or selection).
 // Click btnPainter again or press Escape to cancel.
-// Make a selection while active → applies captured styles.
+// Select text while active, then on mouseup → applies captured styles.
+// Cursor changes to crosshair while active.
 
 function activateFormatPainter() {
   if (STATE.formatPainter) {
     // Toggle off
-    STATE.formatPainter = null;
-    $('btnPainter').classList.remove('active');
+    deactivateFormatPainter();
     return;
   }
 
   const doc = $('outputFrame')?.contentDocument;
   if (!doc) return;
 
-  const sel = doc.getSelection();
-  if (!sel?.rangeCount) return;
+  // Determine the source element for style capture
+  let node = null;
 
-  const range = sel.getRangeAt(0);
-  const el    = range.commonAncestorContainer;
-  const node  = el.nodeType === 3 ? el.parentElement : el;
+  const sel = doc.getSelection();
+  if (sel?.rangeCount) {
+    const range = sel.getRangeAt(0);
+    const el = range.commonAncestorContainer;
+    node = el.nodeType === 3 ? el.parentElement : el;
+  }
+
+  // Fallback: use the element reported by editor.js
+  if (!node && _editorSelectedEl) {
+    node = _editorSelectedEl;
+    const textChild = node.querySelector?.('[contenteditable="true"], [data-ce-frozen]');
+    if (textChild) node = textChild;
+  }
+
   if (!node) return;
 
   const computed = doc.defaultView?.getComputedStyle(node);
@@ -1173,9 +1323,19 @@ function activateFormatPainter() {
     textDecoration: computed.textDecorationLine,
   };
   $('btnPainter').classList.add('active');
+
+  // Change cursor to crosshair inside iframe
+  if (doc.body) doc.body.style.cursor = 'crosshair';
 }
 
-// Called on selectionchange when format painter is active
+function deactivateFormatPainter() {
+  STATE.formatPainter = null;
+  $('btnPainter').classList.remove('active');
+  const doc = $('outputFrame')?.contentDocument;
+  if (doc?.body) doc.body.style.cursor = '';
+}
+
+// Called on mouseup inside iframe when format painter is active
 function tryApplyFormatPainter() {
   if (!STATE.formatPainter) return;
 
@@ -1217,8 +1377,7 @@ function tryApplyFormatPainter() {
   cleanupSpans(doc);
 
   // Deactivate after applying
-  STATE.formatPainter = null;
-  $('btnPainter').classList.remove('active');
+  deactivateFormatPainter();
 }
 
 // ── RIBBON SETUP ───────────────────────────────────────────
@@ -1227,10 +1386,23 @@ function tryApplyFormatPainter() {
 // low risk — justify commands aren't deprecated in practice).
 
 function setupRibbon() {
-  // Font family
+  // Font family — try restoring selection; if no selection, apply to editor-selected element
   $('rbFont').addEventListener('change', (e) => {
+    const doc = $('outputFrame')?.contentDocument;
+    if (!doc) return;
+
     restoreFrameSelection();
-    applyFormat('fontFamily', e.target.value);
+    const sel = doc.getSelection();
+
+    // If we have a valid selection, use applyFormat
+    if (sel?.rangeCount && !sel.isCollapsed) {
+      applyFormat('fontFamily', e.target.value);
+    } else if (_editorSelectedEl) {
+      // No text selection but editor has a selected element — apply directly
+      pushUndoSnapshot();
+      const target = _editorSelectedEl.querySelector?.('[contenteditable="true"], [data-ce-frozen]') || _editorSelectedEl;
+      target.style.fontFamily = e.target.value;
+    }
   });
 
   // Font size number input — apply on Enter or blur
@@ -1238,13 +1410,58 @@ function setupRibbon() {
   const applySizeInput = () => {
     const px = Math.max(8, Math.min(96, parseInt(rbSize.value, 10) || 14));
     rbSize.value = px; // normalize display
+
+    const doc = $('outputFrame')?.contentDocument;
+    if (!doc) return;
+
     restoreFrameSelection();
-    applyFormat('fontSize', px + 'px');
+    const sel = doc.getSelection();
+
+    if (sel?.rangeCount && !sel.isCollapsed) {
+      applyFormat('fontSize', px + 'px');
+    } else if (_editorSelectedEl) {
+      pushUndoSnapshot();
+      const target = _editorSelectedEl.querySelector?.('[contenteditable="true"], [data-ce-frozen]') || _editorSelectedEl;
+      target.style.fontSize = px + 'px';
+      scheduleToolbarUpdate();
+    }
   };
   rbSize.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applySizeInput(); } });
   rbSize.addEventListener('blur', applySizeInput);
   // Prevent the number input from stealing iframe selection on click
   rbSize.addEventListener('mousedown', saveFrameSelection);
+
+  // Font size dropdown combo-box
+  const sizeDropdown = $('rbSizeDropdown');
+  const sizeArrow    = $('rbSizeArrow');
+
+  sizeArrow.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    saveFrameSelection();
+    sizeDropdown.classList.toggle('open');
+    // Highlight the current size in the dropdown
+    const currentSize = rbSize.value;
+    sizeDropdown.querySelectorAll('div').forEach(d => {
+      d.classList.toggle('active', d.dataset.size === currentSize);
+    });
+  });
+
+  sizeDropdown.querySelectorAll('div[data-size]').forEach(d => {
+    d.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const px = parseInt(d.dataset.size, 10);
+      rbSize.value = px;
+      sizeDropdown.classList.remove('open');
+      applySizeInput();
+    });
+  });
+
+  // Close dropdown on click outside
+  document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest?.('#rbSizeCombo')) {
+      sizeDropdown.classList.remove('open');
+    }
+  });
 
   // A↑ A↓ relative size
   $('btnAUp').addEventListener('mousedown',   (e) => { e.preventDefault(); adjustFontSizeRelative(+2); });
@@ -1280,8 +1497,8 @@ function setupRibbon() {
   });
 
   // Lists
-  $('btnBulletList').addEventListener('mousedown', (e) => { e.preventDefault(); insertBulletAtLineStart('• '); });
-  $('btnNumberList').addEventListener('mousedown', (e) => { e.preventDefault(); insertNumberedBullet(); });
+  $('btnBulletList').addEventListener('mousedown', (e) => { e.preventDefault(); toggleBulletList(); });
+  $('btnNumberList').addEventListener('mousedown', (e) => { e.preventDefault(); toggleNumberedList(); });
 
   // Format painter
   $('btnPainter').addEventListener('mousedown', (e) => { e.preventDefault(); activateFormatPainter(); });
@@ -1303,13 +1520,43 @@ function setupRibbonForFrame() {
         if (sel?.rangeCount > 0) STATE.savedRange = sel.getRangeAt(0).cloneRange();
       } catch {}
       scheduleToolbarUpdate();
-      // If format painter is active and user just made a selection, apply it
-      if (STATE.formatPainter) tryApplyFormatPainter();
+    });
+
+    // Format painter applies on mouseup (not selectionchange) —
+    // user finishes their selection, THEN the style is applied
+    doc.addEventListener('mouseup', () => {
+      if (STATE.formatPainter) {
+        // Small delay to let selection finalize
+        setTimeout(tryApplyFormatPainter, 10);
+      }
     });
 
     // Also update toolbar on click — ensures readout fires even without text selection
-    // (important for v3 templates where cursor placement fires selectionchange unreliably)
     doc.addEventListener('click', scheduleToolbarUpdate);
+
+    // ── Custom events from editor.js ──
+    // ig-editor-select: element selected or mode changed
+    doc.addEventListener('ig-editor-select', (e) => {
+      _editorSelectedEl = e.detail?.element || null;
+      scheduleToolbarUpdate();
+    });
+
+    // ig-editor-edit: entered text edit mode
+    doc.addEventListener('ig-editor-edit', (e) => {
+      _editorSelectedEl = e.detail?.element || null;
+      scheduleToolbarUpdate();
+    });
+
+    // ig-editor-deselect: nothing selected
+    doc.addEventListener('ig-editor-deselect', () => {
+      _editorSelectedEl = null;
+    });
+
+    // ig-editor-snapshot: editor.js requests an undo snapshot
+    // (fired after drag/resize operations)
+    doc.addEventListener('ig-editor-snapshot', () => {
+      pushUndoSnapshot();
+    });
 
     // Intercept Ctrl+Z / Ctrl+Y inside iframe to use our history stack
     doc.addEventListener('keydown', (e) => {
@@ -1319,8 +1566,145 @@ function setupRibbonForFrame() {
       if ((e.shiftKey && e.key === 'z') || e.key === 'y') { e.preventDefault(); performRedo(); }
       // Cancel format painter on Escape
       if (e.key === 'Escape' && STATE.formatPainter) {
-        STATE.formatPainter = null;
-        $('btnPainter').classList.remove('active');
+        deactivateFormatPainter();
+      }
+    });
+
+    // ── List keyboard handling inside iframe ──
+    // Enter inside <li>: continue list. Backspace at start of <li>: exit list.
+    // Typing "1. " at start of a block: auto-convert to numbered list.
+    doc.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const sel = doc.getSelection();
+        if (!sel?.rangeCount) return;
+        const node = sel.getRangeAt(0).startContainer;
+        const li = (node.nodeType === 3 ? node.parentElement : node)?.closest?.('li');
+        if (!li) return;
+
+        e.preventDefault();
+        pushUndoSnapshot();
+
+        // If li is empty, exit the list
+        if (!li.textContent.trim()) {
+          const list = li.parentElement;
+          const parent = list.parentElement;
+          const div = doc.createElement('div');
+          div.setAttribute('contenteditable', 'true');
+          div.innerHTML = '<br>';
+          parent.insertBefore(div, list.nextSibling);
+          li.remove();
+          // Remove list if empty
+          if (!list.children.length) list.remove();
+          // Focus new div
+          const r = doc.createRange();
+          r.selectNodeContents(div);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+          return;
+        }
+
+        // Create new li after current
+        const newLi = doc.createElement('li');
+        newLi.setAttribute('contenteditable', 'true');
+        newLi.style.cssText = li.style.cssText || '';
+        newLi.innerHTML = '<br>';
+        li.parentElement.insertBefore(newLi, li.nextSibling);
+        // Focus new li
+        const r = doc.createRange();
+        r.selectNodeContents(newLi);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+
+      // Backspace at start of <li>: convert to regular div and exit list
+      if (e.key === 'Backspace') {
+        const sel = doc.getSelection();
+        if (!sel?.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        if (!range.collapsed) return;
+        const node = range.startContainer;
+        const li = (node.nodeType === 3 ? node.parentElement : node)?.closest?.('li');
+        if (!li) return;
+
+        // Check if cursor is at start of li
+        try {
+          const test = doc.createRange();
+          test.selectNodeContents(li);
+          test.setEnd(range.startContainer, range.startOffset);
+          if (test.toString().length > 0) return; // cursor not at start
+        } catch { return; }
+
+        e.preventDefault();
+        pushUndoSnapshot();
+
+        const list = li.parentElement;
+        const parent = list.parentElement;
+        const div = doc.createElement('div');
+        div.innerHTML = li.innerHTML;
+        div.setAttribute('contenteditable', 'true');
+        parent.insertBefore(div, list);
+        li.remove();
+        if (!list.children.length) list.remove();
+        // Focus the new div
+        const r = doc.createRange();
+        r.selectNodeContents(div);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+    });
+
+    // Auto-detect "1. " or "• " typed at start of block → convert to list
+    doc.addEventListener('input', (e) => {
+      const sel = doc.getSelection();
+      if (!sel?.rangeCount) return;
+      const node = sel.getRangeAt(0).startContainer;
+      const block = findBlockAncestor(node, doc);
+      if (!block || block.closest?.('li')) return; // already in a list
+
+      const text = block.textContent;
+      // Match "1. " at the very start
+      const numMatch = text.match(/^(\d+)\.\s/);
+      if (numMatch) {
+        pushUndoSnapshot();
+        block.textContent = text.slice(numMatch[0].length);
+        // Wrap in <ol>
+        const ol = doc.createElement('ol');
+        ol.style.margin = '0';
+        ol.style.paddingLeft = '1.5em';
+        if (numMatch[1] !== '1') ol.setAttribute('start', numMatch[1]);
+        const li = doc.createElement('li');
+        li.innerHTML = block.innerHTML || '<br>';
+        li.setAttribute('contenteditable', 'true');
+        ol.appendChild(li);
+        block.parentElement.replaceChild(ol, block);
+        const r = doc.createRange();
+        r.selectNodeContents(li);
+        r.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        return;
+      }
+
+      // Match "• " or "- " or "* " at the very start
+      if (/^[•\-\*]\s/.test(text)) {
+        pushUndoSnapshot();
+        block.textContent = text.slice(2);
+        const ul = doc.createElement('ul');
+        ul.style.margin = '0';
+        ul.style.paddingLeft = '1.5em';
+        const li = doc.createElement('li');
+        li.innerHTML = block.innerHTML || '<br>';
+        li.setAttribute('contenteditable', 'true');
+        ul.appendChild(li);
+        block.parentElement.replaceChild(ul, block);
+        const r = doc.createRange();
+        r.selectNodeContents(li);
+        r.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(r);
       }
     });
 
@@ -1356,10 +1740,67 @@ function setupZoom() {
   $('btnZoomIn').addEventListener('click',  () => changeZoom(+0.1));
   $('btnZoomOut').addEventListener('click', () => changeZoom(-0.1));
 
-  document.querySelector('.cbody').addEventListener('wheel', (e) => {
+  const cbody = document.querySelector('.cbody');
+
+  // Ctrl+wheel zoom (trackpad pinch sends Ctrl+wheel in most browsers)
+  cbody.addEventListener('wheel', (e) => {
     if (!e.ctrlKey) return;
     e.preventDefault();
     changeZoom(e.deltaY < 0 ? +0.05 : -0.05);
+  }, { passive: false });
+
+  // Prevent browser-level pinch zoom on the entire page.
+  // Route two-finger gestures on .cbody to our zoom; block them elsewhere.
+  document.addEventListener('wheel', (e) => {
+    // Ctrl+wheel outside .cbody = browser zoom attempt — block it
+    if (e.ctrlKey && !e.target.closest('.cbody')) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Touch-based pinch zoom on .cbody
+  let touchStartDist = 0;
+  let touchStartZoom = 0;
+
+  cbody.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchStartDist = Math.sqrt(dx * dx + dy * dy);
+      touchStartZoom = STATE.zoomLevel;
+    }
+  }, { passive: false });
+
+  cbody.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && touchStartDist > 0) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const scale = dist / touchStartDist;
+      STATE.zoomLevel = Math.max(0.2, Math.min(3.0, touchStartZoom * scale));
+      applyZoom(false);
+    }
+  }, { passive: false });
+
+  cbody.addEventListener('touchend', () => { touchStartDist = 0; });
+
+  // Block all touch-zoom outside .cbody (prevent page-level scaling)
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches.length >= 2 && !e.target.closest('.cbody')) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Safari gesturechange event
+  cbody.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    changeZoom((e.scale - 1) * 0.3);
+  }, { passive: false });
+
+  document.addEventListener('gesturechange', (e) => {
+    if (!e.target.closest('.cbody')) e.preventDefault();
   }, { passive: false });
 }
 
