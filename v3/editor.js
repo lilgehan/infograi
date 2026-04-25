@@ -1,7 +1,8 @@
 /**
  * Infogr.ai v3 — Object Editor
  *
- * Injected into every v3 infographic iframe by preprocessHTMLv3().
+ * Loaded as a regular <script> in the main page (index.html).
+ * Scoped to #editCanvas — only fires on elements inside that div.
  * Adds PowerPoint-style object editing: click to select, drag to move,
  * corner handles to resize, double-click to edit text, arrow keys to nudge.
  *
@@ -20,14 +21,6 @@
  *   Escape in edit mode  → exit to selected mode
  *   Escape in sel mode   → deselect
  *   Arrow keys (sel)     → nudge 1px; Shift+Arrow = 10px
- *   Ctrl+C (sel)         → copy selected box
- *   Ctrl+V (sel)         → paste copied box on top of original
- *
- * ── Custom events dispatched on document ─────────────────────────
- *   'ig-editor-select'   → { detail: { element, mode, isIcon } }
- *   'ig-editor-edit'     → { detail: { element } }
- *   'ig-editor-deselect' → { detail: null }
- *   'ig-editor-snapshot' → { detail: null }  (request undo snapshot from outer frame)
  *
  * ── Architecture ─────────────────────────────────────────────────
  *   Objects keep their original flexbox/grid positions.
@@ -98,10 +91,6 @@
   // overflow parents — elements between sel and .ig-page whose overflow we temporarily set to visible
   var overflowParents = [];
 
-  // clipboard — stores outerHTML of copied box
-  var clipboardHTML = null;
-  var clipboardParent = null; // parent element where the copy was taken from
-
   /* ── Helpers ────────────────────────────────────────────── */
 
   /**
@@ -141,11 +130,6 @@
     ovl.style.top    = r.top    + 'px';
     ovl.style.width  = r.width  + 'px';
     ovl.style.height = r.height + 'px';
-  }
-
-  /** Dispatch a custom event on the document for the outer frame to listen to */
-  function emitEvent(name, detail) {
-    document.dispatchEvent(new CustomEvent(name, { detail: detail || null }));
   }
 
   /* ── Resize handle factory ──────────────────────────────── */
@@ -292,9 +276,6 @@
     ovl = buildOverlay();
     document.body.appendChild(ovl);
     posOverlay();
-
-    // Notify outer frame — provides element reference for toolbar sync
-    emitEvent('ig-editor-select', { element: el, mode: 'sel', isIcon: isIcon });
   }
 
   /* ── Deselect ────────────────────────────────────────────── */
@@ -314,9 +295,6 @@
     mode     = 'off';
     dragging = false;
     resizing = false;
-
-    // Notify outer frame
-    emitEvent('ig-editor-deselect');
   }
 
   /* ── Enter text-edit mode ───────────────────────────────── */
@@ -344,9 +322,6 @@
         if (s) { s.removeAllRanges(); s.addRange(range); }
       } catch (e) {}
     }
-
-    // Notify outer frame — toolbar should now read live selection styles
-    emitEvent('ig-editor-edit', { element: sel });
   }
 
   /* ── Exit text-edit mode → back to sel ─────────────────── */
@@ -360,9 +335,6 @@
     // Blur any focused text element
     var active = document.activeElement;
     if (active && sel.contains(active)) active.blur();
-
-    // Notify outer frame — toolbar should read element styles directly
-    emitEvent('ig-editor-select', { element: sel, mode: 'sel', isIcon: isIcon });
   }
 
   /* ── Find selectable ancestor ───────────────────────────── */
@@ -370,28 +342,24 @@
   // not the card. Walk up twice: once for icons, once for groups.
 
   function findObj(target) {
+    // Only operate inside the edit canvas (not toolbar, sidebar, etc.)
+    var canvas = document.getElementById('editCanvas');
+    if (!canvas || !canvas.contains(target)) return null;
+
     // Pass 1: look for icon
     var el = target;
-    while (el && el !== document.body) {
+    while (el && el !== canvas) {
       if (el.matches && el.matches(ICO)) return { el: el, icon: true };
       el = el.parentElement;
     }
     // Pass 2: look for group
     el = target;
-    while (el && el !== document.body) {
+    while (el && el !== canvas) {
       if (el.matches && el.matches(GRP)) return { el: el, icon: false };
       el = el.parentElement;
     }
     return null;
   }
-
-  /* ── Public API exposed on document for outer frame ─────── */
-  // Allows outer frame to call doDesel() after undo/redo restoreSnapshot.
-
-  document._igEditor = {
-    deselect: function () { doDesel(); },
-    getState: function () { return { sel: sel, mode: mode, isIcon: isIcon }; },
-  };
 
   /* ── EVENT LISTENERS ────────────────────────────────────── */
 
@@ -477,24 +445,13 @@
 
   // ── mouseup: finish drag or resize ──
   document.addEventListener('mouseup', function () {
-    // If drag or resize actually happened, request undo snapshot
-    if ((dragging || resizing) && sel) {
-      var dx = Math.abs(startMX - (window._lastMX || startMX));
-      // Only snapshot if the mouse actually moved (not a click-in-place)
-      if (dragging && (Math.abs(origTX - getTr(sel)[0]) > 0 || Math.abs(origTY - getTr(sel)[1]) > 0)) {
-        emitEvent('ig-editor-snapshot');
-      }
-      if (resizing) {
-        emitEvent('ig-editor-snapshot');
-      }
-    }
     dragging = false;
     resizing = false;
     rzHandle = '';
     if (sel && mode === 'sel') sel.style.cursor = 'move';
   });
 
-  // ── keydown: Escape, arrow keys, copy/paste ──
+  // ── keydown: Escape, arrow keys ──
   document.addEventListener('keydown', function (e) {
     if (!sel) return;
 
@@ -502,38 +459,6 @@
       if (mode === 'edit') exitEdit();
       else doDesel();
       return;
-    }
-
-    // ── Copy / Paste in sel mode ──────────────────────────────
-    var mod = e.ctrlKey || e.metaKey;
-    if (mod && mode === 'sel') {
-      if (e.key === 'c') {
-        // Copy selected element
-        e.preventDefault();
-        clipboardHTML = sel.outerHTML;
-        clipboardParent = sel.parentElement;
-        return;
-      }
-      if (e.key === 'v' && clipboardHTML && clipboardParent) {
-        // Paste: insert copy right after the original element's position
-        e.preventDefault();
-        emitEvent('ig-editor-snapshot'); // snapshot before paste
-        var temp = document.createElement('div');
-        temp.innerHTML = clipboardHTML;
-        var clone = temp.firstElementChild;
-        if (clone) {
-          // Insert after the selected element (or into the original parent)
-          if (sel.parentElement) {
-            sel.parentElement.insertBefore(clone, sel.nextSibling);
-          } else {
-            clipboardParent.appendChild(clone);
-          }
-          // Select the pasted element
-          doDesel();
-          doSelect(clone, false);
-        }
-        return;
-      }
     }
 
     // ── Bullet deletion in edit mode ──────────────────────────

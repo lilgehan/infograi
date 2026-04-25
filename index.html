@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Infogr.ai — AI Infographic Generator</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
@@ -81,30 +81,10 @@
           <option value="Times New Roman">Times New Roman</option>
         </select>
 
-        <!-- Font size — combo-box: typeable input + dropdown (v2.5) -->
-        <div class="ribbon-size-combo" id="rbSizeCombo">
-          <input class="ribbon-select ribbon-size-input" type="text"
-                 id="rbSizeInput" value="14"
-                 title="Font size (px)" autocomplete="off" />
-          <button class="ribbon-size-arrow" id="rbSizeArrow" title="Font size presets" tabindex="-1">&#9662;</button>
-          <div class="ribbon-size-dropdown" id="rbSizeDropdown">
-            <div data-size="8">8</div>
-            <div data-size="9">9</div>
-            <div data-size="10">10</div>
-            <div data-size="11">11</div>
-            <div data-size="12">12</div>
-            <div data-size="14">14</div>
-            <div data-size="16">16</div>
-            <div data-size="18">18</div>
-            <div data-size="20">20</div>
-            <div data-size="24">24</div>
-            <div data-size="28">28</div>
-            <div data-size="32">32</div>
-            <div data-size="36">36</div>
-            <div data-size="48">48</div>
-            <div data-size="72">72</div>
-          </div>
-        </div>
+        <!-- Font size — typeable number input (v2.4) -->
+        <input class="ribbon-select ribbon-size-input" type="number"
+               id="rbSizeInput" min="8" max="96" value="14"
+               title="Font size (px)" />
 
         <!-- A↑ A↓ relative size buttons -->
         <button class="rbtn aa-btn" id="btnAUp"   title="Increase font size"><span class="aa-big">A</span></button>
@@ -204,6 +184,8 @@
         </div>
       </div>
     </div>
+    <!-- Hidden iframe used ONLY for export (PNG/PDF/HTML) -->
+    <iframe id="exportFrame" style="display:none;position:absolute;left:-9999px;"></iframe>
 
   </main>
 </div>
@@ -211,6 +193,7 @@
 <!-- Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="v3/editor.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>
