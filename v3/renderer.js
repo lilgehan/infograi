@@ -1,7 +1,8 @@
 /**
  * Infogr.ai v3 — Renderer
  *
- * fillTemplate(json, layoutId, tone) → HTML string
+ * fillTemplate(json, layoutId, tone) → HTML string       [legacy template path]
+ * renderFromContent(contentJson, tone, size, accentColor) [content-v1 path — Phase 2]
  *
  * The single function that turns AI-generated JSON into a ready-to-render
  * infographic HTML string.
@@ -14,9 +15,12 @@
  * When integrating into app.js: call `await initRenderer()` once on startup
  * to pre-cache templates, then call `fillTemplate(json, layoutId, tone)` synchronously.
  *
- * Phase 1 supports: 'mixed-grid', 'steps-guide'
- * Phase 2 adds:     'timeline', 'funnel', 'comparison', 'flowchart'
+ * Legacy path:   'mixed-grid', 'steps-guide'  → fillTemplate()
+ * Content-v1:    format:'content-v1'           → renderFromContent()
  */
+
+import { renderSection, BOXES_CSS } from './smart-layouts.js';
+import { GRID_CSS, clampColumns }    from './grid.js';
 
 /* ── Template cache (populated by initRenderer / loadTemplate) ── */
 const TEMPLATES = {};
@@ -417,6 +421,210 @@ export async function fillTemplateAsync(json, layoutId, tone, size, accentColor)
   const layout = layoutId || json.layout || 'mixed-grid';
   await loadTemplate(layout);
   return fillTemplate(json, layoutId, tone, size, accentColor);
+}
+
+/* ─────────────────────────────────────────
+   CONTENT-V1: renderFromContent
+   Phase 2 rendering path — no templates, pure programmatic layout.
+   Takes a validated content-v1 JSON document and returns a full
+   HTML string using the same pipeline as fillTemplate() output.
+───────────────────────────────────────── */
+
+/** Google Fonts URL shared by both template and content-v1 paths. */
+const GOOGLE_FONTS_URL =
+  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap';
+
+/**
+ * Build the header HTML for a content-v1 infographic.
+ * Mirrors the `.ig-header` block used in legacy templates.
+ */
+function buildContentHeader(json) {
+  const label    = json.label    ? `<span class="ig-label">${escapeHtml(json.label)}</span>` : '';
+  const heroIcon = json.hero_icon
+    ? `<div class="ig-hero-icon-wrap" style="text-align:center;margin-bottom:10px;">${renderIconHtml(json.hero_icon, 'ig-hero-icon', 64)}</div>`
+    : '';
+  const title    = json.title    ? `<h1 class="ig-title">${escapeHtml(json.title)}</h1>` : '';
+  const subtitle = json.subtitle ? `<p class="ig-subtitle">${escapeHtml(json.subtitle)}</p>` : '';
+  if (!label && !heroIcon && !title && !subtitle) return '';
+  return `<div class="ig-header">${heroIcon}${label}${title}${subtitle}</div>`;
+}
+
+/**
+ * Build optional stats row HTML.
+ */
+function buildStatsHtml(stats) {
+  if (!Array.isArray(stats) || stats.length === 0) return '';
+  return `<div class="ig-stats-row" data-slot="stats-loop">${stats.map(renderStat).join('')}</div>`;
+}
+
+/**
+ * Build optional callout HTML.
+ */
+function buildCalloutHtml(callout) {
+  if (!callout || (!callout.title && !callout.body)) return '';
+  return `<div class="ig-callout">
+  <div class="ig-callout-title">${escapeHtml(callout.title || '')}</div>
+  <div class="ig-callout-body">${escapeHtml(callout.body || '')}</div>
+</div>`;
+}
+
+/**
+ * Build footer HTML.
+ */
+function buildFooterHtml(brand) {
+  return `<div class="ig-footer"><span class="ig-footer-brand">${escapeHtml(brand || 'Infogr.ai')}</span></div>`;
+}
+
+/**
+ * Render a content-v1 JSON document into a full HTML string.
+ * Bypasses template files — all layout is programmatic via smart-layouts + grid.
+ *
+ * The returned HTML goes through the same preprocessHTMLv3() → renderHTML()
+ * pipeline in app.js as legacy template output.
+ *
+ * @param {object} contentJson  — validated content-v1 document
+ * @param {string} [tone]       — 'professional' | 'bold' | 'minimal' | 'playful'
+ * @param {string} [size]       — 'a4' | 'portrait' | 'square' | 'landscape'
+ * @param {string} [accentColor] — hex color override e.g. '#E11D48'
+ * @returns {string} Full HTML string
+ */
+export function renderFromContent(contentJson, tone, size, accentColor) {
+  const toneId  = tone  || contentJson.tone  || 'professional';
+  const sizeId  = size  || contentJson.size  || 'a4';
+  const accent  = accentColor || TONE_ACCENT_DEFAULTS[toneId] || '#2563EB';
+
+  // Compute --accent-soft from accent hex
+  let accentSoft = 'rgba(37,99,235,0.1)';
+  try {
+    const hex = accent.replace('#', '');
+    const r = parseInt(hex.slice(0,2), 16);
+    const g = parseInt(hex.slice(2,4), 16);
+    const b = parseInt(hex.slice(4,6), 16);
+    accentSoft = `rgba(${r},${g},${b},0.1)`;
+  } catch (_) { /* use default */ }
+
+  // Render each content section
+  const sections = Array.isArray(contentJson.sections) ? contentJson.sections : [];
+  const renderedSections = sections.map(section => renderSection(section, toneId));
+
+  // Compose sections — currently stacked vertically (1 section per row).
+  // Phase 3 will wire page-level column layout via grid.js renderSections().
+  const sectionsHtml = renderedSections
+    .map(s => `<div class="ig-content-section">${s}</div>`)
+    .join('');
+
+  // Assemble page body
+  const header  = buildContentHeader(contentJson);
+  const stats   = buildStatsHtml(contentJson.stats);
+  const callout = buildCalloutHtml(contentJson.callout);
+  const footer  = buildFooterHtml(contentJson.footer_brand);
+
+  const accentOverrideCSS = `
+    :root {
+      --accent: ${accent};
+      --accent-soft: ${accentSoft};
+    }
+  `;
+
+  // Minimal content-v1 layout CSS (header/footer/section spacing).
+  // Box + grid CSS is injected via BOXES_CSS + GRID_CSS imports.
+  const contentLayoutCSS = `
+    .ig-page .ig-header {
+      text-align: center;
+      padding: 32px 32px 20px;
+    }
+    .ig-page .ig-header .ig-label {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+      font-size: 0.7em;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 3px 12px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .ig-page .ig-header .ig-title {
+      font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+      font-size: 1.6em;
+      font-weight: 700;
+      color: var(--text-primary, #111827);
+      margin: 0 0 8px;
+      line-height: 1.2;
+    }
+    .ig-page .ig-header .ig-subtitle {
+      font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+      font-size: 0.9em;
+      color: var(--text-secondary, #6b7280);
+      margin: 0;
+      line-height: 1.5;
+    }
+    .ig-page .ig-content-section {
+      padding: 0 28px 20px;
+    }
+    .ig-page .ig-stats-row {
+      display: flex;
+      gap: 16px;
+      padding: 8px 28px 20px;
+      flex-wrap: wrap;
+    }
+    .ig-page .ig-callout {
+      margin: 0 28px 20px;
+      background: var(--accent-soft, rgba(37,99,235,.1));
+      border-left: 4px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+    }
+    .ig-page .ig-callout-title {
+      font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+      font-size: 0.9em;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .ig-page .ig-callout-body {
+      font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+      font-size: 0.8em;
+      color: var(--text-secondary, #6b7280);
+      line-height: 1.45;
+    }
+    .ig-page .ig-footer {
+      padding: 14px 28px;
+      border-top: 1px solid var(--card-border, #e5e7eb);
+      text-align: right;
+    }
+    .ig-page .ig-footer-brand {
+      font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+      font-size: 0.7em;
+      color: var(--text-secondary, #6b7280);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+  `;
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="${GOOGLE_FONTS_URL}" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <style>${accentOverrideCSS}${BOXES_CSS}${GRID_CSS}${contentLayoutCSS}</style>
+</head>
+<body>
+  <div class="ig-page" data-tone="${escapeHtml(toneId)}" data-size="${escapeHtml(sizeId)}">
+    ${header}
+    ${sectionsHtml}
+    ${stats}
+    ${callout}
+    ${footer}
+  </div>
+</body>
+</html>`;
 }
 
 export { iconUrl, escapeHtml, TONE_ACCENT_DEFAULTS };

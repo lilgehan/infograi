@@ -5,8 +5,9 @@
  * No external dependencies — runs in the browser.
  *
  * Usage:
- *   import { validateSchema, sanitiseJson } from './schema.js';
- *   const { valid, errors, fixed } = validateSchema(json, 'mixed-grid');
+ *   import { validateSchema, detectAndParse } from './schema.js';
+ *   const { data, format } = await detectAndParse(rawText);
+ *   // format: 'content-v1' | 'template' | 'unknown'
  */
 
 /**
@@ -15,6 +16,8 @@
  * The authoritative schema definitions live in templates/{id}/schema.json —
  * keep these in sync when schemas change.
  */
+
+import { detectFormat, validateContent } from './content-schema.js';
 
 /* Minimal inline schemas used for validation (full schemas are in the .json files for docs/tooling). */
 const SCHEMAS = {
@@ -206,6 +209,7 @@ export function extractJsonFromResponse(rawText) {
 
 /**
  * Full pipeline: extract → validate → return fixed JSON or throw.
+ * Legacy path for template-based layouts (mixed-grid, steps-guide).
  *
  * @param {string} rawText    — raw AI response text
  * @param {string} layoutId   — expected layout
@@ -223,4 +227,53 @@ export function parseAndValidate(rawText, layoutId) {
   }
 
   return fixed;
+}
+
+/**
+ * Format-aware pipeline: extract → auto-detect format → validate → return.
+ *
+ * This is the Phase 2 entry point. It auto-detects whether the AI returned
+ * a content-v1 document or a legacy template document, then validates
+ * and fixes it using the appropriate validator.
+ *
+ * Use this in callAgentV3() instead of parseAndValidate() when layout is
+ * 'content-v1' or 'auto'.
+ *
+ * @param {string} rawText    — raw AI response text
+ * @param {string} [hint]     — optional layout hint ('content-v1' | 'mixed-grid' | etc.)
+ * @returns {{ data: object, format: 'content-v1'|'template'|'unknown' }}
+ * @throws {Error}            — if JSON extraction fails entirely
+ */
+export function detectAndParse(rawText, hint) {
+  const parsed = extractJsonFromResponse(rawText);
+  if (!parsed) throw new Error('[v3 schema] Could not extract JSON from AI response.');
+
+  // Auto-detect format from the JSON itself
+  const detected = detectFormat(parsed);
+
+  // Honor an explicit hint if detection is ambiguous
+  const format = detected !== 'unknown' ? detected : (hint === 'content-v1' ? 'content-v1' : detected);
+
+  if (format === 'content-v1') {
+    // Validate with the content-v1 validator from content-schema.js
+    const { errors, fixed } = validateContent(parsed);
+    if (errors.length > 0) {
+      console.warn('[v3 schema] content-v1 validation issues:', errors);
+    }
+    return { data: fixed, format: 'content-v1' };
+  }
+
+  if (format === 'template') {
+    // Determine which template it is from the layout field
+    const layoutId = parsed.layout || hint || 'mixed-grid';
+    const { errors, fixed } = validateSchema(parsed, layoutId);
+    if (errors.length > 0) {
+      console.warn('[v3 schema] template validation issues:', errors);
+    }
+    return { data: fixed, format: 'template' };
+  }
+
+  // Unknown format — return raw parsed with a warning
+  console.warn('[v3 schema] Could not detect format from AI response — returning raw parsed JSON.');
+  return { data: parsed, format: 'unknown' };
 }

@@ -1,7 +1,7 @@
 // ── v3 IMPORTS ────────────────────────────────────────────
-import { fillTemplateAsync, initRenderer } from './v3/renderer.js';
-import { buildPrompt, detectLayout       } from './v3/prompt-builder.js';
-import { parseAndValidate                } from './v3/schema.js';
+import { fillTemplateAsync, initRenderer, renderFromContent } from './v3/renderer.js';
+import { buildPrompt, detectLayout, PHASE1_LAYOUTS          } from './v3/prompt-builder.js';
+import { parseAndValidate, detectAndParse                   } from './v3/schema.js';
 
 /* ============================================================
    Infogr.ai v2.4 → v3 Integration
@@ -297,8 +297,10 @@ async function generate() {
   btn.classList.remove('loading');
 }
 
-// ── V3 LAYOUTS — handled by template renderer ──────────────
-const V3_LAYOUTS = new Set(['mixed-grid', 'steps-guide']);
+// ── V3 LAYOUTS — handled by template renderer (Phase 1) or renderFromContent (Phase 2) ──
+// Phase 1 template layouts: 'mixed-grid', 'steps-guide'
+// Phase 2 content-v1 layout: 'content-v1' (programmatic, no template files)
+const V3_LAYOUTS = new Set(['mixed-grid', 'steps-guide', 'content-v1']);
 
 // ── AGENT DISPATCHER ───────────────────────────────────────
 // Routes to v3 (JSON → template) or v2 (raw HTML) based on layout.
@@ -375,14 +377,39 @@ async function callAgentV3(topic, layoutId) {
     }
   }
 
-  // Parse, validate, and fill template
-  const json = parseAndValidate(accumulated.trim(), layoutId);
-
-  // Use user's accent override if they've changed it from the tone default
+  // Detect format from AI response, validate, and route to correct renderer.
+  //
+  // Phase 1 layouts (mixed-grid, steps-guide) → fillTemplateAsync()
+  // Phase 2 content-v1 layout                 → renderFromContent()
+  // Unknown format                             → try template path as fallback
   const accentOverride = (STATE.accent !== TONE_COLORS[STATE.tone]) ? STATE.accent : null;
 
-  const html = await fillTemplateAsync(json, layoutId, STATE.tone, STATE.size, accentOverride);
-  return html;
+  if (PHASE1_LAYOUTS.has(layoutId)) {
+    // Legacy template path — use parseAndValidate (no format detection needed)
+    const json = parseAndValidate(accumulated.trim(), layoutId);
+    const html = await fillTemplateAsync(json, layoutId, STATE.tone, STATE.size, accentOverride);
+    return html;
+  }
+
+  // Phase 2 content-v1 path — auto-detect format, validate, render programmatically
+  const { data: contentJson, format } = detectAndParse(accumulated.trim(), layoutId);
+
+  if (format === 'content-v1') {
+    // Programmatic rendering via smart-layouts + grid (no template file)
+    return renderFromContent(contentJson, STATE.tone, STATE.size, accentOverride);
+  }
+
+  if (format === 'template') {
+    // AI returned a template format despite being asked for content-v1
+    // Fall back gracefully to the template renderer
+    console.warn('[callAgentV3] AI returned template format for content-v1 layoutId — falling back to fillTemplateAsync');
+    const detectedLayout = contentJson.layout || 'mixed-grid';
+    return await fillTemplateAsync(contentJson, detectedLayout, STATE.tone, STATE.size, accentOverride);
+  }
+
+  // Unknown format — last-resort: try rendering as content-v1 anyway
+  console.warn('[callAgentV3] Unknown AI response format — attempting content-v1 render');
+  return renderFromContent(contentJson, STATE.tone, STATE.size, accentOverride);
 }
 
 // ── V2.4 AGENT — raw HTML (unchanged) ──────────────────────

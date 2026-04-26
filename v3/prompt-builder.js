@@ -153,12 +153,106 @@ const STEPS_GUIDE_SCHEMA_PROMPT = `## JSON SCHEMA — steps-guide
 \`\`\``;
 
 /* ─────────────────────────────────────────
+   CONTENT-V1 SCHEMA PROMPT
+   Phase 2 — Content/representation separation.
+   AI returns archetype + items; renderer picks the visual form.
+───────────────────────────────────────── */
+
+const CONTENT_V1_SCHEMA_PROMPT = `## JSON SCHEMA — content-v1
+
+This is the content-first format. Return semantic content items with archetype
+classification. The renderer chooses the best visual representation automatically.
+
+### Content Archetypes
+Pick the archetype that best describes the relationship between your items:
+- **process**     — step 1 → step 2 → step 3 (ordered, causal sequence)
+- **comparison**  — A vs B, or A vs B vs C (parallel attributes)
+- **hierarchy**   — parent → children → grandchildren (levels of abstraction)
+- **journey**     — stages across time or experience (discovery, consideration...)
+- **ecosystem**   — central thing + surrounding parts (hub and spoke)
+- **ranking**     — ordered by importance or value (top 5, leaderboard)
+- **relationship**— how things connect to each other (dependencies, links)
+- **cause-effect**— X leads to Y leads to Z (causality chain)
+- **framework**   — structured model (SWOT, 4Ps, 3-tier, etc.)
+- **metrics**     — numbers, KPIs, data points (purely quantitative)
+- **narrative**   — story with text + visuals (explanation, case study)
+- **catalog**     — collection of similar items (features, options, tools)
+
+### Box Variants
+Pick the variant that best fits the archetype and item count:
+- **solid-boxes**        — filled accent-color boxes; great for frameworks, catalogs
+- **solid-boxes-icons**  — solid boxes with an icon at the top; use when items have distinct icons
+- **outline-boxes**      — bordered boxes, white fill; clean and minimal
+- **side-line**          — left accent bar + card; great for process steps, cause-effect
+- **side-line-text**     — left accent bar, no card bg; very minimal, text-heavy
+- **top-line-text**      — top accent bar, no card; elegant, editorial
+- **top-circle**         — circle at top (icon or number); good for numbered steps
+- **joined-boxes**       — items joined in a horizontal strip; great for timelines, journeys
+- **joined-boxes-icons** — joined strip with icons; same as above with icons
+- **leaf-boxes**         — organic rounded corners; playful, feature showcases
+- **labeled-boxes**      — numbered tag at top-left; rankings, numbered catalogs
+- **alternating-boxes**  — alternating accent/light; visually dynamic comparisons
+
+### Column Count Guide
+- 1 item  → columns: 1
+- 2 items → columns: 2
+- 3 items → columns: 3
+- 4 items → columns: 2 (2×2 grid looks better than 4×1)
+- 5 items → columns: 3 (3+2 arrangement)
+- 6 items → columns: 3 (3×2 perfect grid)
+
+\`\`\`json
+{
+  "format":      "content-v1",
+  "title":       string,          // 72 chars max, title case, no end punctuation
+  "subtitle":    string,          // 140 chars max, 1-2 sentences
+  "label":       string,          // eyebrow pill: "QUICK GUIDE", "3 STEPS" — 40 chars max
+  "hero_icon":   string,          // 1 Icons8 icon name that anchors the topic visually
+  "archetype":   string,          // document-level archetype (from list above)
+  "sections": [
+    {
+      "archetype": string,        // section archetype (can differ from document)
+      "variant":   string,        // box variant from list above
+      "columns":   number,        // 1 | 2 | 3 | 4 (follow column count guide above)
+      "style":     string,        // "compact" | "standard" | "detailed" (text density)
+      "items": [                  // 2–6 content items per section
+        {
+          "title": string,        // 3-6 words, title case
+          "body":  string,        // density-matched: compact=omit, standard=~15 words, detailed=~25 words
+          "icon":  string         // Icons8 icon name (lowercase, hyphenated)
+        }
+        // ... repeat for each item
+      ]
+    }
+    // ... repeat for each section (1-3 sections per infographic)
+  ],
+  "stats": [                      // optional — EXACTLY 3 if included
+    { "number": string, "label": string, "icon": string }
+  ],
+  "callout": {
+    "title": string,              // "Key Insight", "Pro Tip" — 20 chars max
+    "body":  string               // 200 chars max, 1-2 punchy sentences
+  },
+  "footer_brand": string          // 60 chars max
+}
+\`\`\`
+
+## STYLE RULES FOR CONTENT-V1
+- Items in a single section should have consistent body length (±3 words)
+- For "compact" style: omit body field entirely (title only)
+- For "standard" style: body = 13–17 words, complete thought
+- For "detailed" style: body = 23–27 words, full explanation
+- All items in a section must use the same style
+- Pick icons that are visually distinct from each other across items`;
+
+/* ─────────────────────────────────────────
    SCHEMA PROMPT REGISTRY
 ───────────────────────────────────────── */
 
 const SCHEMA_PROMPTS = {
   'mixed-grid':  MIXED_GRID_SCHEMA_PROMPT,
   'steps-guide': STEPS_GUIDE_SCHEMA_PROMPT,
+  'content-v1':  CONTENT_V1_SCHEMA_PROMPT,
 };
 
 /* ─────────────────────────────────────────
@@ -179,7 +273,7 @@ const SCHEMA_PROMPTS = {
 export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
   const schemaPrompt = SCHEMA_PROMPTS[layoutId];
   if (!schemaPrompt) {
-    throw new Error(`[prompt-builder] Unknown layoutId: "${layoutId}"`);
+    throw new Error(`[prompt-builder] Unknown layoutId: "${layoutId}". Valid: ${Object.keys(SCHEMA_PROMPTS).join(', ')}`);
   }
 
   const toneGuide = TONE_GUIDES[tone] || TONE_GUIDES.professional;
@@ -188,8 +282,6 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
   const staticBlock = `${SYSTEM_PROMPT}\n\n${schemaPrompt}`;
 
   // ── Canvas size rules ────────────────────────────────────────
-  // These govern non-text overflow only (title/callout char limits, icon sizes).
-  // Bullet length is controlled separately by the density rule below.
   const SIZE_RULES = {
     a4:        'Canvas: A4 portrait (800×1131px). Titles ≤ 60 chars. Callout body ≤ 200 chars.',
     portrait:  'Canvas: Portrait (800×1422px). Titles ≤ 65 chars. Callout body ≤ 220 chars. Extra vertical room available.',
@@ -199,29 +291,50 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
   const sizeRule = SIZE_RULES[size] || SIZE_RULES.a4;
 
   // ── Card density rule (mixed-grid only) ──────────────────────
-  // Computed here so the AI receives an explicit instruction and
-  // includes the correct card_density value in its JSON output.
-  // The renderer (computeCardDensity) also computes this independently
-  // as a fallback if the AI omits or mangles the field.
   let densityRule = '';
   if (layoutId === 'mixed-grid') {
     const toneId = tone || 'professional';
     let density;
     if (size === 'square') {
-      // Square: ~30px per bullet — only 1 line fits
       density = 'compact';
     } else if (size === 'landscape') {
-      // Landscape: ~39px per bullet — 2 lines fit (CSS override caps standard at 2 lines)
-      // Use standard density so AI writes 12–15 word bullets, not 6-word fragments
       density = 'standard';
     } else if (size === 'portrait') {
-      // Portrait: ~157px per bullet — 4 lines easily
       density = (toneId === 'minimal') ? 'standard' : 'detailed';
     } else { // a4
-      // A4: ~77px per bullet — 4 lines possible, 3 lines is the sweet spot
       density = (toneId === 'minimal') ? 'compact' : 'standard';
     }
     densityRule = `Card density: "${density}" — write bullets at that length (see CARD DENSITY rules above).`;
+  }
+
+  // ── Content-v1 section style guide ───────────────────────────
+  // Tell the AI which text density to target based on size.
+  let contentDensityRule = '';
+  if (layoutId === 'content-v1') {
+    const toneId = tone || 'professional';
+    let density;
+    if (size === 'square') {
+      density = 'compact';
+    } else if (size === 'landscape') {
+      density = 'standard';
+    } else if (size === 'portrait') {
+      density = (toneId === 'minimal') ? 'standard' : 'detailed';
+    } else { // a4
+      density = (toneId === 'minimal') ? 'compact' : 'standard';
+    }
+
+    // Column guidance for content-v1 based on aspect ratio
+    const columnNote = {
+      a4:        'Max 3 columns per section (A4 portrait is narrow). 2–3 items per row is ideal.',
+      portrait:  'Max 2 columns per section (portrait is narrow). Prefer vertical stacks.',
+      square:    'Max 3 columns per section. Prefer 2–3 items, compact style.',
+      landscape: 'Up to 4 columns per section (landscape is wide). Use 3–4 item rows.',
+    }[size] || 'Max 3 columns per section.';
+
+    contentDensityRule = [
+      `Section style: "${density}" — match item body lengths to that density (see schema rules above).`,
+      columnNote,
+    ].join('\n');
   }
 
   // The dynamic user message (changes per request)
@@ -231,6 +344,7 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
     `Tone: ${toneGuide}`,
     sizeRule,
     densityRule,
+    contentDensityRule,
     '',
     'Generate the JSON now. Return only the raw JSON object.',
   ].filter(Boolean).join('\n');
@@ -241,7 +355,6 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
       {
         type: 'text',
         text: staticBlock,
-        // Enable prompt caching on the static block
         cache_control: { type: 'ephemeral' },
       },
     ],
@@ -254,7 +367,7 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
       },
     ],
 
-    // Cache key for debugging (identifies the static block version)
+    // Cache key for debugging
     cacheKey: `v3-${layoutId}-static`,
   };
 }
@@ -265,17 +378,36 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
    Used when layout = 'auto'.
 ───────────────────────────────────────── */
 
+// Phase 1 layouts — handled by fillTemplate() + HTML templates
+const PHASE1_LAYOUTS = new Set(['mixed-grid', 'steps-guide']);
+
 const AUTO_LAYOUT_RULES = [
-  { keywords: ['vs', 'versus', 'compare', 'comparison', 'difference', 'pros cons', 'pro con', 'vs.'],  layout: 'comparison'  },
-  { keywords: ['steps', 'how to', 'guide', 'setup', 'install', 'configure', 'tutorial', 'walkthrough'], layout: 'steps-guide' },
-  { keywords: ['history', 'timeline', 'roadmap', 'evolution', 'milestones', 'journey', 'over time'],   layout: 'timeline'    },
-  { keywords: ['funnel', 'pipeline', 'stages', 'conversion', 'acquisition', 'sales process'],          layout: 'funnel'      },
-  { keywords: ['decision', 'flowchart', 'flow', 'process flow', 'if else', 'diagram', 'decision tree'],layout: 'flowchart'   },
+  // Phase 1 — template-based
+  { keywords: ['steps', 'how to', 'guide', 'setup', 'install', 'configure', 'tutorial', 'walkthrough'],
+    layout: 'steps-guide' },
+
+  // Phase 2 — content-v1 path (programmatic rendering via smart-layouts)
+  { keywords: ['vs', 'versus', 'compare', 'comparison', 'differences between', 'pros cons', 'pro con', 'vs.'],
+    layout: 'content-v1' },
+  { keywords: ['history', 'timeline', 'roadmap', 'evolution', 'milestones', 'over time', 'over the years'],
+    layout: 'content-v1' },
+  { keywords: ['funnel', 'pipeline', 'stages', 'conversion', 'acquisition', 'sales process'],
+    layout: 'content-v1' },
+  { keywords: ['flowchart', 'flow chart', 'process flow', 'decision tree', 'decision diagram'],
+    layout: 'content-v1' },
+  { keywords: ['journey', 'customer journey', 'user journey', 'experience map'],
+    layout: 'content-v1' },
+  { keywords: ['framework', 'model', 'swot', '4ps', 'matrix', 'quadrant'],
+    layout: 'content-v1' },
+  { keywords: ['ecosystem', 'architecture', 'components', 'system overview'],
+    layout: 'content-v1' },
 ];
 
 /**
  * Detect the best layout for a given topic string.
- * Returns 'mixed-grid' as the safe default.
+ * Phase 1 layouts → fillTemplate() path.
+ * Phase 2 layouts → renderFromContent() path via 'content-v1'.
+ * Default → 'mixed-grid' (Phase 1 safe fallback).
  *
  * @param {string} topic
  * @returns {string} layoutId
@@ -286,16 +418,11 @@ export function detectLayout(topic) {
 
   for (const rule of AUTO_LAYOUT_RULES) {
     if (rule.keywords.some(k => lower.includes(k))) {
-      // Only return layouts that are implemented in Phase 1
-      if (['steps-guide', 'mixed-grid'].includes(rule.layout)) {
-        return rule.layout;
-      }
-      // Phase 2 layouts fall back to mixed-grid for now
-      return 'mixed-grid';
+      return rule.layout;
     }
   }
 
   return 'mixed-grid';
 }
 
-export { TONE_GUIDES };
+export { TONE_GUIDES, CONTENT_V1_SCHEMA_PROMPT, PHASE1_LAYOUTS };
