@@ -204,7 +204,54 @@ Note: sequence, bullets, steps, and quote variants are single-column — set col
 - All items in a section must use the same style
 - Pick icons that are visually distinct from each other across items
 - Numbers/stats variants: item.title = the number (e.g. "94%", "1.2M", "4.5"), item.body = the descriptive label
-- Quotes variants: item.title = attribution (person/source), item.body = the quote text`;
+- Quotes variants: item.title = attribution (person/source), item.body = the quote text
+
+### Diagram Variants — use when spatial relationships matter more than lists
+
+**Road / Journey** (linear path through time, phases, or experience — best for 3–6 items):
+- road-horizontal   — left-to-right road with milestone stops; product roadmaps, project phases
+- road-vertical     — top-to-bottom road; sequential milestones, onboarding flows
+- journey-map       — horizontal stages with emotion/action rows; customer journey, UX maps
+- experience-map    — phases with icon + title + body stacked; user experience, lifecycle
+
+**Target / Radial** (concentric importance or orbital relationships — best for 3–5 items):
+- bullseye          — nested rings with center = most important; priorities, focus levels
+- radial            — center hub + items radiating outward; ecosystem maps, hub-and-spoke (first item = center)
+- orbit             — center + items orbiting at fixed radius; satellite features, connected concepts (first item = center)
+- sunburst          — center disc + outer segments; category breakdown, topic clusters (first item = center)
+
+**Hierarchy / Funnel** (parent-child structure or narrowing stages — best for 3–6 items):
+- org-chart         — top-down tree with connecting lines; org structure, reporting lines (first item = root)
+- tree-horizontal   — left-to-right branching tree; decision trees, taxonomy (first item = root)
+- pyramid-diagram   — triangle layers from apex to base; priority pyramid (first item = apex/top)
+- nested-boxes      — boxes inside boxes; containment hierarchy, scope levels (first item = outermost)
+
+**Venn / Relationship** (overlap, intersection, or positioning — best for 2–4 items):
+- venn-2            — two overlapping circles; binary comparison with shared overlap (exactly 2 items)
+- venn-3            — three overlapping circles; triple intersection (exactly 3 items)
+- overlapping-sets  — horizontally offset ovals showing partial overlap; set relationships
+- matrix-2x2        — four-quadrant 2×2 grid with axis labels; strategic positioning (exactly 4 items)
+
+**Process / Motion** (cyclical flows, parallel tracks, or branching logic — best for 3–6 items):
+- circular-flow     — closed loop with arrows between stages; recurring cycles, feedback loops
+- swimlane          — parallel horizontal lanes, each with steps; multi-actor processes
+- branching         — tree that fans out from single root; decision trees, if/then flows (first item = root)
+- infinity-loop     — figure-eight loop with two phases; dual cycles, yin-yang processes (items split evenly)
+
+**Business / Analysis** (strategic frameworks — fixed structures):
+- swot              — 2×2 quadrant grid: Strengths / Weaknesses / Opportunities / Threats (exactly 4 items in that order)
+- competitive-map   — 2-axis positioning map with labeled points; market landscape (items = competitors/products)
+- value-chain       — horizontal linked chain of activities; Porter's value chain, pipeline stages
+- bmc               — Business Model Canvas 9-block grid (exactly 9 items: Key Partners, Key Activities, Key Resources, Value Propositions, Customer Relationships, Channels, Customer Segments, Cost Structure, Revenue Streams)
+
+**Diagram style rules:**
+- For radial/orbit/sunburst: first item is always the center; remaining items surround it
+- For org-chart/tree-horizontal/branching: first item is always the root node
+- For nested-boxes/pyramid-diagram: first item is the outermost/topmost level
+- For venn-2: exactly 2 items; for venn-3: exactly 3 items; for matrix-2x2 and swot: exactly 4 items; for bmc: exactly 9 items
+- columns field is ignored for diagram variants — set columns: 1
+- icon field is supported on all diagram variants
+- Use diagram variants when you need to show WHERE things are relative to each other, not just WHAT they are`;
 
 /* ─────────────────────────────────────────
    buildPrompt()

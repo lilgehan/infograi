@@ -801,6 +801,8 @@ function renderHTML(html) {
       '.igs-stepicon-title', '.igs-stepicon-body',
       '.igs-pyramid-title', '.igs-pyramid-body',
       '.igs-funnel-title', '.igs-funnel-body',
+      // Diagrams family (smart-diagrams.js — Phase 4)
+      '.igd-title', '.igd-body', '.igd-label',
     ].join(', ');
     canvas.querySelectorAll(V3_TEXT_SEL).forEach(el => {
       el.contentEditable = 'true';
@@ -1464,8 +1466,13 @@ function applyZoom(animate = true) {
     wrap.style.marginBottom = extraH > 0 ? extraH + 'px' : '';
   }
 
-  // Always allow scroll so two-finger pan works at any zoom level
-  if (cbody) cbody.style.overflow = 'auto';
+  // Always allow scroll on both axes so two-finger pan works at any zoom level.
+  // Set each axis explicitly — a single overflow shorthand can be overridden by
+  // a stylesheet's overflow-x or overflow-y declaration.
+  if (cbody) {
+    cbody.style.overflowX = 'auto';
+    cbody.style.overflowY = 'auto';
+  }
   $('zoomLabel').textContent = Math.round(z * 100) + '%';
 }
 

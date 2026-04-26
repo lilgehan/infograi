@@ -13,6 +13,8 @@
  *   const html = renderBoxes(items, 'solid-boxes-icons', 'professional', 3, 'standard');
  */
 
+import { renderDiagramSection } from './smart-diagrams.js';
+
 /* ─────────────────────────────────────────
    ICON SYSTEM
    Mirrors renderer.js logic without importing it (would create a circular
@@ -149,11 +151,13 @@ export const BOXES_CSS = `
   overflow: hidden;
 }
 .ig-page .igs-solid .igs-icon {
+  display: block;
   width: 32px; height: 32px;
   object-fit: contain;
-  margin-bottom: 4px;
+  margin: 0 auto 4px;
   filter: brightness(0) invert(1);
   flex-shrink: 0;
+  align-self: center;
 }
 .ig-page .igs-solid .igs-title {
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
@@ -177,7 +181,12 @@ export const BOXES_CSS = `
   overflow: hidden;
 }
 .ig-page .igs-outline .igs-icon {
-  width: 28px; height: 28px; object-fit: contain; margin-bottom: 4px; flex-shrink: 0;
+  display: block;
+  width: 28px; height: 28px;
+  object-fit: contain;
+  margin: 0 auto 4px;
+  flex-shrink: 0;
+  align-self: center;
 }
 .ig-page .igs-outline .igs-title {
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
@@ -263,8 +272,11 @@ export const BOXES_CSS = `
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.ig-page .igs-topcircle .igs-circle img {
-  width: 24px; height: 24px; object-fit: contain;
+.ig-page .igs-topcircle .igs-circle img,
+.ig-page .igs-topcircle .igs-circle svg {
+  display: block;
+  width: 24px; height: 24px;
+  object-fit: contain;
   filter: brightness(0) invert(1);
 }
 .ig-page .igs-topcircle .igs-circle-num {
@@ -304,7 +316,11 @@ export const BOXES_CSS = `
   align-items: center; text-align: center;
 }
 .ig-page .igs-joined .igs-icon {
-  width: 28px; height: 28px; object-fit: contain; margin-bottom: 5px; flex-shrink: 0;
+  display: block;
+  width: 28px; height: 28px;
+  object-fit: contain;
+  margin-bottom: 5px;
+  flex-shrink: 0;
 }
 .ig-page .igs-joined .igs-title {
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
@@ -2200,7 +2216,9 @@ export const STEPS_CSS = `
   justify-content: center;
   overflow: hidden;
 }
-.ig-page .igs-stepicon-icon img {
+.ig-page .igs-stepicon-icon img,
+.ig-page .igs-stepicon-icon svg {
+  display: block;
   width: 1.3rem;
   height: 1.3rem;
   object-fit: contain;
@@ -2473,8 +2491,11 @@ const VARIANT_FAMILY_MAP = {
  */
 export function renderSection(section, tone = 'professional') {
   const { items = [], variant = 'solid-boxes', columns = 3, style: density = 'standard' } = section;
-  const family = VARIANT_FAMILY_MAP[variant] || 'boxes';
-  const fn = LAYOUT_FAMILIES[family];
+  const family = VARIANT_FAMILY_MAP[variant];
+  const fn = family ? LAYOUT_FAMILIES[family] : null;
   if (fn) return fn(items, variant, tone, columns, density);
+  // Try diagram families before falling back to solid-boxes
+  const diagramHtml = renderDiagramSection(section, tone);
+  if (diagramHtml !== null) return diagramHtml;
   return renderBoxes(items, 'solid-boxes', tone, columns, density);
 }

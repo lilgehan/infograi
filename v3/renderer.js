@@ -21,6 +21,7 @@ import {
   QUOTES_CSS,
   STEPS_CSS,
 } from './smart-layouts.js';
+import { DIAGRAM_CSS } from './smart-diagrams.js';
 import { GRID_CSS } from './grid.js';
 
 /* ── Local SVG map — critical icons embedded as data URIs ──
@@ -185,6 +186,7 @@ const ALL_LAYOUT_CSS = [
   CIRCLES_CSS,
   QUOTES_CSS,
   STEPS_CSS,
+  DIAGRAM_CSS,
 ].join('\n');
 
 /* ─────────────────────────────────────────
