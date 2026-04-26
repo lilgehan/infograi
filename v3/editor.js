@@ -54,15 +54,72 @@
    *   .ig-stat, .ig-card, .ig-step, .ig-callout, .ig-header, .ig-footer
    */
   var GRP = [
-    // Tier 1: individual text boxes
-    '.ig-card-title', '.ig-card-bullet',
-    '.ig-stat-num', '.ig-stat-label',
-    '.ig-step-title', '.ig-step-body-text',
+    // ── Tier 1: individual text boxes (legacy chrome + igs-* smart-layout text) ──
+    // Chrome
+    '.ig-title', '.ig-subtitle', '.ig-label', '.ig-label-pill', '.ig-footer-brand',
     '.ig-callout-title', '.ig-callout-body',
-    '.ig-title', '.ig-subtitle', '.ig-label', '.ig-label-pill',
-    '.ig-footer-brand',
-    // Tier 2: group containers
-    '.ig-stat', '.ig-card', '.ig-step', '.ig-callout', '.ig-header', '.ig-footer',
+    '.ig-stat-num', '.ig-stat-label',
+    // Legacy (v2 compat)
+    '.ig-card-title', '.ig-card-bullet',
+    '.ig-step-title', '.ig-step-body-text',
+    // Boxes
+    '.igs-title', '.igs-body', '.igs-circle-num', '.igs-labeled-tag',
+    // Bullets
+    '.igs-bl-title', '.igs-bl-body', '.igs-bl-num',
+    // Sequence
+    '.igs-tl-title', '.igs-tl-label', '.igs-tl-body',
+    '.igs-mtl-title', '.igs-mtl-body',
+    '.igs-mtlb-title', '.igs-mtlb-body',
+    '.igs-arrow-title', '.igs-arrow-body',
+    '.igs-pill', '.igs-slant-body',
+    // Numbers
+    '.igs-stat-num', '.igs-stat-label',
+    '.igs-bar-stat-label', '.igs-bar-stat-num',
+    '.igs-star-title', '.igs-star-score',
+    '.igs-dotgrid-label',
+    '.igs-dotline-title', '.igs-dotline-num',
+    '.igs-cbl-title', '.igs-cbl-body',
+    '.igs-cel-title', '.igs-cel-body',
+    // Circles
+    '.igs-cycle-title', '.igs-cycle-body',
+    '.igs-flower-title', '.igs-flower-body',
+    '.igs-circle-title', '.igs-circle-body',
+    '.igs-ring-title', '.igs-ring-body',
+    '.igs-semi-title', '.igs-semi-body',
+    // Quotes
+    '.igs-qbox-text', '.igs-qbox-attr',
+    '.igs-bubble-box', '.igs-bubble-attr',
+    // Steps
+    '.igs-stair-title', '.igs-stair-body',
+    '.igs-step-title', '.igs-step-body',
+    '.igs-boxstep-title', '.igs-boxstep-body',
+    '.igs-arrowstep-title', '.igs-arrowstep-body',
+    '.igs-stepicon-title', '.igs-stepicon-body',
+    '.igs-pyramid-title', '.igs-pyramid-body',
+    '.igs-funnel-title', '.igs-funnel-body',
+    // ── Tier 2: group containers (move/resize whole block) ──
+    // Chrome groups
+    '.ig-callout', '.ig-header', '.ig-footer',
+    '.ig-stat', '.ig-card', '.ig-step',
+    // Boxes containers
+    '.igs-solid', '.igs-outline', '.igs-sideline', '.igs-sidelinetext',
+    '.igs-topline', '.igs-topcircle', '.igs-joined', '.igs-leaf',
+    '.igs-labeled-wrap', '.igs-alt',
+    // Bullets containers
+    '.igs-bl-large', '.igs-bl-small', '.igs-bl-arrow', '.igs-bl-process', '.igs-bl-boxsmall',
+    // Sequence containers
+    '.igs-tl-item', '.igs-mtl-item', '.igs-mtlb-item', '.igs-arrow-item', '.igs-slant-item',
+    // Numbers containers
+    '.igs-stat-item', '.igs-circle-stat-item', '.igs-bar-stat-item', '.igs-star-item',
+    '.igs-dotgrid-item', '.igs-dotline-item', '.igs-cbl-item', '.igs-cel-item',
+    // Circles containers
+    '.igs-cycle-item', '.igs-flower-petal', '.igs-flower-center',
+    '.igs-circle-item', '.igs-ring-item', '.igs-semi-item',
+    // Quotes containers
+    '.igs-qbox-item', '.igs-bubble-item',
+    // Steps containers
+    '.igs-stair-item', '.igs-step-item', '.igs-boxstep-item', '.igs-arrowstep-item',
+    '.igs-stepicon-item', '.igs-pyramid-item', '.igs-funnel-item',
   ].join(', ');
 
   /** Icon elements (take priority over everything on click) */

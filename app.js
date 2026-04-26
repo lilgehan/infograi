@@ -708,30 +708,9 @@ function preprocessHTML(html, sz) {
 //   3. Inject the icon fallback script (handles broken proxy loads).
 //   4. Inject /v3/editor.js — the full PowerPoint-style object editor.
 function preprocessHTMLv3(html) {
-  // 1. <base href> no longer needed — content is injected into main document
-  // html = html.replace('<head>', '<head><base href="/">');
-
-  // 2. Mark text slots as contenteditable (filled directly by renderer)
-  const textSlots = ['title','subtitle','label','callout-title','callout-body','footer-brand'];
-  for (const slot of textSlots) {
-    html = html.replace(
-      new RegExp(`(data-slot="${slot}"[^>]*)>`, 'g'),
-      `$1 contenteditable="true">`
-    );
-  }
-  // Renderer-generated inline content (stats, cards, steps)
-  html = html.replace(/(<div class="ig-stat-num">)/g,      '<div class="ig-stat-num" contenteditable="true">');
-  html = html.replace(/(<div class="ig-stat-label">)/g,    '<div class="ig-stat-label" contenteditable="true">');
-  html = html.replace(/(<div class="ig-card-title">)/g,    '<div class="ig-card-title" contenteditable="true">');
-  html = html.replace(/(<li class="ig-card-bullet">)/g,    '<li class="ig-card-bullet" contenteditable="true">');
-  html = html.replace(/(<div class="ig-step-title">)/g,    '<div class="ig-step-title" contenteditable="true">');
-  html = html.replace(/(<div class="ig-step-body-text">)/g,'<div class="ig-step-body-text" contenteditable="true">');
-
-  // 3. Fallback script only (editor.js now runs in main page, not injected)
-  html = html.replace(/<\/body>/i,
-    fallbackScript + '\n' +
-    '</body>'
-  );
+  // Inject icon fallback script before </body>.
+  // contenteditable is now injected via DOM traversal in renderHTML() — see V3_TEXT_SEL.
+  html = html.replace(/<\/body>/i, fallbackScript + '\n</body>');
   return html;
 }
 
@@ -777,6 +756,56 @@ function renderHTML(html) {
 
   // Insert the body content into the canvas
   canvas.innerHTML += parsedDoc.body.innerHTML;
+
+  // BUG 1 FIX — inject contenteditable on all v3 smart-layout text elements.
+  // Done via DOM traversal (not string replacement) so it works with any variant.
+  if (STATE.isV3) {
+    const V3_TEXT_SEL = [
+      // Chrome (renderer.js chrome elements)
+      '.ig-title', '.ig-subtitle', '.ig-label',
+      '.ig-stat-num', '.ig-stat-label',
+      '.ig-callout-title', '.ig-callout-body',
+      '.ig-footer-brand',
+      // Boxes family
+      '.igs-title', '.igs-body', '.igs-circle-num', '.igs-labeled-tag',
+      // Bullets family
+      '.igs-bl-title', '.igs-bl-body', '.igs-bl-num',
+      // Sequence family
+      '.igs-tl-title', '.igs-tl-label', '.igs-tl-body',
+      '.igs-mtl-title', '.igs-mtl-body',
+      '.igs-mtlb-title', '.igs-mtlb-body',
+      '.igs-arrow-title', '.igs-arrow-body',
+      '.igs-pill', '.igs-slant-body',
+      // Numbers family
+      '.igs-stat-num', '.igs-stat-label',
+      '.igs-bar-stat-label', '.igs-bar-stat-num',
+      '.igs-star-title', '.igs-star-score',
+      '.igs-dotgrid-label',
+      '.igs-dotline-title', '.igs-dotline-num',
+      '.igs-cbl-title', '.igs-cbl-body',
+      '.igs-cel-title', '.igs-cel-body',
+      // Circles family
+      '.igs-cycle-title', '.igs-cycle-body',
+      '.igs-flower-title', '.igs-flower-body',
+      '.igs-circle-title', '.igs-circle-body',
+      '.igs-ring-title', '.igs-ring-body',
+      '.igs-semi-title', '.igs-semi-body',
+      // Quotes family
+      '.igs-qbox-text', '.igs-qbox-attr',
+      '.igs-bubble-box', '.igs-bubble-attr',
+      // Steps family
+      '.igs-stair-title', '.igs-stair-body',
+      '.igs-step-title', '.igs-step-body',
+      '.igs-boxstep-title', '.igs-boxstep-body',
+      '.igs-arrowstep-title', '.igs-arrowstep-body',
+      '.igs-stepicon-title', '.igs-stepicon-body',
+      '.igs-pyramid-title', '.igs-pyramid-body',
+      '.igs-funnel-title', '.igs-funnel-body',
+    ].join(', ');
+    canvas.querySelectorAll(V3_TEXT_SEL).forEach(el => {
+      el.contentEditable = 'true';
+    });
+  }
 
   const wrap = $('outputWrap');
   wrap.innerHTML = '';
@@ -1417,10 +1446,27 @@ function applyZoom(animate = true) {
   const wrap  = $('outputWrap');
   const cbody = document.querySelector('.cbody');
   if (!wrap) return;
-  wrap.style.transition = animate ? 'transform 0.15s ease' : 'none';
-  wrap.style.transform  = `scale(${STATE.zoomLevel})`;
-  $('zoomLabel').textContent = Math.round(STATE.zoomLevel * 100) + '%';
-  if (cbody) cbody.style.overflow = STATE.zoomLevel > 1 ? 'auto' : 'hidden';
+
+  const z  = STATE.zoomLevel;
+  const sz = SIZES[STATE.size];
+
+  // BUG 3 FIX — anchor from top-left so margin extensions extend the scroll area
+  // correctly. CSS transform doesn't affect layout flow, so we compensate with
+  // margins equal to the extra pixels the scaled canvas visually occupies.
+  wrap.style.transformOrigin = 'top left';
+  wrap.style.transition      = animate ? 'transform 0.15s ease' : 'none';
+  wrap.style.transform       = `scale(${z})`;
+
+  if (sz) {
+    const extraW = Math.max(0, Math.round(sz.w * z - sz.w));
+    const extraH = Math.max(0, Math.round(sz.h * z - sz.h));
+    wrap.style.marginRight  = extraW > 0 ? extraW + 'px' : '';
+    wrap.style.marginBottom = extraH > 0 ? extraH + 'px' : '';
+  }
+
+  // Always allow scroll so two-finger pan works at any zoom level
+  if (cbody) cbody.style.overflow = 'auto';
+  $('zoomLabel').textContent = Math.round(z * 100) + '%';
 }
 
 // ── EXPORT HELPERS ─────────────────────────────────────────
