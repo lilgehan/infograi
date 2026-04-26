@@ -1,7 +1,7 @@
 // ── v3 IMPORTS ────────────────────────────────────────────
-import { fillTemplateAsync, initRenderer, renderFromContent } from './v3/renderer.js';
-import { buildPrompt, detectLayout, PHASE1_LAYOUTS          } from './v3/prompt-builder.js';
-import { parseAndValidate, detectAndParse                   } from './v3/schema.js';
+import { initRenderer, renderFromContent } from './v3/renderer.js';
+import { buildPrompt, detectLayout       } from './v3/prompt-builder.js';
+import { detectAndParse                  } from './v3/schema.js';
 
 /* ============================================================
    Infogr.ai v2.4 → v3 Integration
@@ -158,12 +158,12 @@ const SIZES = {
 
 const LAYOUTS = [
   { id: 'auto',        name: 'Auto (AI picks)', thumb: 'auto'       },
-  { id: 'steps-guide', name: 'Steps Guide',     thumb: 'steps'      },
-  { id: 'mixed-grid',  name: 'Mixed Grid',      thumb: 'grid'       },
+  { id: 'content-v1',  name: 'Overview / Boxes', thumb: 'grid'      },
   { id: 'timeline',    name: 'Timeline',        thumb: 'timeline'   },
   { id: 'funnel',      name: 'Funnel',          thumb: 'funnel'     },
   { id: 'comparison',  name: 'Comparison',      thumb: 'comparison' },
   { id: 'flowchart',   name: 'Flowchart',       thumb: 'flowchart'  },
+  { id: 'process',     name: 'Process / Steps', thumb: 'steps'      },
 ];
 
 // ── DOM ────────────────────────────────────────────────────
@@ -172,8 +172,7 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // ── INIT ───────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  // Pre-fetch v3 templates in the background so first generation is instant
-  initRenderer().catch(e => console.warn('[v3] Template pre-cache failed:', e));
+  // initRenderer is now a no-op — all rendering is programmatic via smart-layouts
 
   const k = localStorage.getItem('infograi_key');
   if (k) { $('apiKey').value = k; $('apiDot').className = 'api-dot ok'; }
@@ -297,27 +296,16 @@ async function generate() {
   btn.classList.remove('loading');
 }
 
-// ── V3 LAYOUTS — handled by template renderer (Phase 1) or renderFromContent (Phase 2) ──
-// Phase 1 template layouts: 'mixed-grid', 'steps-guide'
-// Phase 2 content-v1 layout: 'content-v1' (programmatic, no template files)
-const V3_LAYOUTS = new Set(['mixed-grid', 'steps-guide', 'content-v1']);
-
 // ── AGENT DISPATCHER ───────────────────────────────────────
-// Routes to v3 (JSON → template) or v2 (raw HTML) based on layout.
+// All layouts go through the content-v1 engine (renderFromContent).
 async function callAgent(topic) {
   const rawLayout = STATE.layout;
   const layoutId  = rawLayout === 'auto' ? detectLayout(topic) : rawLayout;
-
-  if (V3_LAYOUTS.has(layoutId)) {
-    STATE.isV3 = true;
-    return await callAgentV3(topic, layoutId);
-  } else {
-    STATE.isV3 = false;
-    return await callAgentV2(topic);
-  }
+  STATE.isV3 = true;
+  return await callAgentV3(topic, layoutId);
 }
 
-// ── V3 AGENT — JSON → template fill ────────────────────────
+// ── V3 AGENT — JSON → renderFromContent ────────────────────
 async function callAgentV3(topic, layoutId) {
   const { system, messages } = buildPrompt({
     topic,
@@ -377,38 +365,9 @@ async function callAgentV3(topic, layoutId) {
     }
   }
 
-  // Detect format from AI response, validate, and route to correct renderer.
-  //
-  // Phase 1 layouts (mixed-grid, steps-guide) → fillTemplateAsync()
-  // Phase 2 content-v1 layout                 → renderFromContent()
-  // Unknown format                             → try template path as fallback
+  // All responses go through the content-v1 path
   const accentOverride = (STATE.accent !== TONE_COLORS[STATE.tone]) ? STATE.accent : null;
-
-  if (PHASE1_LAYOUTS.has(layoutId)) {
-    // Legacy template path — use parseAndValidate (no format detection needed)
-    const json = parseAndValidate(accumulated.trim(), layoutId);
-    const html = await fillTemplateAsync(json, layoutId, STATE.tone, STATE.size, accentOverride);
-    return html;
-  }
-
-  // Phase 2 content-v1 path — auto-detect format, validate, render programmatically
-  const { data: contentJson, format } = detectAndParse(accumulated.trim(), layoutId);
-
-  if (format === 'content-v1') {
-    // Programmatic rendering via smart-layouts + grid (no template file)
-    return renderFromContent(contentJson, STATE.tone, STATE.size, accentOverride);
-  }
-
-  if (format === 'template') {
-    // AI returned a template format despite being asked for content-v1
-    // Fall back gracefully to the template renderer
-    console.warn('[callAgentV3] AI returned template format for content-v1 layoutId — falling back to fillTemplateAsync');
-    const detectedLayout = contentJson.layout || 'mixed-grid';
-    return await fillTemplateAsync(contentJson, detectedLayout, STATE.tone, STATE.size, accentOverride);
-  }
-
-  // Unknown format — last-resort: try rendering as content-v1 anyway
-  console.warn('[callAgentV3] Unknown AI response format — attempting content-v1 render');
+  const { data: contentJson } = detectAndParse(accumulated.trim(), layoutId);
   return renderFromContent(contentJson, STATE.tone, STATE.size, accentOverride);
 }
 

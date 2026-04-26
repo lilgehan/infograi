@@ -1,33 +1,30 @@
 /**
  * Infogr.ai v3 — Renderer
  *
- * fillTemplate(json, layoutId, tone) → HTML string       [legacy template path]
- * renderFromContent(contentJson, tone, size, accentColor) [content-v1 path — Phase 2]
+ * renderFromContent(contentJson, tone, size, accentColor) → HTML string
  *
- * The single function that turns AI-generated JSON into a ready-to-render
- * infographic HTML string.
+ * The single function that turns AI-generated content-v1 JSON into a
+ * ready-to-render infographic HTML string.
  *
- * INTEGRATION NOTE:
- * This file uses fetch() to load templates at runtime (no bundler required).
- * Templates are served as static files from /v3/templates/{layoutId}/template.html
- * by Vercel, just like any other static asset.
- *
- * When integrating into app.js: call `await initRenderer()` once on startup
- * to pre-cache templates, then call `fillTemplate(json, layoutId, tone)` synchronously.
- *
- * Legacy path:   'mixed-grid', 'steps-guide'  → fillTemplate()
- * Content-v1:    format:'content-v1'           → renderFromContent()
+ * All legacy template code (fillTemplate, fillTemplateAsync, initRenderer,
+ * loadTemplate, TEMPLATES cache) has been removed. All layouts go through
+ * renderFromContent() via the smart-layouts engine.
  */
 
-import { renderSection, BOXES_CSS } from './smart-layouts.js';
-import { GRID_CSS, clampColumns }    from './grid.js';
+import {
+  renderSection,
+  BOXES_CSS,
+  BULLETS_CSS,
+  SEQUENCE_CSS,
+  NUMBERS_CSS,
+  CIRCLES_CSS,
+  QUOTES_CSS,
+  STEPS_CSS,
+} from './smart-layouts.js';
+import { GRID_CSS } from './grid.js';
 
-/* ── Template cache (populated by initRenderer / loadTemplate) ── */
-const TEMPLATES = {};
-
-/* ── Local SVG map — 25 critical icons embedded as data URIs ──
+/* ── Local SVG map — critical icons embedded as data URIs ──
    These load instantly with zero network requests, zero CORS issues.
-   Matches the LOCAL_ICON_SVGS map in app.js.
 ── */
 const LOCAL_SVG_MAP = {
   'folder':         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M4 14a4 4 0 0 1 4-4h10l4 4h22a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z" fill="#FFA726"/><path d="M4 20h40v14a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z" fill="#FFB74D"/></svg>`,
@@ -58,8 +55,7 @@ const LOCAL_SVG_MAP = {
 };
 
 /**
- * Returns the best src for an icon: local inline SVG data URI if available,
- * otherwise the Icons8 proxy URL. Zero CORS, zero external dependency for local icons.
+ * Returns a local inline SVG data URI if the icon name is in LOCAL_SVG_MAP.
  */
 function localSvgDataUri(name) {
   const svg = LOCAL_SVG_MAP[name];
@@ -68,58 +64,15 @@ function localSvgDataUri(name) {
 }
 
 /* ── Icons8 proxy helper ── */
-const PROXY_BASE = '/api/proxy?url=';
-const ICONS8_BASE = 'https://img.icons8.com/3d-fluency';
-
-// Fallback shown when an Icons8 icon name doesn't exist — a neutral gray circle
+const PROXY_BASE   = '/api/proxy?url=';
+const ICONS8_BASE  = 'https://img.icons8.com/3d-fluency';
 const ICON_FALLBACK_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='20' fill='%23e2e8f0'/%3E%3Ccircle cx='24' cy='24' r='6' fill='%23cbd5e1'/%3E%3C/svg%3E";
 
 function iconUrl(name, size = 96) {
-  // Use local SVG if available — instant load, no proxy needed
   const local = localSvgDataUri(name);
   if (local) return local;
-  // Fall back to proxied Icons8 URL
   const raw = `${ICONS8_BASE}/${size}/${name}.png`;
   return `${PROXY_BASE}${encodeURIComponent(raw)}`;
-}
-
-/**
- * Render an icon as inline SVG (for local icons) or <img> (for proxy icons).
- * Inline SVG is 100% reliable — no network, no CSP issues, no onerror.
- *
- * @param {string} name      — icon name (e.g. 'folder')
- * @param {string} cssClass  — CSS class to apply to the element
- * @param {number} [px]      — display size in px
- * @returns {string} HTML string
- */
-function renderIconHtml(name, cssClass, px = 40) {
-  const svgStr = LOCAL_SVG_MAP[name];
-  if (svgStr) {
-    // Inject inline SVG — replace opening <svg tag to add class + size attributes
-    return svgStr.replace(
-      '<svg ',
-      `<svg class="${cssClass}" width="${px}" height="${px}" aria-label="${escapeHtml(name)}" data-icon="true" data-icon-name="${escapeHtml(name)}" `
-    );
-  }
-  // Remote icon — proxied Icons8 URL with graceful onerror fallback
-  const src = `${PROXY_BASE}${encodeURIComponent(`${ICONS8_BASE}/${px}/${name}.png`)}`;
-  return `<img class="${cssClass}" src="${src}" alt="${escapeHtml(name)}" width="${px}" height="${px}" data-icon="true" data-icon-name="${escapeHtml(name)}" onerror="this.onerror=null;this.src='${ICON_FALLBACK_SRC}'" />`;
-}
-
-/* ── Slot helpers ── */
-
-/** Set innerHTML for a data-slot element. Safe no-op if slot not found. */
-function fillSlot(doc, slotName, html) {
-  const el = doc.querySelector(`[data-slot="${slotName}"]`);
-  if (!el) return;
-  el.innerHTML = html ?? '';
-}
-
-/** Set textContent for a data-slot element. */
-function fillSlotText(doc, slotName, text) {
-  const el = doc.querySelector(`[data-slot="${slotName}"]`);
-  if (!el) return;
-  el.textContent = text ?? '';
 }
 
 function escapeHtml(str) {
@@ -130,96 +83,23 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-/* ─────────────────────────────────────────
-   MIXED-GRID slot renderers
-───────────────────────────────────────── */
-
-function renderStat(stat) {
-  const iconHtml = renderIconHtml(stat.icon, 'ig-stat-icon', 28);
-  return `<div class="ig-stat">
-    <div class="ig-stat-icon-wrap">
-      ${iconHtml}
-    </div>
-    <div class="ig-stat-text">
-      <div class="ig-stat-num">${escapeHtml(stat.number)}</div>
-      <div class="ig-stat-label">${escapeHtml(stat.label)}</div>
-    </div>
-  </div>`;
-}
-
 /**
- * Compute the card density class for a given size + tone + AI hint.
- *
- * Priority: AI-declared card_density (if valid) → size constraint → tone preference.
- *
- * Geometry rationale (bullets-container px available per bullet):
- *   A4 portrait  → ~261px → 4.6 lines/bullet  → standard (3 lines) or detailed (4)
- *   9:16 portrait→ ~500px → 9+ lines/bullet   → detailed (4 lines)
- *   1:1 square   → ~120px → 1.8 lines/bullet  → compact  (1 line)
- *   16:9 landscape→~144px → 2.5 lines/bullet  → standard (CSS caps at 2 lines via landscape override)
- *
- * @param {object} json    - parsed AI JSON (may contain card_density hint)
- * @param {string} sizeId  - 'a4'|'portrait'|'square'|'landscape'
- * @param {string} toneId  - 'professional'|'bold'|'minimal'|'playful'
- * @returns {'compact'|'standard'|'detailed'}
+ * Render an icon as inline SVG or <img> with onerror fallback.
  */
-function computeCardDensity(json, sizeId, toneId) {
-  const VALID = ['compact', 'standard', 'detailed'];
-
-  // Honour AI-declared density if it passes validation
-  if (VALID.includes(json.card_density)) return json.card_density;
-
-  // Size constraints take absolute priority (geometry doesn't change with tone)
-  if (sizeId === 'square') return 'compact';
-  // Landscape: ~2.5 lines fit, but CSS `.ig-page[data-size="landscape"] .ig-card-bullet`
-  // (specificity 0,3,0) caps standard bullets at 2 lines — no extra class needed.
-  if (sizeId === 'landscape') return 'standard';
-
-  // Portrait has lots of vertical room
-  if (sizeId === 'portrait') {
-    return (toneId === 'minimal') ? 'standard' : 'detailed';
+function renderIconHtml(name, cssClass, px = 40) {
+  const svgStr = LOCAL_SVG_MAP[name];
+  if (svgStr) {
+    return svgStr.replace(
+      '<svg ',
+      `<svg class="${cssClass}" width="${px}" height="${px}" aria-label="${escapeHtml(name)}" data-icon="true" data-icon-name="${escapeHtml(name)}" `
+    );
   }
-
-  // A4: default by tone
-  // minimal = intentional whitespace; professional/bold/playful = rich content
-  return (toneId === 'minimal') ? 'compact' : 'standard';
-}
-
-function renderCard(card, density = 'standard') {
-  const iconHtml = renderIconHtml(card.icon, 'ig-card-icon', 40);
-  const bullets  = (card.bullets ?? [])
-    .map(b => `<li class="ig-card-bullet">${escapeHtml(b)}</li>`)
-    .join('');
-
-  return `<div class="ig-card ig-card--${density}">
-    <div class="ig-card-icon-wrap">
-      ${iconHtml}
-    </div>
-    <div class="ig-card-title">${escapeHtml(card.title)}</div>
-    <ul class="ig-card-bullets">${bullets}</ul>
-  </div>`;
+  const src = `${PROXY_BASE}${encodeURIComponent(`${ICONS8_BASE}/${px}/${name}.png`)}`;
+  return `<img class="${cssClass}" src="${src}" alt="${escapeHtml(name)}" width="${px}" height="${px}" data-icon="true" data-icon-name="${escapeHtml(name)}" onerror="this.onerror=null;this.src='${ICON_FALLBACK_SRC}'" />`;
 }
 
 /* ─────────────────────────────────────────
-   STEPS-GUIDE slot renderers
-───────────────────────────────────────── */
-
-function renderStep(step, idx) {
-  const iconHtml = renderIconHtml(step.icon, 'ig-step-icon', 26);
-  return `<div class="ig-step">
-    <div class="ig-step-num">${escapeHtml(String(step.number ?? idx + 1))}</div>
-    <div class="ig-step-icon-wrap">
-      ${iconHtml}
-    </div>
-    <div class="ig-step-body">
-      <div class="ig-step-title">${escapeHtml(step.title)}</div>
-      <div class="ig-step-body-text">${escapeHtml(step.body)}</div>
-    </div>
-  </div>`;
-}
-
-/* ─────────────────────────────────────────
-   TONE APPLICATION
+   TONE DEFAULTS
 ───────────────────────────────────────── */
 
 const TONE_ACCENT_DEFAULTS = {
@@ -229,219 +109,39 @@ const TONE_ACCENT_DEFAULTS = {
   playful:      '#7C3AED',
 };
 
-function applyTone(doc, tone, accentOverride) {
-  const page = doc.querySelector('.ig-page');
-  if (!page) return;
-
-  page.setAttribute('data-tone', tone || 'professional');
-
-  // Inject --accent override if user changed the accent picker
-  if (accentOverride) {
-    const hex = accentOverride.replace('#', '');
-    const r = parseInt(hex.slice(0,2),16);
-    const g = parseInt(hex.slice(2,4),16);
-    const b = parseInt(hex.slice(4,6),16);
-
-    const style = doc.createElement('style');
-    style.textContent = `:root { --accent: ${accentOverride}; --accent-soft: rgba(${r},${g},${b},0.08); }`;
-    doc.head.appendChild(style);
-  }
-}
-
 /* ─────────────────────────────────────────
-   SIZE APPLICATION
-───────────────────────────────────────── */
-
-function applySize(doc, size) {
-  const page = doc.querySelector('.ig-page');
-  if (!page) return;
-  page.setAttribute('data-size', size || 'a4');
-}
-
-/* ─────────────────────────────────────────
-   CORE: fillTemplate
+   initRenderer — no-op (templates removed)
+   Kept for call-site compatibility.
 ───────────────────────────────────────── */
 
 /**
- * Fill a v3 template with AI-generated JSON content.
- *
- * @param {object} json          — parsed AI output (matches layout schema)
- * @param {string} [layoutId]    — 'mixed-grid' | 'steps-guide' | ... (falls back to json.layout)
- * @param {string} [tone]        — 'professional' | 'bold' | 'minimal' | 'playful' (falls back to json.tone)
- * @param {string} [size]        — 'a4' | 'portrait' | 'square' | 'landscape' (falls back to json.size)
- * @param {string} [accentColor] — hex color override for --accent (e.g. '#E11D48')
- * @returns {string} Complete HTML string ready for srcdoc
- */
-export function fillTemplate(json, layoutId, tone, size, accentColor) {
-  const layout    = layoutId  || json.layout  || 'mixed-grid';
-  const toneId    = tone      || json.tone    || 'professional';
-  const sizeId    = size      || json.size    || 'a4';
-
-  const templateHTML = TEMPLATES[layout];
-  if (!templateHTML) {
-    throw new Error(`[v3 renderer] Unknown layout: "${layout}". Available: ${Object.keys(TEMPLATES).join(', ')}`);
-  }
-
-  // Parse template into a DOM document
-  const parser = new DOMParser();
-  const doc    = parser.parseFromString(templateHTML, 'text/html');
-
-  // Apply tone + size attributes
-  applyTone(doc, toneId, accentColor);
-  applySize(doc, sizeId);
-
-  // ── Fill layout: MIXED-GRID ──
-  if (layout === 'mixed-grid') {
-    fillSlotText(doc, 'label',    json.label    || '');
-    fillSlotText(doc, 'title',    json.title    || '');
-    fillSlotText(doc, 'subtitle', json.subtitle || '');
-
-    // Hero icon
-    const heroEl = doc.querySelector('[data-slot="hero-icon"]');
-    if (heroEl && json.hero_icon) {
-      heroEl.src = iconUrl(json.hero_icon, 128);
-      heroEl.alt = json.hero_icon;
-      heroEl.setAttribute('data-icon-name', json.hero_icon);
-      heroEl.setAttribute('data-icon', 'true');  // ← makes it selectable by the object editor
-      heroEl.setAttribute('onerror', `this.onerror=null;this.src='${ICON_FALLBACK_SRC}'`);
-    }
-
-    // Stats row (3 items)
-    if (json.stats?.length) {
-      fillSlot(doc, 'stats-loop', json.stats.map(renderStat).join(''));
-    }
-
-    // Cards grid (3 items) — density class applied per card
-    if (json.cards?.length) {
-      const density = computeCardDensity(json, sizeId, toneId);
-      fillSlot(doc, 'cards-loop', json.cards.map(c => renderCard(c, density)).join(''));
-    }
-
-    // Callout
-    if (json.callout) {
-      fillSlotText(doc, 'callout-title', json.callout.title);
-      fillSlotText(doc, 'callout-body',  json.callout.body);
-    }
-
-    // Footer
-    fillSlotText(doc, 'footer-brand', json.footer_brand || 'Infogr.ai');
-  }
-
-  // ── Fill layout: STEPS-GUIDE ──
-  else if (layout === 'steps-guide') {
-    fillSlotText(doc, 'label',    json.label    || '');
-    fillSlotText(doc, 'title',    json.title    || '');
-    fillSlotText(doc, 'subtitle', json.subtitle || '');
-
-    // Hero icon
-    const heroEl = doc.querySelector('[data-slot="hero-icon"]');
-    if (heroEl && json.hero_icon) {
-      heroEl.src = iconUrl(json.hero_icon, 128);
-      heroEl.alt = json.hero_icon;
-      heroEl.setAttribute('data-icon-name', json.hero_icon);
-      heroEl.setAttribute('data-icon', 'true');  // ← makes it selectable by the object editor
-      heroEl.setAttribute('onerror', `this.onerror=null;this.src='${ICON_FALLBACK_SRC}'`);
-    }
-
-    // Steps loop
-    if (json.sections?.length) {
-      fillSlot(doc, 'steps-loop',
-        json.sections.map((s, i) => renderStep(s, i)).join(''));
-    }
-
-    // Stats (optional)
-    if (json.stats?.length) {
-      fillSlot(doc, 'stats-loop', json.stats.map(renderStat).join(''));
-    }
-
-    // Callout (optional)
-    if (json.callout) {
-      fillSlotText(doc, 'callout-title', json.callout.title);
-      fillSlotText(doc, 'callout-body',  json.callout.body);
-    }
-
-    // Footer
-    fillSlotText(doc, 'footer-brand', json.footer_brand || 'Infogr.ai');
-  }
-
-  // Return the complete filled HTML
-  return doc.documentElement.outerHTML;
-}
-
-/* ─────────────────────────────────────────
-   EXPORTS
-───────────────────────────────────────── */
-
-/* ─────────────────────────────────────────
-   TEMPLATE LOADING (fetch-based, no bundler)
-───────────────────────────────────────── */
-
-const TEMPLATE_BASE_PATH = '/v3/templates';
-
-/**
- * Fetch a single template and cache it.
- * @param {string} layoutId
- * @returns {Promise<string>} template HTML string
- */
-async function loadTemplate(layoutId) {
-  if (TEMPLATES[layoutId]) return TEMPLATES[layoutId];
-
-  const url = `${TEMPLATE_BASE_PATH}/${layoutId}/template.html`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`[v3 renderer] Could not load template "${layoutId}" from ${url}`);
-  const html = await resp.text();
-  TEMPLATES[layoutId] = html;
-  return html;
-}
-
-/**
- * Pre-cache all Phase 1 templates on startup.
- * Call once in app.js: `await initRenderer();`
- * After this, fillTemplate() can be called synchronously.
+ * No-op — all rendering is now done via renderFromContent().
+ * Kept for backwards compatibility with any call site that awaits it.
  */
 export async function initRenderer() {
-  await Promise.all([
-    loadTemplate('mixed-grid'),
-    loadTemplate('steps-guide'),
-  ]);
-}
-
-/**
- * fillTemplateAsync — awaits template load if not yet cached.
- * Use this instead of fillTemplate() if initRenderer() wasn't called first.
- *
- * @param {object} json
- * @param {string} [layoutId]
- * @param {string} [tone]
- * @param {string} [size]
- * @param {string} [accentColor]
- * @returns {Promise<string>} filled HTML
- */
-export async function fillTemplateAsync(json, layoutId, tone, size, accentColor) {
-  const layout = layoutId || json.layout || 'mixed-grid';
-  await loadTemplate(layout);
-  return fillTemplate(json, layoutId, tone, size, accentColor);
+  // Nothing to do — template pre-caching removed in Phase 3
 }
 
 /* ─────────────────────────────────────────
-   CONTENT-V1: renderFromContent
-   Phase 2 rendering path — no templates, pure programmatic layout.
-   Takes a validated content-v1 JSON document and returns a full
-   HTML string using the same pipeline as fillTemplate() output.
+   CONTENT-V1 HELPERS
 ───────────────────────────────────────── */
 
-/** Google Fonts URL shared by both template and content-v1 paths. */
-const GOOGLE_FONTS_URL =
-  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap';
+/** Stats row item HTML (used in the stats strip above/below sections). */
+function renderStatItem(stat) {
+  const iconHtml = renderIconHtml(stat.icon || 'star', 'ig-stat-icon', 28);
+  return `<div class="ig-stat">
+    <div class="ig-stat-icon-wrap">${iconHtml}</div>
+    <div class="ig-stat-text">
+      <div class="ig-stat-num">${escapeHtml(stat.number || '')}</div>
+      <div class="ig-stat-label">${escapeHtml(stat.label || '')}</div>
+    </div>
+  </div>`;
+}
 
-/**
- * Build the header HTML for a content-v1 infographic.
- * Mirrors the `.ig-header` block used in legacy templates.
- */
 function buildContentHeader(json) {
   const label    = json.label    ? `<span class="ig-label">${escapeHtml(json.label)}</span>` : '';
   const heroIcon = json.hero_icon
-    ? `<div class="ig-hero-icon-wrap" style="text-align:center;margin-bottom:10px;">${renderIconHtml(json.hero_icon, 'ig-hero-icon', 64)}</div>`
+    ? `<div class="ig-hero-icon-wrap">${renderIconHtml(json.hero_icon, 'ig-hero-icon', 64)}</div>`
     : '';
   const title    = json.title    ? `<h1 class="ig-title">${escapeHtml(json.title)}</h1>` : '';
   const subtitle = json.subtitle ? `<p class="ig-subtitle">${escapeHtml(json.subtitle)}</p>` : '';
@@ -449,17 +149,11 @@ function buildContentHeader(json) {
   return `<div class="ig-header">${heroIcon}${label}${title}${subtitle}</div>`;
 }
 
-/**
- * Build optional stats row HTML.
- */
 function buildStatsHtml(stats) {
   if (!Array.isArray(stats) || stats.length === 0) return '';
-  return `<div class="ig-stats-row" data-slot="stats-loop">${stats.map(renderStat).join('')}</div>`;
+  return `<div class="ig-stats-row">${stats.map(renderStatItem).join('')}</div>`;
 }
 
-/**
- * Build optional callout HTML.
- */
 function buildCalloutHtml(callout) {
   if (!callout || (!callout.title && !callout.body)) return '';
   return `<div class="ig-callout">
@@ -468,19 +162,122 @@ function buildCalloutHtml(callout) {
 </div>`;
 }
 
-/**
- * Build footer HTML.
- */
 function buildFooterHtml(brand) {
   return `<div class="ig-footer"><span class="ig-footer-brand">${escapeHtml(brand || 'Infogr.ai')}</span></div>`;
 }
 
+/* ─────────────────────────────────────────
+   Google Fonts URL
+───────────────────────────────────────── */
+
+const GOOGLE_FONTS_URL =
+  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap';
+
+/* ─────────────────────────────────────────
+   ALL SMART-LAYOUT CSS
+───────────────────────────────────────── */
+
+const ALL_LAYOUT_CSS = [
+  BOXES_CSS,
+  BULLETS_CSS,
+  SEQUENCE_CSS,
+  NUMBERS_CSS,
+  CIRCLES_CSS,
+  QUOTES_CSS,
+  STEPS_CSS,
+].join('\n');
+
+/* ─────────────────────────────────────────
+   Content-v1 chrome CSS (header/footer/section spacing)
+───────────────────────────────────────── */
+
+const CONTENT_LAYOUT_CSS = `
+  .ig-page .ig-header {
+    text-align: center;
+    padding: 32px 32px 20px;
+  }
+  .ig-page .ig-header .ig-hero-icon-wrap {
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .ig-page .ig-header .ig-label {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+    font-size: 0.7em;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 12px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+  }
+  .ig-page .ig-header .ig-title {
+    font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+    font-size: 1.6em;
+    font-weight: 700;
+    color: var(--text-primary, #111827);
+    margin: 0 0 8px;
+    line-height: 1.2;
+  }
+  .ig-page .ig-header .ig-subtitle {
+    font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+    font-size: 0.9em;
+    color: var(--text-secondary, #6b7280);
+    margin: 0;
+    line-height: 1.5;
+  }
+  .ig-page .ig-content-section {
+    padding: 0 28px 20px;
+  }
+  .ig-page .ig-stats-row {
+    display: flex;
+    gap: 16px;
+    padding: 8px 28px 20px;
+    flex-wrap: wrap;
+  }
+  .ig-page .ig-callout {
+    margin: 0 28px 20px;
+    background: var(--accent-soft, rgba(37,99,235,.1));
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+  }
+  .ig-page .ig-callout-title {
+    font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+    font-size: 0.9em;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .ig-page .ig-callout-body {
+    font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+    font-size: 0.8em;
+    color: var(--text-secondary, #6b7280);
+    line-height: 1.45;
+  }
+  .ig-page .ig-footer {
+    padding: 14px 28px;
+    border-top: 1px solid var(--card-border, #e5e7eb);
+    text-align: right;
+  }
+  .ig-page .ig-footer-brand {
+    font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+    font-size: 0.7em;
+    color: var(--text-secondary, #6b7280);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+`;
+
+/* ─────────────────────────────────────────
+   renderFromContent — the only rendering path
+───────────────────────────────────────── */
+
 /**
  * Render a content-v1 JSON document into a full HTML string.
- * Bypasses template files — all layout is programmatic via smart-layouts + grid.
- *
- * The returned HTML goes through the same preprocessHTMLv3() → renderHTML()
- * pipeline in app.js as legacy template output.
+ * All layouts go through this function — no templates required.
  *
  * @param {object} contentJson  — validated content-v1 document
  * @param {string} [tone]       — 'professional' | 'bold' | 'minimal' | 'playful'
@@ -489,9 +286,9 @@ function buildFooterHtml(brand) {
  * @returns {string} Full HTML string
  */
 export function renderFromContent(contentJson, tone, size, accentColor) {
-  const toneId  = tone  || contentJson.tone  || 'professional';
-  const sizeId  = size  || contentJson.size  || 'a4';
-  const accent  = accentColor || TONE_ACCENT_DEFAULTS[toneId] || '#2563EB';
+  const toneId = tone  || contentJson.tone  || 'professional';
+  const sizeId = size  || contentJson.size  || 'a4';
+  const accent = accentColor || TONE_ACCENT_DEFAULTS[toneId] || '#2563EB';
 
   // Compute --accent-soft from accent hex
   let accentSoft = 'rgba(37,99,235,0.1)';
@@ -503,106 +300,19 @@ export function renderFromContent(contentJson, tone, size, accentColor) {
     accentSoft = `rgba(${r},${g},${b},0.1)`;
   } catch (_) { /* use default */ }
 
-  // Render each content section
+  // Render each content section via smart-layouts engine
   const sections = Array.isArray(contentJson.sections) ? contentJson.sections : [];
-  const renderedSections = sections.map(section => renderSection(section, toneId));
-
-  // Compose sections — currently stacked vertically (1 section per row).
-  // Phase 3 will wire page-level column layout via grid.js renderSections().
-  const sectionsHtml = renderedSections
-    .map(s => `<div class="ig-content-section">${s}</div>`)
+  const sectionsHtml = sections
+    .map(section => `<div class="ig-content-section">${renderSection(section, toneId)}</div>`)
     .join('');
 
-  // Assemble page body
+  // Build chrome
   const header  = buildContentHeader(contentJson);
   const stats   = buildStatsHtml(contentJson.stats);
   const callout = buildCalloutHtml(contentJson.callout);
   const footer  = buildFooterHtml(contentJson.footer_brand);
 
-  const accentOverrideCSS = `
-    :root {
-      --accent: ${accent};
-      --accent-soft: ${accentSoft};
-    }
-  `;
-
-  // Minimal content-v1 layout CSS (header/footer/section spacing).
-  // Box + grid CSS is injected via BOXES_CSS + GRID_CSS imports.
-  const contentLayoutCSS = `
-    .ig-page .ig-header {
-      text-align: center;
-      padding: 32px 32px 20px;
-    }
-    .ig-page .ig-header .ig-label {
-      display: inline-block;
-      background: var(--accent);
-      color: #fff;
-      font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-      font-size: 0.7em;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      padding: 3px 12px;
-      border-radius: 20px;
-      margin-bottom: 10px;
-    }
-    .ig-page .ig-header .ig-title {
-      font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-      font-size: 1.6em;
-      font-weight: 700;
-      color: var(--text-primary, #111827);
-      margin: 0 0 8px;
-      line-height: 1.2;
-    }
-    .ig-page .ig-header .ig-subtitle {
-      font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
-      font-size: 0.9em;
-      color: var(--text-secondary, #6b7280);
-      margin: 0;
-      line-height: 1.5;
-    }
-    .ig-page .ig-content-section {
-      padding: 0 28px 20px;
-    }
-    .ig-page .ig-stats-row {
-      display: flex;
-      gap: 16px;
-      padding: 8px 28px 20px;
-      flex-wrap: wrap;
-    }
-    .ig-page .ig-callout {
-      margin: 0 28px 20px;
-      background: var(--accent-soft, rgba(37,99,235,.1));
-      border-left: 4px solid var(--accent);
-      border-radius: 0 8px 8px 0;
-      padding: 14px 18px;
-    }
-    .ig-page .ig-callout-title {
-      font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-      font-size: 0.9em;
-      font-weight: 700;
-      color: var(--accent);
-      margin-bottom: 4px;
-    }
-    .ig-page .ig-callout-body {
-      font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
-      font-size: 0.8em;
-      color: var(--text-secondary, #6b7280);
-      line-height: 1.45;
-    }
-    .ig-page .ig-footer {
-      padding: 14px 28px;
-      border-top: 1px solid var(--card-border, #e5e7eb);
-      text-align: right;
-    }
-    .ig-page .ig-footer-brand {
-      font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
-      font-size: 0.7em;
-      color: var(--text-secondary, #6b7280);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-  `;
+  const accentOverrideCSS = `:root { --accent: ${accent}; --accent-soft: ${accentSoft}; }`;
 
   return `<!DOCTYPE html>
 <html>
@@ -613,7 +323,7 @@ export function renderFromContent(contentJson, tone, size, accentColor) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="${GOOGLE_FONTS_URL}" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
-  <style>${accentOverrideCSS}${BOXES_CSS}${GRID_CSS}${contentLayoutCSS}</style>
+  <style>${accentOverrideCSS}${ALL_LAYOUT_CSS}${GRID_CSS}${CONTENT_LAYOUT_CSS}</style>
 </head>
 <body>
   <div class="ig-page" data-tone="${escapeHtml(toneId)}" data-size="${escapeHtml(sizeId)}">
