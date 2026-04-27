@@ -194,6 +194,13 @@ const ALL_LAYOUT_CSS = [
 ───────────────────────────────────────── */
 
 const CONTENT_LAYOUT_CSS = `
+  /* ── Page container — hard-clamped to its parent dimensions ── */
+  .ig-page {
+    overflow: hidden;
+    max-height: 100%;
+    height: 100%;
+    box-sizing: border-box;
+  }
   .ig-page .ig-header {
     text-align: center;
     padding: 32px 32px 20px;

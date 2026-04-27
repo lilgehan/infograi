@@ -423,14 +423,15 @@ body {
 }
 .exp-btn.primary:hover { background: var(--ui-accent-h); }
 
-/* ── Canvas body (centers iframe; JS toggles overflow based on zoom) ─ */
+/* ── Canvas body (scrollable on both axes; x always shows scrollbar) ─ */
 .cbody {
   flex: 1;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 32px;
-  overflow: hidden; /* JS sets to 'auto' when zoom > 1 */
+  overflow-x: scroll; /* always visible — matches vertical scrollbar */
+  overflow-y: auto;
 }
 
 #outputWrap {

@@ -1467,10 +1467,10 @@ function applyZoom(animate = true) {
   }
 
   // Always allow scroll on both axes so two-finger pan works at any zoom level.
-  // Set each axis explicitly — a single overflow shorthand can be overridden by
-  // a stylesheet's overflow-x or overflow-y declaration.
+  // overflowX stays 'scroll' (always visible bar); overflowY switches to 'auto'
+  // once content is large enough to need it.
   if (cbody) {
-    cbody.style.overflowX = 'auto';
+    cbody.style.overflowX = 'scroll';
     cbody.style.overflowY = 'auto';
   }
   $('zoomLabel').textContent = Math.round(z * 100) + '%';
@@ -1547,10 +1547,13 @@ async function toBase64(url) {
   } catch { return null; }
 }
 
-async function prefetchExportImages() {
-  const doc = $('exportFrame')?.contentDocument;
-  if (!doc) return () => {};
-  const imgs    = [...doc.querySelectorAll('img')];
+/**
+ * Convert all external img srcs inside a container to data URIs so
+ * html-to-image can capture them. Returns a restore function that
+ * puts all original srcs back.
+ */
+async function prefetchImagesInEl(container) {
+  const imgs    = [...container.querySelectorAll('img')];
   const origSrc = imgs.map(img => img.src);
   await Promise.all(imgs.map(async (img, i) => {
     if (!origSrc[i] || origSrc[i].startsWith('data:')) return;
@@ -1558,6 +1561,13 @@ async function prefetchExportImages() {
     if (b64) img.src = b64;
   }));
   return () => imgs.forEach((img, i) => { img.src = origSrc[i]; });
+}
+
+// Legacy alias — exportFrame-based path kept for potential future use
+async function prefetchExportImages() {
+  const doc = $('exportFrame')?.contentDocument;
+  if (!doc) return () => {};
+  return prefetchImagesInEl(doc);
 }
 
 async function autoConvertImages() {
@@ -1577,12 +1587,19 @@ async function autoConvertImages() {
 
 // ── EXPORT PNG ─────────────────────────────────────────────
 async function exportPNG() {
-  const el = await prepareExportFrame();
-  if (!el) { alert('Nothing to export yet.'); return; }
+  // Capture editCanvas directly — html-to-image cannot cross iframe boundaries.
+  const canvas = document.getElementById('editCanvas');
+  if (!canvas) { alert('Nothing to export yet.'); return; }
+  const sz = SIZES[STATE.size];
   await document.fonts.ready;
-  const restore = await prefetchExportImages();
+  const restore = await prefetchImagesInEl(canvas);
   try {
-    const dataUrl = await htmlToImage.toPng(el, { pixelRatio: 2, backgroundColor: '#ffffff' });
+    const dataUrl = await htmlToImage.toPng(canvas, {
+      pixelRatio: 2,
+      backgroundColor: '#ffffff',
+      width:  sz?.w,
+      height: sz?.h,
+    });
     download(dataUrl, exportFilename('png'));
   } catch (e) {
     alert('PNG export failed: ' + (e?.message || String(e)) +
@@ -1592,26 +1609,28 @@ async function exportPNG() {
 
 // ── EXPORT PDF ─────────────────────────────────────────────
 async function exportPDF() {
-  const el = await prepareExportFrame();
-  if (!el) { alert('Nothing to export yet.'); return; }
+  // Capture editCanvas directly — html-to-image cannot cross iframe boundaries.
+  const canvas = document.getElementById('editCanvas');
+  if (!canvas) { alert('Nothing to export yet.'); return; }
+  const sz = SIZES[STATE.size];
   await document.fonts.ready;
-  const restore = await prefetchExportImages();
+  const restore = await prefetchImagesInEl(canvas);
   try {
-    const dataUrl = await htmlToImage.toPng(el, { pixelRatio: 2 });
-    const img = new Image();
-    img.onload = () => {
-      const sz = SIZES[STATE.size];
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({
-        orientation: sz.h > sz.w ? 'portrait' : 'landscape',
-        unit:        'px',
-        format:      [sz.w, sz.h],
-        hotfixes:    ['px_scaling'],
-      });
-      pdf.addImage(dataUrl, 'PNG', 0, 0, sz.w, sz.h);
-      pdf.save(exportFilename('pdf'));
-    };
-    img.src = dataUrl;
+    const dataUrl = await htmlToImage.toPng(canvas, {
+      pixelRatio: 2,
+      backgroundColor: '#ffffff',
+      width:  sz?.w,
+      height: sz?.h,
+    });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: sz.h > sz.w ? 'portrait' : 'landscape',
+      unit:        'px',
+      format:      [sz?.w || 800, sz?.h || 1131],
+      hotfixes:    ['px_scaling'],
+    });
+    pdf.addImage(dataUrl, 'PNG', 0, 0, sz?.w || 800, sz?.h || 1131);
+    pdf.save(exportFilename('pdf'));
   } catch (e) {
     alert('PDF export failed: ' + (e?.message || String(e)));
   } finally { restore(); }

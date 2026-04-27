@@ -277,11 +277,12 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
 
   // ── Canvas size rules ────────────────────────────────────────
   const SIZE_RULES = {
-    a4:        'Canvas: A4 portrait (800×1131px). Titles ≤ 60 chars. Callout body ≤ 200 chars.',
-    portrait:  'Canvas: Portrait (800×1422px). Titles ≤ 65 chars. Callout body ≤ 220 chars. Extra vertical room available.',
-    square:    'Canvas: Square (800×800px). VERY limited. Titles ≤ 35 chars. Callout ≤ 90 chars. Stat labels ≤ 3 words.',
-    landscape: 'Canvas: Landscape (1100×800px). Wide but short. Titles ≤ 40 chars. Callout ≤ 90 chars. Stat labels ≤ 3 words.',
+    a4:        'Canvas: A4 portrait (800×1131px). Titles ≤ 60 chars. Callout body ≤ 200 chars. Generate MAXIMUM 3 sections with 3–4 items each.',
+    portrait:  'Canvas: Portrait (800×1422px). Titles ≤ 65 chars. Callout body ≤ 220 chars. Generate MAXIMUM 4 sections with 3–4 items each.',
+    square:    'Canvas: Square (800×800px). VERY limited vertical space. Titles ≤ 35 chars. Callout ≤ 90 chars. Stat labels ≤ 3 words. Generate MAXIMUM 2 sections with 3 items each.',
+    landscape: 'Canvas: Landscape (1100×800px). Wide but SHORT — very limited vertical space. Titles ≤ 40 chars. Callout ≤ 90 chars. Stat labels ≤ 3 words. Generate MAXIMUM 2 sections with 3–4 items each.',
   };
+  const SINGLE_PAGE_RULE = 'CRITICAL: The TOTAL content must fit on a single page with NO scrolling. Leave 15% vertical space empty rather than overflow. Fewer sections with rich content is always better than more sections that overflow.';
   const sizeRule = SIZE_RULES[size] || SIZE_RULES.a4;
 
   // ── Content density rule ─────────────────────────────────────
@@ -321,6 +322,7 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
     `Topic: ${topic}`,
     `Tone: ${toneGuide}`,
     sizeRule,
+    SINGLE_PAGE_RULE,
     `Section style: "${density}" — match item body lengths to that density (see STYLE RULES above).`,
     columnNote,
     layoutHint,
