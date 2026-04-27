@@ -225,7 +225,28 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Layout picker ─────────────────────────────────────── */
-.tpl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.tpl-grid { display: flex; flex-direction: column; gap: 0; }
+
+/* Two-tier group structure */
+.tpl-group { display: flex; flex-direction: column; gap: 4px; padding: 5px 0; }
+.tpl-group-label {
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t3);
+  font-family: 'Space Grotesk', sans-serif;
+  padding: 0 2px 2px;
+  opacity: 0.6;
+}
+.tpl-group-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.tpl-group-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+  opacity: 0.5;
+}
+
 .tpl-card {
   background: var(--surface2);
   border: 1.5px solid var(--border);
@@ -247,6 +268,10 @@ body {
   font-family: 'Space Grotesk', sans-serif;
 }
 .tpl-card.on .tpl-name { color: var(--ui-accent); }
+
+/* Advanced document cards — subtle distinction from quick layouts */
+.tpl-card--advanced { border-style: dashed; }
+.tpl-card--advanced.on { border-style: solid; }
 
 /* ── Canvas area ───────────────────────────────────────── */
 .canvas-area {

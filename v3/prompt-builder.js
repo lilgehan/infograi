@@ -10,11 +10,14 @@
  *  - JSON schema embedded in the static (cached) part
  *  - detectLayout() always returns 'content-v1'
  *  - buildPrompt() always uses CONTENT_V1_SCHEMA_PROMPT
+ *  - When archetypeId is provided, archetype recipe overrides the generic hints
  *
  * Usage:
  *   import { buildPrompt, detectLayout } from './prompt-builder.js';
- *   const messages = buildPrompt({ topic, layoutId, tone, size });
+ *   const messages = buildPrompt({ topic, layoutId, tone, size, archetypeId });
  */
+
+import { getArchetype } from './archetypes.js';
 
 /* ─────────────────────────────────────────
    ICON NAMING CONVENTION
@@ -262,14 +265,17 @@ Note: sequence, bullets, steps, and quote variants are single-column — set col
  * Always uses the content-v1 schema path.
  *
  * @param {object} opts
- * @param {string}  opts.topic     — user's topic description
- * @param {string}  opts.layoutId  — any layout id (all route through content-v1)
- * @param {string}  opts.tone      — 'professional' | 'bold' | 'minimal' | 'playful'
- * @param {string} [opts.size]     — 'a4' | 'portrait' | 'square' | 'landscape' (default 'a4')
+ * @param {string}  opts.topic       — user's topic description
+ * @param {string}  opts.layoutId    — any layout id (all route through content-v1)
+ * @param {string}  opts.tone        — 'professional' | 'bold' | 'minimal' | 'playful'
+ * @param {string} [opts.size]       — 'a4' | 'portrait' | 'square' | 'landscape' (default 'a4')
+ * @param {string} [opts.archetypeId] — optional archetype id from archetypes.js
+ *                                      When provided, archetype recipe overrides generic hints:
+ *                                      aiSystemHint → system prefix, per-section variant/density/itemCount/aiHint
  *
  * @returns {{ system: Array, messages: Array, cacheKey: string }}
  */
-export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
+export function buildPrompt({ topic, layoutId, tone, size = 'a4', archetypeId }) {
   const toneGuide = TONE_GUIDES[tone] || TONE_GUIDES.professional;
 
   // Always use content-v1 schema (all layouts go through renderFromContent)
@@ -306,7 +312,57 @@ export function buildPrompt({ topic, layoutId, tone, size = 'a4' }) {
     landscape: 'Up to 4 columns per section (landscape is wide). Use 3–4 item rows.',
   }[size] || 'Max 3 columns per section.';
 
-  // ── Layout hint for the AI ───────────────────────────────────
+  // ── ARCHETYPE PATH — override hints with recipe ───────────────
+  if (archetypeId) {
+    const archetype = getArchetype(archetypeId);
+    if (archetype) {
+      // Build per-section instructions from the recipe
+      const sectionInstructions = archetype.sections.map((s, i) => {
+        const count = `${s.itemCount.min}–${s.itemCount.max} items`;
+        return `  Section ${i + 1} (role: ${s.role}): variant="${s.variant}", style="${s.density}", ${count}. ${s.aiHint}`;
+      }).join('\n');
+
+      const archetypeDirective = [
+        `## DOCUMENT TYPE: ${archetype.name}`,
+        archetype.aiSystemHint,
+        '',
+        '## SECTION BREAKDOWN (follow exactly):',
+        sectionInstructions,
+        '',
+        `CRITICAL: Generate EXACTLY ${archetype.sections.length} sections in the order listed above.`,
+        'Do NOT add extra sections. Do NOT change the variants specified.',
+        `Each section's "style" must match the density listed for that section.`,
+      ].join('\n');
+
+      const userMessage = [
+        `Topic: ${topic}`,
+        `Tone: ${toneGuide}`,
+        sizeRule,
+        SINGLE_PAGE_RULE,
+        columnNote,
+        '',
+        archetypeDirective,
+        '',
+        'Generate the JSON now. Return only the raw JSON object.',
+      ].filter(Boolean).join('\n');
+
+      return {
+        system: [
+          {
+            type: 'text',
+            text: staticBlock,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages: [
+          { role: 'user', content: userMessage },
+        ],
+        cacheKey: `v3-content-v1-static`,
+      };
+    }
+  }
+
+  // ── QUICK LAYOUT PATH — generic hints ────────────────────────
   // When the user picks a named layout, nudge the AI toward relevant variants
   const LAYOUT_VARIANT_HINTS = {
     'timeline':   'Prefer sequence variants: timeline, minimal-timeline, or minimal-timeline-boxes.',

@@ -23,6 +23,7 @@ import {
 } from './smart-layouts.js';
 import { DIAGRAM_CSS } from './smart-diagrams.js';
 import { GRID_CSS } from './grid.js';
+import { COMPOSITION_CSS, applyComposition } from './compositions.js';
 
 /* ── Local SVG map — critical icons embedded as data URIs ──
    These load instantly with zero network requests, zero CORS issues.
@@ -187,6 +188,7 @@ const ALL_LAYOUT_CSS = [
   QUOTES_CSS,
   STEPS_CSS,
   DIAGRAM_CSS,
+  COMPOSITION_CSS,
 ].join('\n');
 
 /* ─────────────────────────────────────────
@@ -200,6 +202,32 @@ const CONTENT_LAYOUT_CSS = `
     max-height: 100%;
     height: 100%;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+  .ig-page .ig-header      { flex-shrink: 0; }
+  .ig-page .ig-footer      { flex-shrink: 0; margin-top: auto; }
+  .ig-page .ig-stats-row   { flex-shrink: 0; }
+  .ig-page .ig-callout     { flex-shrink: 0; }
+
+  /* ── Composition wrapper — flex-grows to fill space between header and footer ── */
+  .ig-page .ig-composition-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0 28px 20px;
+    box-sizing: border-box;
+  }
+  /* When a named composition is inside the wrap, it takes full space */
+  .ig-page .ig-composition-wrap > .ig-comp-stack,
+  .ig-page .ig-composition-wrap > .ig-comp-two-col,
+  .ig-page .ig-composition-wrap > .ig-comp-hero-grid,
+  .ig-page .ig-composition-wrap > .ig-comp-dashboard,
+  .ig-page .ig-composition-wrap > .ig-comp-quadrant,
+  .ig-page .ig-composition-wrap > .ig-comp-sidebar {
+    flex: 1 1 auto;
   }
   .ig-page .ig-header {
     text-align: center;
@@ -237,8 +265,14 @@ const CONTENT_LAYOUT_CSS = `
     margin: 0;
     line-height: 1.5;
   }
-  .ig-page .ig-content-section {
+  /* ig-content-section: padding only applies when NOT inside ig-composition-wrap */
+  .ig-page > .ig-content-section {
     padding: 0 28px 20px;
+    flex: 1 1 auto;
+  }
+  /* Inside composition-wrap, sections have no extra horizontal padding (wrap handles it) */
+  .ig-page .ig-composition-wrap .ig-content-section {
+    padding: 0;
   }
   .ig-page .ig-stats-row {
     display: flex;
@@ -288,32 +322,44 @@ const CONTENT_LAYOUT_CSS = `
  * Render a content-v1 JSON document into a full HTML string.
  * All layouts go through this function — no templates required.
  *
- * @param {object} contentJson  — validated content-v1 document
- * @param {string} [tone]       — 'professional' | 'bold' | 'minimal' | 'playful'
- * @param {string} [size]       — 'a4' | 'portrait' | 'square' | 'landscape'
+ * @param {object} contentJson   — validated content-v1 document
+ * @param {string} [tone]        — 'professional' | 'bold' | 'minimal' | 'playful'
+ * @param {string} [size]        — 'a4' | 'portrait' | 'square' | 'landscape'
  * @param {string} [accentColor] — hex color override e.g. '#E11D48'
+ * @param {string} [compositionId] — optional page composition: 'stack' | 'two-col-equal' |
+ *                                   'hero-grid' | 'dashboard' | 'quadrant' | 'asymmetric-sidebar'
+ *                                   Defaults to 'stack' (backward compatible vertical stacking).
  * @returns {string} Full HTML string
  */
-export function renderFromContent(contentJson, tone, size, accentColor) {
+export function renderFromContent(contentJson, tone, size, accentColor, compositionId) {
   const toneId = tone  || contentJson.tone  || 'professional';
   const sizeId = size  || contentJson.size  || 'a4';
   const accent = accentColor || TONE_ACCENT_DEFAULTS[toneId] || '#2563EB';
 
-  // Compute --accent-soft from accent hex
+  // Compute --accent-soft and --accent-rgb from accent hex
   let accentSoft = 'rgba(37,99,235,0.1)';
+  let accentRgb  = '37,99,235';
   try {
     const hex = accent.replace('#', '');
     const r = parseInt(hex.slice(0,2), 16);
     const g = parseInt(hex.slice(2,4), 16);
     const b = parseInt(hex.slice(4,6), 16);
     accentSoft = `rgba(${r},${g},${b},0.1)`;
+    accentRgb  = `${r},${g},${b}`;
   } catch (_) { /* use default */ }
 
   // Render each content section via smart-layouts engine
   const sections = Array.isArray(contentJson.sections) ? contentJson.sections : [];
-  const sectionsHtml = sections
-    .map(section => `<div class="ig-content-section">${renderSection(section, toneId)}</div>`)
-    .join('');
+  const renderedSections = sections.map(
+    section => `<div class="ig-content-section">${renderSection(section, toneId)}</div>`
+  );
+
+  // Apply composition pattern (default: 'stack' = backward-compatible vertical stacking)
+  const compId = compositionId || 'stack';
+  const composedHtml = applyComposition(renderedSections, compId, { accentColor: accent });
+
+  // Wrap in the flex-fill composition wrapper
+  const sectionsHtml = `<div class="ig-composition-wrap">${composedHtml}</div>`;
 
   // Build chrome
   const header  = buildContentHeader(contentJson);
@@ -321,7 +367,7 @@ export function renderFromContent(contentJson, tone, size, accentColor) {
   const callout = buildCalloutHtml(contentJson.callout);
   const footer  = buildFooterHtml(contentJson.footer_brand);
 
-  const accentOverrideCSS = `:root { --accent: ${accent}; --accent-soft: ${accentSoft}; }`;
+  const accentOverrideCSS = `:root { --accent: ${accent}; --accent-soft: ${accentSoft}; --accent-rgb: ${accentRgb}; }`;
 
   return `<!DOCTYPE html>
 <html>

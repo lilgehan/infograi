@@ -2,6 +2,7 @@
 import { initRenderer, renderFromContent } from './v3/renderer.js';
 import { buildPrompt, detectLayout       } from './v3/prompt-builder.js';
 import { detectAndParse                  } from './v3/schema.js';
+import { getArchetype, ARCHETYPE_IDS     } from './v3/archetypes.js';
 
 /* ============================================================
    Infogr.ai v2.4 → v3 Integration
@@ -156,7 +157,8 @@ const SIZES = {
   landscape: { w: 1100, h: 800,  label: '16:9', sections: '3-4' },
 };
 
-const LAYOUTS = [
+// ── QUICK LAYOUTS — Group 1 ────────────────────────────────
+const QUICK_LAYOUTS = [
   { id: 'auto',        name: 'Auto (AI picks)', thumb: 'auto'       },
   { id: 'content-v1',  name: 'Overview / Boxes', thumb: 'grid'      },
   { id: 'timeline',    name: 'Timeline',        thumb: 'timeline'   },
@@ -165,6 +167,18 @@ const LAYOUTS = [
   { id: 'flowchart',   name: 'Flowchart',       thumb: 'flowchart'  },
   { id: 'process',     name: 'Process / Steps', thumb: 'steps'      },
 ];
+
+// ── ADVANCED DOCUMENTS — Group 2 (archetypes) ──────────────
+const ADVANCED_LAYOUTS = [
+  { id: 'mind-map',        name: 'Mind Map',        thumb: 'arch-mindmap'    },
+  { id: 'dashboard',       name: 'Dashboard',       thumb: 'arch-dashboard'  },
+  { id: 'competitive-map', name: 'Competitive Map', thumb: 'arch-quadrant'   },
+  { id: 'process-flow',    name: 'Process Flow',    thumb: 'arch-processflow'},
+  { id: 'research-atlas',  name: 'Research Atlas',  thumb: 'arch-atlas'      },
+];
+
+// Combined for backward compat (callAgent references STATE.layout)
+const LAYOUTS = [...QUICK_LAYOUTS, ...ADVANCED_LAYOUTS];
 
 // ── DOM ────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -228,12 +242,35 @@ window.addEventListener('load', () => {
 // ── LAYOUT PICKER ──────────────────────────────────────────
 function renderLayoutPicker() {
   const grid = $('layoutGrid');
-  grid.innerHTML = LAYOUTS.map((l, i) => `
+
+  // Build Group 1: Quick Layouts
+  const quickCards = QUICK_LAYOUTS.map((l, i) => `
     <div class="tpl-card ${i === 0 ? 'on' : ''}" data-layout="${l.id}">
       ${layoutThumb(l.thumb)}
       <div class="tpl-name">${l.name}</div>
     </div>
   `).join('');
+
+  // Build Group 2: Advanced Documents (archetypes)
+  const advancedCards = ADVANCED_LAYOUTS.map(l => `
+    <div class="tpl-card tpl-card--advanced" data-layout="${l.id}">
+      ${layoutThumb(l.thumb)}
+      <div class="tpl-name">${l.name}</div>
+    </div>
+  `).join('');
+
+  grid.innerHTML = `
+    <div class="tpl-group">
+      <div class="tpl-group-label">QUICK LAYOUTS</div>
+      <div class="tpl-group-cards">${quickCards}</div>
+    </div>
+    <div class="tpl-group-divider"></div>
+    <div class="tpl-group">
+      <div class="tpl-group-label">ADVANCED DOCUMENTS</div>
+      <div class="tpl-group-cards">${advancedCards}</div>
+    </div>
+  `;
+
   grid.querySelectorAll('.tpl-card').forEach(el => {
     el.addEventListener('click', () => {
       if (el.classList.contains('on') && el.dataset.layout !== 'auto') {
@@ -251,6 +288,7 @@ function renderLayoutPicker() {
 
 function layoutThumb(kind) {
   const thumbs = {
+    // ── Quick Layout thumbs ──────────────────────────────────
     auto: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><text x="40" y="20" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="11" fill="#E05A2B">AUTO</text><text x="40" y="34" text-anchor="middle" font-family="sans-serif" font-size="7.5" fill="#666">✨ AI decides</text><circle cx="16" cy="44" r="2" fill="#E05A2B"/><circle cx="40" cy="44" r="2" fill="#E05A2B"/><circle cx="64" cy="44" r="2" fill="#E05A2B"/></svg>`,
     steps: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="9" rx="2" fill="#1A2744"/><circle cx="12" cy="21" r="4" fill="#E05A2B"/><rect x="19" y="18.5" width="40" height="3" rx="1.5" fill="#ccc"/><circle cx="12" cy="33" r="4" fill="#1A2744"/><rect x="19" y="30.5" width="36" height="3" rx="1.5" fill="#ccc"/><circle cx="12" cy="45" r="4" fill="#E05A2B"/><rect x="19" y="42.5" width="32" height="3" rx="1.5" fill="#ccc"/></svg>`,
     grid: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="9" rx="2" fill="#1A2744"/><rect x="4" y="16" width="34" height="16" rx="2" fill="#E05A2B" opacity="0.8"/><rect x="42" y="16" width="34" height="16" rx="2" fill="#1A2744" opacity="0.8"/><rect x="4" y="35" width="21" height="14" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/><rect x="29" y="35" width="21" height="14" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/><rect x="55" y="35" width="21" height="14" rx="2" fill="white" stroke="#ddd" stroke-width="0.5"/></svg>`,
@@ -258,6 +296,56 @@ function layoutThumb(kind) {
     funnel: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><polygon points="8,10 72,10 64,22 16,22" fill="#E05A2B" opacity="0.9"/><polygon points="16,24 64,24 56,36 24,36" fill="#E05A2B" opacity="0.7"/><polygon points="24,38 56,38 50,50 30,50" fill="#E05A2B" opacity="0.5"/></svg>`,
     comparison: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="4" y="4" width="72" height="9" rx="2" fill="#1A2744"/><rect x="4" y="16" width="33" height="32" rx="2" fill="#FEE2E2" stroke="#FECACA" stroke-width="0.5"/><rect x="43" y="16" width="33" height="32" rx="2" fill="#DCFCE7" stroke="#BBF7D0" stroke-width="0.5"/></svg>`,
     flowchart: `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F5F5F5" rx="3"/><rect x="27" y="2" width="26" height="9" rx="4" fill="#ffecbd"/><rect x="22" y="16" width="36" height="9" rx="2" fill="#c2e5ff"/><path d="M40 30 L52 36 L40 42 L28 36 Z" fill="#dcccff"/><rect x="23" y="46" width="34" height="6" rx="3" fill="#ffecbd"/></svg>`,
+
+    // ── Advanced Document (archetype) thumbs ─────────────────
+    // Mind Map: central circle with 4 surrounding dots and connector lines
+    'arch-mindmap': `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#EEF2FF" rx="3"/>
+      <circle cx="40" cy="26" r="9" fill="#4F46E5"/>
+      <circle cx="14" cy="14" r="5" fill="#818CF8"/><line x1="33" y1="19" x2="18" y2="17" stroke="#818CF8" stroke-width="1.5"/>
+      <circle cx="66" cy="14" r="5" fill="#818CF8"/><line x1="47" y1="19" x2="62" y2="17" stroke="#818CF8" stroke-width="1.5"/>
+      <circle cx="14" cy="38" r="5" fill="#818CF8"/><line x1="33" y1="33" x2="18" y2="36" stroke="#818CF8" stroke-width="1.5"/>
+      <circle cx="66" cy="38" r="5" fill="#818CF8"/><line x1="47" y1="33" x2="62" y2="36" stroke="#818CF8" stroke-width="1.5"/>
+    </svg>`,
+
+    // Dashboard: top bar + 2×2 grid in middle + bottom bar
+    'arch-dashboard': `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F0FDF4" rx="3"/>
+      <rect x="4" y="4" width="72" height="10" rx="2" fill="#16A34A" opacity="0.8"/>
+      <rect x="4" y="17" width="34" height="14" rx="2" fill="#86EFAC" opacity="0.7"/>
+      <rect x="42" y="17" width="34" height="14" rx="2" fill="#86EFAC" opacity="0.7"/>
+      <rect x="4" y="34" width="72" height="14" rx="2" fill="#16A34A" opacity="0.4"/>
+    </svg>`,
+
+    // Competitive Map: 2×2 colored quadrants
+    'arch-quadrant': `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#FFF7ED" rx="3"/>
+      <rect x="4"  y="4"  width="34" height="21" rx="2" fill="#FDBA74" opacity="0.8"/>
+      <rect x="42" y="4"  width="34" height="21" rx="2" fill="#FB923C" opacity="0.8"/>
+      <rect x="4"  y="28" width="34" height="20" rx="2" fill="#EA580C" opacity="0.5"/>
+      <rect x="42" y="28" width="34" height="20" rx="2" fill="#C2410C" opacity="0.5"/>
+      <line x1="40" y1="2" x2="40" y2="50" stroke="white" stroke-width="1.5"/>
+      <line x1="2" y1="26" x2="78" y2="26" stroke="white" stroke-width="1.5"/>
+    </svg>`,
+
+    // Process Flow: vertical connected arrow blocks
+    'arch-processflow': `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#F0F9FF" rx="3"/>
+      <rect x="12" y="4"  width="56" height="9" rx="2" fill="#0284C7" opacity="0.9"/>
+      <polygon points="40,14 44,18 36,18" fill="#0284C7"/>
+      <rect x="12" y="18" width="56" height="9" rx="2" fill="#0284C7" opacity="0.7"/>
+      <polygon points="40,28 44,32 36,32" fill="#0284C7" opacity="0.7"/>
+      <rect x="12" y="32" width="56" height="9" rx="2" fill="#0284C7" opacity="0.5"/>
+      <polygon points="40,42 44,46 36,46" fill="#0284C7" opacity="0.5"/>
+      <rect x="12" y="46" width="56" height="5" rx="2" fill="#0284C7" opacity="0.3"/>
+    </svg>`,
+
+    // Research Atlas: two equal columns with items
+    'arch-atlas': `<svg viewBox="0 0 80 52"><rect width="80" height="52" fill="#FAF5FF" rx="3"/>
+      <rect x="4"  y="4"  width="34" height="8"  rx="2" fill="#9333EA" opacity="0.8"/>
+      <rect x="4"  y="15" width="34" height="8"  rx="2" fill="#9333EA" opacity="0.5"/>
+      <rect x="4"  y="26" width="34" height="8"  rx="2" fill="#9333EA" opacity="0.3"/>
+      <rect x="42" y="4"  width="34" height="8"  rx="2" fill="#7E22CE" opacity="0.8"/>
+      <rect x="42" y="15" width="34" height="8"  rx="2" fill="#7E22CE" opacity="0.5"/>
+      <rect x="42" y="26" width="34" height="8"  rx="2" fill="#7E22CE" opacity="0.3"/>
+      <rect x="4"  y="38" width="72" height="10" rx="2" fill="#C4B5FD" opacity="0.6"/>
+    </svg>`,
   };
   return thumbs[kind] || '';
 }
@@ -300,18 +388,34 @@ async function generate() {
 // All layouts go through the content-v1 engine (renderFromContent).
 async function callAgent(topic) {
   const rawLayout = STATE.layout;
-  const layoutId  = rawLayout === 'auto' ? detectLayout(topic) : rawLayout;
+
+  // Detect whether the user selected an archetype or a quick layout
+  if (ARCHETYPE_IDS.has(rawLayout)) {
+    // Archetype path: pass archetypeId to buildPrompt + compositionId to renderFromContent
+    const archetype = getArchetype(rawLayout);
+    const compositionId = archetype?.composition || 'stack';
+    STATE.isV3 = true;
+    return await callAgentV3(topic, rawLayout, rawLayout, compositionId);
+  }
+
+  // Quick layout path
+  const layoutId = rawLayout === 'auto' ? detectLayout(topic) : rawLayout;
   STATE.isV3 = true;
-  return await callAgentV3(topic, layoutId);
+  return await callAgentV3(topic, layoutId, null, null);
 }
 
 // ── V3 AGENT — JSON → renderFromContent ────────────────────
-async function callAgentV3(topic, layoutId) {
+// @param {string}      topic
+// @param {string}      layoutId       — used for quick-layout variant hints
+// @param {string|null} archetypeId    — if set, passes recipe instructions to AI
+// @param {string|null} compositionId  — if set, applies page composition to output
+async function callAgentV3(topic, layoutId, archetypeId, compositionId) {
   const { system, messages } = buildPrompt({
     topic,
     layoutId,
-    tone: STATE.tone,
-    size: STATE.size,
+    tone:        STATE.tone,
+    size:        STATE.size,
+    archetypeId: archetypeId || undefined,
   });
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -368,7 +472,7 @@ async function callAgentV3(topic, layoutId) {
   // All responses go through the content-v1 path
   const accentOverride = (STATE.accent !== TONE_COLORS[STATE.tone]) ? STATE.accent : null;
   const { data: contentJson } = detectAndParse(accumulated.trim(), layoutId);
-  return renderFromContent(contentJson, STATE.tone, STATE.size, accentOverride);
+  return renderFromContent(contentJson, STATE.tone, STATE.size, accentOverride, compositionId || undefined);
 }
 
 // ── V2.4 AGENT — raw HTML (unchanged) ──────────────────────
