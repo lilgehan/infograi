@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Infogr.ai — Visual Gallery (All Variants)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    :root {
+      --accent: #2563EB;
+      --accent-soft: rgba(37,99,235,0.1);
+      --accent-rgb: 37,99,235;
+      --card-bg: #ffffff;
+      --card-border: #e5e7eb;
+      --text-primary: #111827;
+      --text-secondary: #6b7280;
+      --font-heading: 'Space Grotesk', sans-serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      padding: 20px;
+    }
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 2em;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .subtitle {
+      text-align: center;
+      color: #6b7280;
+      margin-bottom: 30px;
+      font-size: 0.95em;
+    }
+
+    /* Filter tabs */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .filter-btn {
+      padding: 8px 18px;
+      border: 1px solid #d1d5db;
+      border-radius: 20px;
+      background: white;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: #2563EB; color: #2563EB; }
+    .filter-btn.active { background: #2563EB; color: white; border-color: #2563EB; }
+
+    /* Family section */
+    .family-section {
+      margin-bottom: 40px;
+    }
+    .family-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.3em;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 4px;
+      padding-left: 4px;
+      border-left: 4px solid #2563EB;
+      padding-left: 12px;
+    }
+    .family-subtitle {
+      color: #6b7280;
+      font-size: 0.85em;
+      margin-bottom: 16px;
+      padding-left: 16px;
+    }
+
+    /* Variant cards grid */
+    .variants-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+      gap: 20px;
+    }
+
+    .variant-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+    .variant-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .variant-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #f3f4f6;
+      background: #fafafa;
+    }
+    .variant-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      font-size: 0.95em;
+      color: #111827;
+    }
+    .variant-meta {
+      font-size: 0.75em;
+      color: #9ca3af;
+    }
+    .variant-render {
+      padding: 16px;
+      min-height: 200px;
+      overflow: hidden;
+    }
+    /* Scale down renders to fit nicely */
+    .variant-render .ig-page {
+      all: unset;
+    }
+
+    /* Item count switcher */
+    .item-count-bar {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .item-count-btn {
+      width: 28px;
+      height: 28px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      font-size: 0.8em;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .item-count-btn:hover { border-color: #2563EB; color: #2563EB; }
+    .item-count-btn.active { background: #2563EB; color: white; border-color: #2563EB; }
+
+    /* Density switcher */
+    .density-bar {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .density-btn {
+      padding: 6px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 16px;
+      background: white;
+      cursor: pointer;
+      font-size: 0.8em;
+      font-family: 'Space Grotesk', sans-serif;
+      transition: all 0.15s;
+    }
+    .density-btn:hover { border-color: #2563EB; color: #2563EB; }
+    .density-btn.active { background: #dbeafe; color: #2563EB; border-color: #2563EB; }
+
+    .controls-row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .controls-row label {
+      font-size: 0.85em;
+      font-weight: 600;
+      color: #374151;
+    }
+  </style>
+</head>
+<body>
+  <h1>Infogr.ai Visual Gallery</h1>
+  <p class="subtitle">Every layout and diagram variant rendered with sample data. Switch item counts and density to see how they adapt.</p>
+
+  <div class="controls-row">
+    <label>Density:</label>
+    <div class="density-bar" id="densityBar">
+      <button class="density-btn" data-density="compact">Compact</button>
+      <button class="density-btn active" data-density="standard">Standard</button>
+      <button class="density-btn" data-density="detailed">Detailed</button>
+    </div>
+    <label>Tone:</label>
+    <div class="density-bar" id="toneBar">
+      <button class="density-btn active" data-tone="professional">Professional</button>
+      <button class="density-btn" data-tone="bold">Bold</button>
+      <button class="density-btn" data-tone="minimal">Minimal</button>
+      <button class="density-btn" data-tone="playful">Playful</button>
+    </div>
+  </div>
+
+  <div class="filter-bar" id="filterBar">
+    <button class="filter-btn active" data-filter="all">All</button>
+  </div>
+
+  <div id="gallery"></div>
+
+  <script type="module">
+    import { renderSection, BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS } from './v3/smart-layouts.js';
+    import { renderDiagramSection, DIAGRAM_CSS } from './v3/smart-diagrams.js';
+
+    // Inject all CSS into the page
+    const styleEl = document.createElement('style');
+    styleEl.textContent = [BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS, DIAGRAM_CSS].join('\n');
+    document.head.appendChild(styleEl);
+
+    // ── Sample data generator ──
+    const SAMPLE_TITLES = [
+      'Strategic Planning', 'Market Analysis', 'Product Launch',
+      'Team Building', 'Revenue Growth', 'Customer Success',
+      'Data Analytics', 'Innovation Hub', 'Quality Assurance',
+      'Global Expansion', 'Risk Management', 'Digital Transform'
+    ];
+    const SAMPLE_BODIES = [
+      'Develop comprehensive strategies that align with organizational goals and drive sustainable growth across all business units.',
+      'Analyze market trends, competitor positioning, and customer behavior to identify opportunities and potential threats.',
+      'Coordinate cross-functional teams to deliver successful product launches with maximum market impact and adoption.',
+      'Foster a collaborative culture that attracts top talent and enables teams to perform at their highest potential.',
+      'Implement revenue optimization strategies through pricing, upselling, and market expansion initiatives.',
+      'Build lasting customer relationships through proactive engagement, support excellence, and value delivery.',
+      'Leverage advanced analytics and machine learning to extract actionable insights from complex data sets.',
+      'Create an environment that encourages experimentation, rapid prototyping, and breakthrough innovation.',
+      'Establish rigorous quality standards and continuous improvement processes to ensure product excellence.',
+      'Navigate international markets with localized strategies, compliance frameworks, and partnership networks.',
+      'Identify, assess, and mitigate risks across operations, finance, and strategic initiatives.',
+      'Lead digital transformation initiatives that modernize processes, enhance capabilities, and create competitive advantages.'
+    ];
+    const SAMPLE_ICONS = [
+      'rocket', 'chart-increasing', 'target', 'user-group',
+      'star', 'shield', 'idea', 'gear',
+      'checkmark', 'brain', 'briefcase', 'lightning-bolt'
+    ];
+    const SAMPLE_NUMBERS = ['87%', '$2.4M', '150+', '99.9%', '3.2x', '45K', '12', '68%', '5★'];
+
+    function makeItems(count) {
+      return Array.from({ length: count }, (_, i) => ({
+        title: SAMPLE_TITLES[i % SAMPLE_TITLES.length],
+        body: SAMPLE_BODIES[i % SAMPLE_BODIES.length],
+        icon: SAMPLE_ICONS[i % SAMPLE_ICONS.length],
+        number: SAMPLE_NUMBERS[i % SAMPLE_NUMBERS.length],
+      }));
+    }
+
+    // ── All variants ──
+    const FAMILIES = {
+      'Boxes (layouts)': {
+        type: 'layout',
+        variants: [
+          'solid-boxes', 'solid-boxes-icons', 'outline-boxes', 'side-line',
+          'side-line-text', 'top-line-text', 'top-circle', 'joined-boxes',
+          'joined-boxes-icons', 'leaf-boxes', 'labeled-boxes', 'alternating-boxes'
+        ],
+        defaultItems: 4,
+      },
+      'Bullets (layouts)': {
+        type: 'layout',
+        variants: ['large-bullets', 'small-bullets', 'arrow-bullets', 'process-steps', 'solid-box-small-bullets'],
+        defaultItems: 4,
+      },
+      'Sequence (layouts)': {
+        type: 'layout',
+        variants: ['timeline', 'minimal-timeline', 'minimal-timeline-boxes', 'arrows', 'pills', 'slanted-labels'],
+        defaultItems: 4,
+      },
+      'Numbers (layouts)': {
+        type: 'layout',
+        variants: ['stats', 'circle-stats', 'bar-stats', 'star-rating', 'dot-grid', 'dot-line', 'circle-bold-line', 'circle-external-line'],
+        defaultItems: 4,
+      },
+      'Circles (layouts)': {
+        type: 'layout',
+        variants: ['cycle', 'flower', 'circle', 'ring', 'semi-circle'],
+        defaultItems: 4,
+      },
+      'Quotes (layouts)': {
+        type: 'layout',
+        variants: ['quote-boxes', 'speech-bubbles'],
+        defaultItems: 2,
+      },
+      'Steps (layouts)': {
+        type: 'layout',
+        variants: ['staircase', 'steps', 'box-steps', 'arrow-steps', 'steps-with-icons', 'pyramid', 'vertical-funnel'],
+        defaultItems: 4,
+      },
+      'Road (diagrams)': {
+        type: 'diagram',
+        variants: ['road-horizontal', 'road-vertical', 'journey-map', 'experience-map'],
+        defaultItems: 4,
+      },
+      'Target (diagrams)': {
+        type: 'diagram',
+        variants: ['bullseye', 'radial', 'orbit', 'sunburst'],
+        defaultItems: 4,
+      },
+      'Hierarchy (diagrams)': {
+        type: 'diagram',
+        variants: ['org-chart', 'tree-horizontal', 'pyramid-diagram', 'nested-boxes'],
+        defaultItems: 4,
+      },
+      'Venn (diagrams)': {
+        type: 'diagram',
+        variants: ['venn-2', 'venn-3', 'overlapping-sets', 'matrix-2x2'],
+        defaultItems: 3,
+      },
+      'Process (diagrams)': {
+        type: 'diagram',
+        variants: ['circular-flow', 'swimlane', 'branching', 'infinity-loop'],
+        defaultItems: 4,
+      },
+      'Business (diagrams)': {
+        type: 'diagram',
+        variants: ['swot', 'competitive-map', 'value-chain', 'bmc'],
+        defaultItems: 4,
+      },
+    };
+
+    // ── State ──
+    let currentDensity = 'standard';
+    let currentTone = 'professional';
+    let currentFilter = 'all';
+    // Per-variant item counts
+    const itemCounts = {};
+
+    // ── Render a single variant ──
+    function renderVariant(variant, familyName, familyInfo) {
+      const count = itemCounts[variant] ?? familyInfo.defaultItems;
+      const items = makeItems(count);
+      const section = { variant, items, columns: 3, style: currentDensity };
+
+      let html;
+      try {
+        if (familyInfo.type === 'diagram') {
+          html = renderDiagramSection(section, currentTone);
+          if (html === null) html = '<p style="color:#ef4444;">Diagram returned null</p>';
+        } else {
+          html = renderSection(section, currentTone);
+        }
+      } catch (e) {
+        html = `<p style="color:#ef4444;">Error: ${e.message}</p>`;
+      }
+      return html;
+    }
+
+    // ── Build the gallery ──
+    function buildGallery() {
+      const gallery = document.getElementById('gallery');
+      gallery.innerHTML = '';
+
+      for (const [familyName, familyInfo] of Object.entries(FAMILIES)) {
+        // Filter check
+        if (currentFilter !== 'all') {
+          if (currentFilter === 'layouts' && familyInfo.type !== 'layout') continue;
+          if (currentFilter === 'diagrams' && familyInfo.type !== 'diagram') continue;
+          if (currentFilter !== 'layouts' && currentFilter !== 'diagrams' && !familyName.toLowerCase().includes(currentFilter)) continue;
+        }
+
+        const section = document.createElement('div');
+        section.className = 'family-section';
+        section.dataset.family = familyName;
+
+        const variantCount = familyInfo.variants.length;
+        section.innerHTML = `
+          <h2 class="family-title">${familyName}</h2>
+          <p class="family-subtitle">${variantCount} variant${variantCount > 1 ? 's' : ''} · ${familyInfo.type}</p>
+          <div class="variants-grid" id="grid-${familyName.replace(/\s+/g, '-')}"></div>
+        `;
+        gallery.appendChild(section);
+
+        const grid = section.querySelector('.variants-grid');
+
+        for (const variant of familyInfo.variants) {
+          const count = itemCounts[variant] ?? familyInfo.defaultItems;
+          const card = document.createElement('div');
+          card.className = 'variant-card';
+          card.dataset.variant = variant;
+
+          // Item count buttons (2-8)
+          let countBtns = '';
+          for (let n = 2; n <= 8; n++) {
+            const active = n === count ? ' active' : '';
+            countBtns += `<button class="item-count-btn${active}" data-n="${n}" data-variant="${variant}" data-family="${familyName}">${n}</button>`;
+          }
+
+          card.innerHTML = `
+            <div class="variant-card-header">
+              <span class="variant-name">${variant}</span>
+              <div class="item-count-bar">
+                <span class="variant-meta">Items:</span>
+                ${countBtns}
+              </div>
+            </div>
+            <div class="variant-render ig-page" data-variant="${variant}" data-family="${familyName}">
+              ${renderVariant(variant, familyName, familyInfo)}
+            </div>
+          `;
+          grid.appendChild(card);
+        }
+      }
+
+      // Attach item count click handlers
+      document.querySelectorAll('.item-count-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const variant = e.target.dataset.variant;
+          const familyName = e.target.dataset.family;
+          const n = parseInt(e.target.dataset.n);
+          itemCounts[variant] = n;
+
+          // Update active state
+          const card = e.target.closest('.variant-card');
+          card.querySelectorAll('.item-count-btn').forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+
+          // Re-render just this variant
+          const renderDiv = card.querySelector('.variant-render');
+          const familyInfo = FAMILIES[familyName];
+          renderDiv.innerHTML = renderVariant(variant, familyName, familyInfo);
+        });
+      });
+    }
+
+    // ── Filter bar ──
+    const filterBar = document.getElementById('filterBar');
+    const filters = ['all', 'layouts', 'diagrams',
+      'boxes', 'bullets', 'sequence', 'numbers', 'circles', 'quotes', 'steps',
+      'road', 'target', 'hierarchy', 'venn', 'process', 'business'];
+    filters.forEach(f => {
+      if (f === 'all') return; // already exists
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn';
+      btn.dataset.filter = f;
+      btn.textContent = f.charAt(0).toUpperCase() + f.slice(1);
+      filterBar.appendChild(btn);
+    });
+
+    filterBar.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('filter-btn')) return;
+      currentFilter = e.target.dataset.filter;
+      filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      buildGallery();
+    });
+
+    // ── Density bar ──
+    document.getElementById('densityBar').addEventListener('click', (e) => {
+      if (!e.target.classList.contains('density-btn')) return;
+      currentDensity = e.target.dataset.density;
+      document.querySelectorAll('#densityBar .density-btn').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      buildGallery();
+    });
+
+    // ── Tone bar ──
+    document.getElementById('toneBar').addEventListener('click', (e) => {
+      if (!e.target.classList.contains('density-btn')) return;
+      currentTone = e.target.dataset.tone;
+      document.querySelectorAll('#toneBar .density-btn').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      buildGallery();
+    });
+
+    // ── Initial render ──
+    buildGallery();
+
+    console.log('Gallery loaded. Total variants:',
+      Object.values(FAMILIES).reduce((sum, f) => sum + f.variants.length, 0));
+  </script>
+</body>
+</html>
