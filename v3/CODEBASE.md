@@ -230,6 +230,55 @@ All variants render an inline SVG shape centred between two text-box columns. Se
 
 ---
 
+---
+
+### `smart-diagrams.js`
+**Exports:** `ROAD_CSS`, `renderRoad`, `TARGET_CSS`, `renderTarget`, `HIERARCHY_CSS`, `renderHierarchy`, `VENN_CSS`, `renderVenn`, `PROCESS_CSS`, `renderProcess`, `BUSINESS_CSS`, `renderBusiness`, `DIAGRAM_CSS`, `DIAGRAM_FAMILIES`, `DIAGRAM_VARIANT_FAMILY_MAP`, `renderDiagramSection`
+
+Layer 2 render functions for relationship/hierarchy/movement diagrams. Each family has a CSS export and a render function. CSS prefix: `.ig-page .igd-*`. Editable text classes: `.igd-title`, `.igd-body`, `.igd-label`.
+
+**Key helpers (module-level):**
+- `dgTruncateTitle(title, density)` / `dgTruncateBody(body, density)` — density-aware truncation
+- `trunc(str, max=25)` — hard character truncation, used by diagram variants needing consistent width
+- `esc(str)` — HTML escape
+- `dgIconImg(name, cssClass, size)` — resolves icon via LOCAL_SVG_MAP or proxy, same fallback as smart-layouts.js
+- `radialPositions(n, radiusPct)` — computes N (x%, y%) positions arranged clockwise from 12 o'clock
+
+**Road family (road-horizontal, road-vertical, journey-map, experience-map):**
+- `road-horizontal` — milestones alternating above/below a horizontal track; track sits BELOW the dots (`top: calc(50% + 12px)`); titles hard-truncated to 25 chars
+- `road-vertical` — milestones alternating left/right of a vertical track
+- `journey-map` — horizontal stages with chevron arrow headers, body text below
+- `experience-map` — 3-row table: Stage / Detail / Feeling (emoji)
+
+**Target family (bullseye, radial, orbit):**
+- `bullseye` — inline SVG concentric rings; items[0]=innermost/darkest, items[n-1]=outermost/lightest; ring count matches item count (2–5); numbered labels in each annular band; dashed connectors to right-side text column; layout: SVG 40% left, text 60% right
+- `radial` — center hub + spoke cards, absolute-positioned, radialPositions() geometry
+- `orbit` — center hub + up to 4 orbital circles at fixed N/S/E/W positions (105px from center); SVG dashed orbit ring background; no body text for orbitals; max title 20 chars; warns if >4 items supplied
+
+**Hierarchy family (org-chart, pyramid-diagram, nested-diamonds):**
+- `org-chart` — root box → vertical connector → horizontal bar spanning children → vertical connectors to child boxes; horizontal bar width computed from N children: `left/right = 100/(2*N)%` via `.igd-org-h-bar` explicit `<div>`; max title 25 chars
+- `pyramid-diagram` — inline SVG trapezoid bands (apex=top=darkest at items[0], base=bottom=lightest at items[n-1]); text column to the right with color swatches; layout: SVG 160px left, text flex-1 right
+- `nested-diamonds` — inline SVG overlapping diamond (rotated square) shapes stacked vertically; top=smallest/lightest (items[0]), bottom=largest/darkest (items[n-1]); 42% vertical overlap; numbered labels inside each diamond; text column to the right; min 2, max 4 items
+
+**Venn family (venn-diagram, linear-venn, linear-venn-filled):**
+- `venn-diagram` — SVG overlapping circles; 2 items: side-by-side ~45% overlap (r=110, gap=90); 3 items: equilateral triangle arrangement (r=95, side=138); titles in SVG text inside/near each circle; viewBox adapts (2-circle: 400×300, 3-circle: 400×330); min 2, max 3 items
+- `linear-venn` — SVG outline circles (stroke only) in a horizontal row; 30% overlap (step = r×1.4); title + short description inside each circle as SVG text; min 2, max 5 items
+- `linear-venn-filled` — same layout as linear-venn; filled circles with opacity ramping 0.35→0.80; white text inside; min 2, max 5 items
+
+**Process family (infinity-loop):**
+- `infinity-loop` — CSS grid layout (3-col: text | SVG | text, 2-row: top | bottom); EXACTLY 4 items always (pads with placeholder if fewer); SVG lemniscate drawn with cubic bezier curves (`M 200,100 C 200,42 310,42 310,100 C 310,158 200,158 200,100 C 200,42 90,42 90,100 C 90,158 200,158 200,100 Z`), filled with gradient; text boxes at TL/TR/BL/BR corners; title only (max 25 chars), no body text; viewBox `0 0 400 200`
+
+**Business family (swot, competitive-map, chain):**
+- `swot` — 2×2 CSS grid with fixed S/W/O/T colors and lettered badges; unchanged from prior version
+- `competitive-map` — positioned dots on a 2-axis grid; unchanged from prior version
+- `chain` — SVG horizontal chain links (pill-shaped rounded rects, rx=25, w=80×h=50); 30% overlap (step=56px); 2–6 links; opacity ramps 0.35→0.75 left-to-right; alternating title labels above (even) / below (odd) each link as SVG text; viewBox `0 0 500 150`
+
+**Removed variants (vs. prior version):** `sunburst`, `tree-horizontal`, `swimlane`, `branching`, `value-chain`, `bmc`, `venn-2`, `venn-3`, `overlapping-sets`, `matrix-2x2`, `circular-flow`, `nested-boxes`
+
+**Added/renamed variants:** `nested-diamonds` (was `nested-boxes`), `venn-diagram`, `linear-venn`, `linear-venn-filled`, `chain`
+
+---
+
 ## Pending Work (as of 2026-04-28)
 
 - **UnDraw illustration slot** — add `illustration` field to schemas + templates; AI picks slug from category-filtered list; renderer injects inline SVG with accent color

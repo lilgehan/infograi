@@ -4,16 +4,16 @@
  * Diagrams visualize RELATIONSHIPS, HIERARCHY, and MOVEMENT.
  * Different from Smart Layouts which organize content into grids/lists.
  *
- * All diagrams: pure HTML+CSS — no SVG diagram shapes, no canvas,
- * no external libraries. Icons use inline SVG (same as smart-layouts.js).
+ * All diagrams: pure HTML+CSS+inline SVG — no canvas, no external libraries.
+ * Icons use inline SVG (same as smart-layouts.js).
  *
  * Families:
  *   Road      — road-horizontal, road-vertical, journey-map, experience-map
- *   Target    — bullseye, radial, orbit, sunburst
- *   Hierarchy — org-chart, tree-horizontal, pyramid-diagram, nested-boxes
- *   Venn      — venn-2, venn-3, overlapping-sets, matrix-2x2
- *   Process   — circular-flow, swimlane, branching, infinity-loop
- *   Business  — swot, competitive-map, value-chain, bmc
+ *   Target    — bullseye, radial, orbit
+ *   Hierarchy — org-chart, pyramid-diagram, nested-diamonds
+ *   Venn      — venn-diagram, linear-venn, linear-venn-filled
+ *   Process   — infinity-loop
+ *   Business  — swot, competitive-map, chain
  *
  * CSS prefix: .ig-page .igd-* (diagrams; layouts use .igs-*)
  * Editable text classes: .igd-title, .igd-body, .igd-label
@@ -85,6 +85,12 @@ function dgTruncateTitle(title, density) {
   return words.slice(0, 7).join(' ') + '…';
 }
 
+/** Hard-truncate to max characters — used for diagram variants requiring consistent width */
+function trunc(str, max = 25) {
+  if (!str) return '';
+  return str.length > max ? str.slice(0, max - 1) + '…' : str;
+}
+
 function esc(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -140,10 +146,10 @@ export const ROAD_CSS = `
 }
 .ig-page .igd-road-h-track {
   position: absolute;
-  left: 0; right: 0; top: 50%;
+  left: 0; right: 0;
+  top: calc(50% + 12px);
   height: 3px;
   background: var(--card-border, #e5e7eb);
-  transform: translateY(-50%);
   border-radius: 2px;
 }
 .ig-page .igd-road-h-track-fill {
@@ -320,7 +326,7 @@ export function renderRoad(items, variant, tone, columns, density) {
   if (variant === 'road-horizontal') {
     const cards = list.map((item, i) => {
       const above = i % 2 === 0 ? 'igd-road-h-item--above' : 'igd-road-h-item--below';
-      const title = esc(dgTruncateTitle(item.title || '', density));
+      const title = esc(trunc(item.title || '', 25));
       const body  = esc(dgTruncateBody(item.body || '', density));
       return `<div class="igd-road-h-item ${above}">
         ${above === 'igd-road-h-item--above'
@@ -387,7 +393,7 @@ export function renderRoad(items, variant, tone, columns, density) {
   if (variant === 'experience-map') {
     const stages = list.slice(0, 6);
     const emotions = ['😊', '😐', '😊', '😄', '😕', '😞', '😊', '😄'];
-    const stageRow = stages.map((item, i) => {
+    const stageRow = stages.map((item) => {
       const title = esc(dgTruncateTitle(item.title || '', density));
       return `<div class="igd-expmap-cell"><p class="igd-title" style="font-size:0.82em">${title}</p></div>`;
     }).join('');
@@ -421,53 +427,41 @@ export function renderRoad(items, variant, tone, columns, density) {
 
 /* ═══════════════════════════════════════════════════════════════
    FAMILY 2 — TARGET
-   Variants: bullseye, radial, orbit, sunburst
+   Variants: bullseye, radial, orbit
    Item roles:
-     bullseye  — items[0] = center/most important, items[n-1] = outermost
-     radial    — items[0] = center hub, items[1..] = spokes
-     orbit     — items[0] = center, items[1..] = orbiting items
-     sunburst  — items[0] = center, items[1..] = radiating segments
+     bullseye — items[0] = innermost/most important, items[n-1] = outermost
+     radial   — items[0] = center hub, items[1..] = spokes
+     orbit    — items[0] = center, items[1..4] = orbiting items (max 4)
 ═══════════════════════════════════════════════════════════════ */
 
 export const TARGET_CSS = `
-/* ── bullseye ── */
+/* ── bullseye (SVG concentric rings) ── */
 .ig-page .igd-bullseye-wrap {
-  display: flex; align-items: center; gap: 20px;
-  padding: 12px;
+  display: flex; align-items: center; gap: 20px; padding: 12px;
 }
-.ig-page .igd-bullseye-diagram {
-  position: relative;
-  flex-shrink: 0;
+.ig-page .igd-bullseye-svg-col {
+  flex: 0 0 40%; display: flex; align-items: center; justify-content: center;
 }
-.ig-page .igd-bull-ring {
-  position: absolute;
-  border-radius: 50%;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  border: 2px solid var(--accent);
-  opacity: 0.9;
+.ig-page .igd-bullseye-svg-col svg { width: 100%; max-width: 200px; height: auto; }
+.ig-page .igd-bullseye-text-col {
+  flex: 1; display: flex; flex-direction: column; gap: 10px;
+}
+.ig-page .igd-bull-text-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  max-width: 200px;
+}
+.ig-page .igd-bull-ring-badge {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 0.68em; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
-  text-align: center;
-}
-.ig-page .igd-bull-ring--center {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.ig-page .igd-bull-ring--center .igd-title { color: #fff; font-size: 0.72em; }
-.ig-page .igd-bull-legend {
-  flex: 1; display: flex; flex-direction: column; gap: 8px;
-}
-.ig-page .igd-bull-leg-item {
-  display: flex; align-items: center; gap: 8px;
-}
-.ig-page .igd-bull-leg-dot {
-  width: 10px; height: 10px; border-radius: 50%;
   flex-shrink: 0;
 }
-.ig-page .igd-bull-leg-item .igd-title { font-size: 0.82em; }
-.ig-page .igd-bull-leg-item .igd-body  { font-size: 0.7em; }
+.ig-page .igd-bull-text-item .igd-title { font-size: 0.82em; }
+.ig-page .igd-bull-text-item .igd-body  { font-size: 0.72em; }
 
-/* ── radial / orbit / sunburst shared ── */
+/* ── radial shared ── */
 .ig-page .igd-radial-wrap {
   position: relative;
   margin: 0 auto;
@@ -508,77 +502,92 @@ export const TARGET_CSS = `
 .ig-page .igd-radial-item .igd-title { font-size: 0.78em; }
 .ig-page .igd-radial-item .igd-body  { font-size: 0.68em; }
 
-/* ── orbit ring ── */
-.ig-page .igd-orbit-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px dashed var(--card-border, #e5e7eb);
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 0;
+/* ── orbit ── */
+.ig-page .igd-orbit-wrap {
+  position: relative; margin: 0 auto;
+  display: flex; align-items: center; justify-content: center;
 }
-
-/* ── sunburst ray items ── */
-.ig-page .igd-sunburst-item {
+.ig-page .igd-orbit-item {
   position: absolute;
-  display: flex; align-items: center;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   transform: translate(-50%, -50%);
   z-index: 2;
 }
-.ig-page .igd-sunburst-card {
-  background: var(--accent-soft, rgba(37,99,235,.1));
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-card, 10px);
-  padding: 6px 10px; text-align: center;
-  max-width: 90px; overflow: hidden;
+.ig-page .igd-orbit-circle {
+  width: 68px; height: 68px; border-radius: 50%;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
 }
-.ig-page .igd-sunburst-card .igd-title { color: var(--accent); font-size: 0.75em; }
+.ig-page .igd-orbit-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 0.72em; font-weight: 700;
+  color: var(--text-primary, #111827);
+  text-align: center; max-width: 80px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin: 0;
+}
 `;
 
 /**
  * renderTarget — Target / Radial diagrams
- * Variants: bullseye, radial, orbit, sunburst
+ * Variants: bullseye, radial, orbit
  */
 export function renderTarget(items, variant, tone, columns, density) {
   const list = items.slice(0, 7);
 
-  /* ── bullseye ── */
+  /* ── bullseye (SVG concentric circles) ── */
   if (variant === 'bullseye') {
-    const n = Math.max(list.length, 1);
-    const outerPx = 220;
-    const innerPx = Math.round(outerPx / n);
-    // items[0] = center, items[n-1] = outermost
-    // Render rings from outermost to innermost using z-index layering
-    const alphas = Array.from({ length: n }, (_, i) =>
-      parseFloat((0.12 + (i / Math.max(n - 1, 1)) * 0.28).toFixed(2))
-    );
-    let ringsHtml = '';
+    const n    = Math.min(Math.max(list.length, 2), 5);
+    const data = list.slice(0, n);
+    const cx   = 125, cy = 125, outerR = 110;
+    const step = outerR / n;
+
+    // Rings: render outermost first (i=n-1), innermost last (i=0)
+    // items[0] = innermost/darkest, items[n-1] = outermost/lightest
+    let rings = '', connectors = '';
     for (let i = n - 1; i >= 0; i--) {
-      const ringSize = Math.round(innerPx + (i / Math.max(n - 1, 1)) * (outerPx - innerPx));
-      const isCenter = i === 0;
-      const title = esc(dgTruncateTitle(list[i]?.title || '', density));
-      ringsHtml += `<div class="igd-bull-ring${isCenter ? ' igd-bull-ring--center' : ''}"
-        style="width:${ringSize}px;height:${ringSize}px;background:var(--accent,#2563EB);opacity:${alphas[i]};border-color:var(--accent,#2563EB)">
-        ${isCenter ? `<p class="igd-title">${title}</p>` : ''}
-      </div>`;
+      const r     = (i + 1) * step;
+      const alpha = parseFloat((0.85 - i * (0.65 / Math.max(n - 1, 1))).toFixed(2));
+      rings += `<circle cx="${cx}" cy="${cy}" r="${r}"
+        fill="var(--accent)" opacity="${alpha}"/>`;
+
+      // Number label in the annular band (at 12-o'clock position within band)
+      const midR  = (i + 0.5) * step;
+      const lx    = cx;
+      const ly    = cy - midR;
+      rings += `<text x="${lx}" y="${ly + 4}" text-anchor="middle"
+        font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+        font-size="10" font-weight="700" fill="#fff" opacity="0.9">${i + 1}</text>`;
+
+      // Connector line from right side of band to SVG right edge
+      const lineX  = cx + midR * 0.8;
+      const lineY  = ly;
+      connectors += `<line x1="${lineX.toFixed(1)}" y1="${lineY.toFixed(1)}" x2="248" y2="${lineY.toFixed(1)}"
+        stroke="var(--accent)" stroke-width="1" stroke-dasharray="4 3" opacity="0.4"/>`;
     }
-    const legendItems = list.map((item, i) => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
+
+    const textItems = data.map((item, i) => {
+      const title = esc(trunc(item.title || '', 25));
       const body  = esc(dgTruncateBody(item.body || '', density));
-      const alpha = alphas[i];
-      return `<div class="igd-bull-leg-item">
-        <div class="igd-bull-leg-dot" style="background:var(--accent,#2563EB);opacity:${alpha + 0.5}"></div>
+      const alpha = parseFloat((0.85 - i * (0.65 / Math.max(n - 1, 1))).toFixed(2));
+      return `<div class="igd-bull-text-item">
+        <div class="igd-bull-ring-badge" style="opacity:${alpha + 0.1}">${i + 1}</div>
         <div>
           <p class="igd-title">${title}</p>
           ${body ? `<p class="igd-body">${body}</p>` : ''}
         </div>
       </div>`;
     }).join('');
+
     return `<div class="igd-bullseye-wrap">
-      <div class="igd-bullseye-diagram" style="width:${outerPx}px;height:${outerPx}px;flex-shrink:0">
-        ${ringsHtml}
+      <div class="igd-bullseye-svg-col">
+        <svg viewBox="0 0 250 250" xmlns="http://www.w3.org/2000/svg">
+          ${rings}${connectors}
+        </svg>
       </div>
-      <div class="igd-bull-legend">${legendItems}</div>
+      <div class="igd-bullseye-text-col">${textItems}</div>
     </div>`;
   }
 
@@ -587,9 +596,9 @@ export function renderTarget(items, variant, tone, columns, density) {
     const hub    = list[0];
     const spokes = list.slice(1);
     const n      = spokes.length;
-    const cSize  = 280; // container px
+    const cSize  = 280;
     const hubPx  = 80;
-    const radius = (cSize / 2) - 55; // px from center
+    const radius = (cSize / 2) - 55;
     const hubt   = esc(dgTruncateTitle(hub?.title || '', density));
     const hubb   = esc(dgTruncateBody(hub?.body || '', density));
     let spokesHtml = '';
@@ -599,7 +608,6 @@ export function renderTarget(items, variant, tone, columns, density) {
       const cy      = cSize / 2;
       const ix      = cx + radius * Math.cos(angle);
       const iy      = cy + radius * Math.sin(angle);
-      // spoke line from hub edge to item center
       const spokeLen = radius - hubPx / 2;
       const spokeDeg = (angle * 180 / Math.PI);
       const title = esc(dgTruncateTitle(item.title || '', density));
@@ -629,78 +637,57 @@ export function renderTarget(items, variant, tone, columns, density) {
     </div>`;
   }
 
-  /* ── orbit ── */
+  /* ── orbit — fixed NSEW positions, max 4 orbital items ── */
   if (variant === 'orbit') {
     const hub     = list[0];
-    const orbital = list.slice(1);
-    const n       = orbital.length;
-    const cSize   = 280;
-    const hubPx   = 80;
-    const radius  = (cSize / 2) - 52;
-    const hubt    = esc(dgTruncateTitle(hub?.title || '', density));
-    const hubb    = esc(dgTruncateBody(hub?.body || '', density));
-    let orbitsHtml = '';
-    orbital.forEach((item, i) => {
-      const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-      const cx    = cSize / 2;
-      const cy    = cSize / 2;
-      const ix    = cx + radius * Math.cos(angle);
-      const iy    = cy + radius * Math.sin(angle);
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      const body  = esc(dgTruncateBody(item.body || '', density));
-      orbitsHtml += `<div class="igd-radial-item" style="left:${ix}px;top:${iy}px;max-width:82px">
-        ${item.icon ? dgIconImg(item.icon, '', 18) : ''}
-        <p class="igd-title">${title}</p>
-        ${body ? `<p class="igd-body">${body}</p>` : ''}
-      </div>`;
-    });
-    return `<div class="igd-radial-wrap" style="width:${cSize}px;height:${cSize}px">
-      <div class="igd-orbit-ring" style="width:${radius * 2}px;height:${radius * 2}px"></div>
-      <div class="igd-radial-hub" style="
-        width:${hubPx}px;height:${hubPx}px;
-        left:${cSize / 2}px;top:${cSize / 2}px;
-        transform:translate(-50%,-50%)">
-        <p class="igd-title">${hubt}</p>
-        ${hubb ? `<p class="igd-body">${hubb}</p>` : ''}
-      </div>
-      ${orbitsHtml}
-    </div>`;
-  }
+    const orbital = list.slice(1, 5); // max 4 orbital items
+    if (list.length > 5) console.warn('[smart-diagrams] orbit: more than 4 orbital items — only rendering first 4');
 
-  /* ── sunburst ── */
-  if (variant === 'sunburst') {
-    const center  = list[0];
-    const rays    = list.slice(1);
-    const n       = rays.length;
-    const cSize   = 280;
-    const radius  = (cSize / 2) - 48;
-    const centt   = esc(dgTruncateTitle(center?.title || '', density));
-    const centb   = esc(dgTruncateBody(center?.body || '', density));
-    let raysHtml  = '';
-    rays.forEach((item, i) => {
-      const angle  = (i / n) * 2 * Math.PI - Math.PI / 2;
-      const cx     = cSize / 2;
-      const cy     = cSize / 2;
-      const ix     = cx + radius * Math.cos(angle);
-      const iy     = cy + radius * Math.sin(angle);
-      const title  = esc(dgTruncateTitle(item.title || '', density));
-      const body   = esc(dgTruncateBody(item.body || '', density));
-      raysHtml += `<div class="igd-sunburst-item" style="left:${ix}px;top:${iy}px">
-        <div class="igd-sunburst-card">
-          <p class="igd-title">${title}</p>
-          ${body ? `<p class="igd-body">${body}</p>` : ''}
+    const n       = orbital.length;
+    const cSize   = 300;
+    const cx      = cSize / 2;  // 150
+    const cy      = cSize / 2;  // 150
+    const hubR    = 45;
+    const orbDist = 105; // distance from center to orbital center
+    const orbR    = 34;
+
+    // NSEW positions (for up to 4 items)
+    const NSEW_ANGLES = [-Math.PI / 2, 0, Math.PI / 2, Math.PI]; // N, E, S, W
+
+    const hubt = esc(trunc(hub?.title || '', 20));
+    const hubb = esc(dgTruncateBody(hub?.body || '', density));
+
+    // SVG background: dashed orbit path ring
+    const svgBg = `<svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 ${cSize} ${cSize}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${cx}" cy="${cy}" r="${orbDist}" fill="none"
+        stroke="var(--card-border,#e5e7eb)" stroke-dasharray="6 4" stroke-width="1.5"/>
+    </svg>`;
+
+    const orbitItems = orbital.map((item, i) => {
+      const angle = NSEW_ANGLES[i];
+      const ix    = cx + orbDist * Math.cos(angle);
+      const iy    = cy + orbDist * Math.sin(angle);
+      const title = esc(trunc(item.title || '', 20));
+      return `<div class="igd-orbit-item" style="left:${ix}px;top:${iy}px">
+        <div class="igd-orbit-circle" style="opacity:0.85">
+          ${item.icon ? dgIconImg(item.icon, '', 28) : ''}
         </div>
+        <p class="igd-orbit-title">${title}</p>
       </div>`;
-    });
-    return `<div class="igd-radial-wrap" style="width:${cSize}px;height:${cSize}px">
+    }).join('');
+
+    return `<div class="igd-orbit-wrap" style="width:${cSize}px;height:${cSize}px;position:relative">
+      ${svgBg}
       <div class="igd-radial-hub" style="
-        width:90px;height:90px;
-        left:${cSize / 2}px;top:${cSize / 2}px;
-        transform:translate(-50%,-50%)">
-        <p class="igd-title">${centt}</p>
-        ${centb ? `<p class="igd-body">${centb}</p>` : ''}
+        width:${hubR * 2}px;height:${hubR * 2}px;
+        left:${cx}px;top:${cy}px;
+        transform:translate(-50%,-50%);
+        font-size:0.9em">
+        ${hub?.icon ? dgIconImg(hub.icon, '', 24) : ''}
+        <p class="igd-title" style="color:#fff;font-size:0.76em">${hubt}</p>
+        ${hubb ? `<p class="igd-body" style="color:rgba(255,255,255,0.85);font-size:0.62em">${hubb}</p>` : ''}
       </div>
-      ${raysHtml}
+      ${orbitItems}
     </div>`;
   }
 
@@ -709,11 +696,11 @@ export function renderTarget(items, variant, tone, columns, density) {
 
 /* ═══════════════════════════════════════════════════════════════
    FAMILY 3 — HIERARCHY
-   Variants: org-chart, tree-horizontal, pyramid-diagram, nested-boxes
+   Variants: org-chart, pyramid-diagram, nested-diamonds
    Item roles:
-     org-chart / tree-horizontal — items[0] = root, items[1..] = children
-     pyramid-diagram — items[0] = apex (top/most important), items[n-1] = base
-     nested-boxes — items[0] = outermost layer, items[n-1] = innermost
+     org-chart       — items[0] = root, items[1..] = children
+     pyramid-diagram — items[0] = apex (top/darkest), items[n-1] = base (lightest)
+     nested-diamonds — items[0] = smallest top, items[n-1] = largest bottom
 ═══════════════════════════════════════════════════════════════ */
 
 export const HIERARCHY_CSS = `
@@ -744,99 +731,78 @@ export const HIERARCHY_CSS = `
   margin: 0 auto;
 }
 .ig-page .igd-org-children-row {
-  display: flex; gap: 12px; position: relative;
+  display: flex; gap: 20px; position: relative;
   padding-top: 22px;
 }
 .ig-page .igd-org-children-row::before {
   content: ''; position: absolute;
-  top: 0; left: 50%; right: auto;
-  width: 0; height: 22px;
-  border-left: 2px solid var(--accent-soft, rgba(37,99,235,.3));
+  top: 0; left: 50%;
+  width: 2px; height: 22px;
+  background: var(--accent-soft, rgba(37,99,235,.3));
+  transform: translateX(-50%);
 }
-.ig-page .igd-org-children-row::after {
-  content: ''; position: absolute;
-  top: 0; left: 10%; right: 10%;
-  height: 2px;
+.ig-page .igd-org-h-bar {
+  position: absolute;
+  top: 0; height: 2px;
   background: var(--accent-soft, rgba(37,99,235,.3));
 }
 .ig-page .igd-org-child-wrap {
   display: flex; flex-direction: column; align-items: center;
-  padding-top: 0; position: relative; gap: 0;
+  position: relative; gap: 0;
 }
 .ig-page .igd-org-child-wrap::before {
   content: ''; width: 2px; height: 22px;
   background: var(--accent-soft, rgba(37,99,235,.3));
 }
 
-/* ── tree-horizontal ── */
-.ig-page .igd-tree-h {
-  display: flex; align-items: center; gap: 0; padding: 8px;
+/* ── pyramid-diagram (SVG trapezoid bands + right text column) ── */
+.ig-page .igd-pyrd-wrap {
+  display: flex; align-items: center; gap: 16px; padding: 8px;
 }
-.ig-page .igd-tree-h-root {
-  display: flex; flex-direction: column;
-  align-items: flex-end; margin-right: 0;
+.ig-page .igd-pyrd-svg-col {
+  flex: 0 0 160px;
 }
-.ig-page .igd-tree-h-connector {
-  width: 28px; flex-shrink: 0;
-  position: relative; align-self: stretch;
-  display: flex; align-items: center;
+.ig-page .igd-pyrd-svg-col svg { width: 100%; height: auto; }
+.ig-page .igd-pyrd-text-col {
+  flex: 1; display: flex; flex-direction: column; gap: 6px;
 }
-.ig-page .igd-tree-h-connector::before {
-  content: ''; position: absolute;
-  top: 0; bottom: 0; left: 50%;
-  width: 2px;
-  background: var(--accent-soft, rgba(37,99,235,.3));
+.ig-page .igd-pyrd-text-item {
+  display: flex; align-items: flex-start; gap: 8px;
 }
-.ig-page .igd-tree-h-connector::after {
-  content: ''; position: absolute;
-  top: 50%; left: 50%;
-  width: 14px; height: 2px;
-  background: var(--accent-soft, rgba(37,99,235,.3));
+.ig-page .igd-pyrd-swatch {
+  width: 12px; height: 12px; border-radius: 2px;
+  flex-shrink: 0; margin-top: 3px;
 }
-.ig-page .igd-tree-h-children {
-  display: flex; flex-direction: column; gap: 8px;
-}
-.ig-page .igd-tree-h-child {
-  display: flex; align-items: center; gap: 0;
-}
-.ig-page .igd-tree-h-branch {
-  width: 14px; height: 2px;
-  background: var(--accent-soft, rgba(37,99,235,.3));
-  flex-shrink: 0;
-}
+.ig-page .igd-pyrd-text-item .igd-title { font-size: 0.82em; }
+.ig-page .igd-pyrd-text-item .igd-body  { font-size: 0.72em; }
 
-/* ── pyramid-diagram ── */
-.ig-page .igd-pyrd {
-  display: flex; flex-direction: column;
-  align-items: center; gap: 2px; padding: 8px 0;
+/* ── nested-diamonds (SVG + right text column) ── */
+.ig-page .igd-ndiam-wrap {
+  display: flex; align-items: center; gap: 16px; padding: 8px;
 }
-.ig-page .igd-pyrd-level {
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 4px;
-  padding: 8px 16px; text-align: center;
-  min-height: 42px; overflow: hidden;
-  transition: width 0.2s;
+.ig-page .igd-ndiam-svg-col {
+  flex: 0 0 160px; display: flex; align-items: center; justify-content: center;
 }
-
-/* ── nested-boxes ── */
-.ig-page .igd-nested {
-  padding: 10px;
-  border-radius: var(--radius-card, 10px);
-  border: 2px solid var(--accent);
-  position: relative;
+.ig-page .igd-ndiam-svg-col svg { width: 100%; height: auto; }
+.ig-page .igd-ndiam-text-col {
+  flex: 1; display: flex; flex-direction: column; gap: 8px;
 }
-.ig-page .igd-nested-label {
-  margin-bottom: 8px;
+.ig-page .igd-ndiam-text-item {
+  display: flex; align-items: flex-start; gap: 8px; max-width: 200px;
 }
-.ig-page .igd-nested .igd-nested {
-  border-color: var(--accent);
-  opacity: 0.85;
+.ig-page .igd-ndiam-badge {
+  width: 20px; height: 20px; border-radius: 3px;
+  flex-shrink: 0; margin-top: 2px;
+  transform: rotate(45deg);
+  background: var(--accent);
 }
+.ig-page .igd-ndiam-text-item .igd-title { font-size: 0.82em; }
+.ig-page .igd-ndiam-text-item .igd-body  { font-size: 0.72em; }
 `;
 
 /**
  * renderHierarchy — Hierarchy / structure diagrams
- * Variants: org-chart, tree-horizontal, pyramid-diagram, nested-boxes
+ * Variants: org-chart, pyramid-diagram, nested-diamonds
  */
 export function renderHierarchy(items, variant, tone, columns, density) {
   const list = items.slice(0, 7);
@@ -844,11 +810,18 @@ export function renderHierarchy(items, variant, tone, columns, density) {
   /* ── org-chart ── */
   if (variant === 'org-chart') {
     const root     = list[0];
-    const children = list.slice(1);
-    const rTitle   = esc(dgTruncateTitle(root?.title || '', density));
+    const children = list.slice(1, 7);
+    const n        = children.length;
+    const rTitle   = esc(trunc(root?.title || '', 25));
     const rBody    = esc(dgTruncateBody(root?.body || '', density));
+
+    // Compute horizontal bar extents: spans center of first child to center of last child
+    // With N children in flex gap:20px, each takes equal width.
+    // Approximately: left = 50%/N, right = 50%/N (from each edge to center of edge child)
+    const halfUnit = n > 1 ? `${(100 / (n * 2)).toFixed(1)}%` : '50%';
+
     const childNodes = children.map(item => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
+      const title = esc(trunc(item.title || '', 25));
       const body  = esc(dgTruncateBody(item.body || '', density));
       return `<div class="igd-org-child-wrap">
         <div class="igd-org-node">
@@ -857,6 +830,7 @@ export function renderHierarchy(items, variant, tone, columns, density) {
         </div>
       </div>`;
     }).join('');
+
     return `<div class="igd-org">
       <div class="igd-org-node igd-org-root-node">
         <p class="igd-title">${rTitle}</p>
@@ -864,82 +838,114 @@ export function renderHierarchy(items, variant, tone, columns, density) {
       </div>
       ${children.length ? `
         <div class="igd-org-connector-v"></div>
-        <div class="igd-org-children-row">${childNodes}</div>` : ''}
+        <div class="igd-org-children-row">
+          <div class="igd-org-h-bar" style="left:${halfUnit};right:${halfUnit}"></div>
+          ${childNodes}
+        </div>` : ''}
     </div>`;
   }
 
-  /* ── tree-horizontal ── */
-  if (variant === 'tree-horizontal') {
-    const root     = list[0];
-    const children = list.slice(1);
-    const rTitle   = esc(dgTruncateTitle(root?.title || '', density));
-    const rBody    = esc(dgTruncateBody(root?.body || '', density));
-    const childNodes = children.map(item => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      const body  = esc(dgTruncateBody(item.body || '', density));
-      return `<div class="igd-tree-h-child">
-        <div class="igd-tree-h-branch"></div>
-        <div class="igd-org-node">
-          <p class="igd-title">${title}</p>
-          ${body ? `<p class="igd-body">${body}</p>` : ''}
-        </div>
-      </div>`;
-    }).join('');
-    return `<div class="igd-tree-h">
-      <div class="igd-tree-h-root">
-        <div class="igd-org-node igd-org-root-node">
-          <p class="igd-title">${rTitle}</p>
-          ${rBody ? `<p class="igd-body">${rBody}</p>` : ''}
-        </div>
-      </div>
-      ${children.length ? `
-        <div class="igd-tree-h-connector"></div>
-        <div class="igd-tree-h-children">${childNodes}</div>` : ''}
-    </div>`;
-  }
-
-  /* ── pyramid-diagram ── */
+  /* ── pyramid-diagram (SVG trapezoid bands, top=apex/darkest) ── */
   if (variant === 'pyramid-diagram') {
-    // items[0] = apex (narrowest), items[n-1] = base (widest)
-    const n = list.length || 1;
-    const levels = list.map((item, i) => {
-      const pct   = Math.round(20 + (i / Math.max(n - 1, 1)) * 80);
-      const alpha = parseFloat((0.15 + (i / Math.max(n - 1, 1)) * 0.65).toFixed(2));
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      const body  = esc(dgTruncateBody(item.body || '', density));
-      return `<div class="igd-pyrd-level" style="
-        width:${pct}%;
-        background:var(--accent,#2563EB);
-        opacity:${alpha + 0.2};
-        clip-path:polygon(${5 + (i / Math.max(n - 1, 1)) * 0}% 0,${100 - (5 + (i / Math.max(n - 1, 1)) * 0)}% 0,100% 100%,0 100%)">
-        <p class="igd-title" style="color:#fff">${title}</p>
-        ${body ? `<p class="igd-body" style="color:rgba(255,255,255,0.85)">${body}</p>` : ''}
-      </div>`;
-    }).join('');
-    return `<div class="igd-pyrd">${levels}</div>`;
-  }
+    const n    = Math.min(list.length, 6) || 1;
+    const data = list.slice(0, n);
 
-  /* ── nested-boxes ── */
-  if (variant === 'nested-boxes') {
-    // items[0] = outermost, items[n-1] = innermost
-    const n = list.length;
-    // Build from inside out (innermost first), then wrap
-    let inner = '';
-    for (let i = n - 1; i >= 0; i--) {
-      const item  = list[i];
-      const title = esc(dgTruncateTitle(item.title || '', density));
+    // SVG triangle: apex at (90, 0), base at (0, 200) and (180, 200)
+    // Band i (0=top/apex, n-1=bottom/base)
+    let bands = '';
+    for (let i = 0; i < n; i++) {
+      const top_y = (i / n) * 200;
+      const bot_y = ((i + 1) / n) * 200;
+      const tl    = 90 - top_y / 2;
+      const tr    = 90 + top_y / 2;
+      const bl    = 90 - bot_y / 2;
+      const br    = 90 + bot_y / 2;
+      // top=darkest (i=0), bottom=lightest (i=n-1)
+      const alpha = parseFloat((0.85 - i * (0.65 / Math.max(n - 1, 1))).toFixed(2));
+      bands += `<polygon points="${tl.toFixed(1)},${top_y.toFixed(1)} ${tr.toFixed(1)},${top_y.toFixed(1)} ${br.toFixed(1)},${bot_y.toFixed(1)} ${bl.toFixed(1)},${bot_y.toFixed(1)}"
+        fill="var(--accent)" opacity="${alpha}"/>`;
+      // Separator line between bands (except after last)
+      if (i < n - 1) {
+        bands += `<line x1="${bl.toFixed(1)}" y1="${bot_y.toFixed(1)}" x2="${br.toFixed(1)}" y2="${bot_y.toFixed(1)}"
+          stroke="rgba(255,255,255,0.4)" stroke-width="1"/>`;
+      }
+    }
+
+    const textItems = data.map((item, i) => {
+      const title = esc(trunc(item.title || '', 25));
       const body  = esc(dgTruncateBody(item.body || '', density));
-      const alpha = parseFloat((0.15 + ((n - 1 - i) / Math.max(n - 1, 1)) * 0.55).toFixed(2));
-      const isInnermost = i === n - 1;
-      inner = `<div class="igd-nested" style="border-color:var(--accent,#2563EB);background:rgba(var(--accent-rgb,37,99,235),${alpha})">
-        <div class="igd-nested-label">
+      const alpha = parseFloat((0.85 - i * (0.65 / Math.max(n - 1, 1))).toFixed(2));
+      return `<div class="igd-pyrd-text-item">
+        <div class="igd-pyrd-swatch" style="background:var(--accent);opacity:${alpha}"></div>
+        <div>
           <p class="igd-title">${title}</p>
           ${body ? `<p class="igd-body">${body}</p>` : ''}
         </div>
-        ${inner}
       </div>`;
+    }).join('');
+
+    return `<div class="igd-pyrd-wrap">
+      <div class="igd-pyrd-svg-col">
+        <svg viewBox="0 0 180 205" xmlns="http://www.w3.org/2000/svg">${bands}</svg>
+      </div>
+      <div class="igd-pyrd-text-col">${textItems}</div>
+    </div>`;
+  }
+
+  /* ── nested-diamonds (SVG overlapping diamonds, top=smallest) ── */
+  if (variant === 'nested-diamonds') {
+    const n    = Math.min(Math.max(list.length, 2), 4);
+    const data = list.slice(0, n);
+
+    // Diamond sizes: top smallest, bottom largest
+    const sizes    = Array.from({ length: n }, (_, i) => 65 + i * 30); // 65, 95, 125, 155
+    const overlap  = 0.42; // each diamond's center is offset 58% of its height from prev
+    const svgW     = 160;
+
+    // Compute diamond center_y positions
+    const centerYs = [];
+    let y = sizes[0] / 2;
+    for (let i = 0; i < n; i++) {
+      centerYs.push(y);
+      if (i < n - 1) y += sizes[i] * (1 - overlap);
     }
-    return inner;
+    const svgH = Math.ceil(centerYs[n - 1] + sizes[n - 1] / 2) + 4;
+    const cx   = svgW / 2;
+
+    let diamonds = '';
+    for (let i = 0; i < n; i++) {
+      const s     = sizes[i] / 2; // half-size (half-diagonal)
+      const dy    = centerYs[i];
+      // top=lightest (i=0), bottom=darkest (i=n-1)
+      const alpha = parseFloat((0.25 + i * (0.55 / Math.max(n - 1, 1))).toFixed(2));
+      diamonds += `<polygon
+        points="${cx},${(dy - s).toFixed(1)} ${(cx + s).toFixed(1)},${dy.toFixed(1)} ${cx},${(dy + s).toFixed(1)} ${(cx - s).toFixed(1)},${dy.toFixed(1)}"
+        fill="var(--accent)" opacity="${alpha}"/>`;
+      // Item number label inside diamond
+      diamonds += `<text x="${cx}" y="${(dy + 4).toFixed(1)}" text-anchor="middle"
+        font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+        font-size="11" font-weight="700" fill="#fff" opacity="0.85">${i + 1}</text>`;
+    }
+
+    const textItems = data.map((item, i) => {
+      const title = esc(trunc(item.title || '', 25));
+      const body  = esc(dgTruncateBody(item.body || '', density));
+      const alpha = parseFloat((0.25 + i * (0.55 / Math.max(n - 1, 1))).toFixed(2));
+      return `<div class="igd-ndiam-text-item">
+        <div class="igd-ndiam-badge" style="opacity:${alpha + 0.15}"></div>
+        <div>
+          <p class="igd-title">${title}</p>
+          ${body ? `<p class="igd-body">${body}</p>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="igd-ndiam-wrap">
+      <div class="igd-ndiam-svg-col">
+        <svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">${diamonds}</svg>
+      </div>
+      <div class="igd-ndiam-text-col">${textItems}</div>
+    </div>`;
   }
 
   return renderHierarchy(items, 'org-chart', tone, columns, density);
@@ -947,586 +953,282 @@ export function renderHierarchy(items, variant, tone, columns, density) {
 
 /* ═══════════════════════════════════════════════════════════════
    FAMILY 4 — VENN
-   Variants: venn-2, venn-3, overlapping-sets, matrix-2x2
+   Variants: venn-diagram, linear-venn, linear-venn-filled
    Item roles:
-     venn-2       — items[0] = left circle, items[1] = right circle
-     venn-3       — items[0,1,2] = three circles; overlap from body text
-     overlapping-sets — items[0] = left set, items[1] = right set
-     matrix-2x2   — items[0]=TL, items[1]=TR, items[2]=BL, items[3]=BR
+     venn-diagram       — 2 or 3 items = overlapping circles
+     linear-venn        — 2–5 items = horizontal outline circles in a row
+     linear-venn-filled — 2–5 items = horizontal filled circles in a row
 ═══════════════════════════════════════════════════════════════ */
 
 export const VENN_CSS = `
-/* ── venn shared ── */
-.ig-page .igd-venn-wrap {
-  position: relative; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center;
-}
-
-/* ── venn-2 ── */
-.ig-page .igd-venn2 {
-  position: relative; height: 200px; width: 100%;
-  display: flex; align-items: center;
-}
-.ig-page .igd-v2-circle {
-  position: absolute;
-  width: 160px; height: 160px;
-  border-radius: 50%;
-  background: var(--accent, #2563EB);
-  top: 50%; transform: translateY(-50%);
-  opacity: 0.25;
-}
-.ig-page .igd-v2-circle--left  { left: 10%; }
-.ig-page .igd-v2-circle--right { right: 10%; }
-.ig-page .igd-v2-left-label {
-  position: absolute; left: 4%; top: 50%;
-  transform: translateY(-50%);
-  width: 28%; text-align: center;
-  z-index: 1;
-}
-.ig-page .igd-v2-right-label {
-  position: absolute; right: 4%; top: 50%;
-  transform: translateY(-50%);
-  width: 28%; text-align: center;
-  z-index: 1;
-}
-.ig-page .igd-v2-overlap-label {
-  position: absolute; left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center; z-index: 1;
-  max-width: 80px;
-}
-
-/* ── venn-3 ── */
-.ig-page .igd-venn3 {
-  position: relative; height: 240px; width: 100%;
-}
-.ig-page .igd-v3-circle {
-  position: absolute;
-  width: 140px; height: 140px;
-  border-radius: 50%;
-  background: var(--accent, #2563EB);
-  opacity: 0.22;
-}
-.ig-page .igd-v3-circle--a { top:  8px; left: 50%; transform: translateX(-50%); }
-.ig-page .igd-v3-circle--b { bottom: 8px; left: 20%; }
-.ig-page .igd-v3-circle--c { bottom: 8px; right: 20%; }
-.ig-page .igd-v3-label {
-  position: absolute; text-align: center; z-index: 1;
-  max-width: 90px;
-}
-.ig-page .igd-v3-label--a { top: 12px; left: 50%; transform: translateX(-50%); }
-.ig-page .igd-v3-label--b { bottom: 12px; left: 8%; }
-.ig-page .igd-v3-label--c { bottom: 12px; right: 8%; }
-.ig-page .igd-v3-center {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -44%);
-  text-align: center; z-index: 1;
-}
-
-/* ── overlapping-sets ── */
-.ig-page .igd-overlap-sets {
+/* ── venn-diagram ── */
+.ig-page .igd-venn-svg-wrap {
   display: flex; align-items: center; justify-content: center;
-  padding: 8px; gap: 0;
+  overflow: hidden;
 }
-.ig-page .igd-ovlp-circle {
-  width: 170px; height: 170px;
-  border-radius: 50%;
-  background: var(--accent, #2563EB);
-  opacity: 0.22;
-  position: absolute;
-}
-.ig-page .igd-ovlp-set {
-  width: 150px; height: 150px;
-  border-radius: 50%;
-  position: relative;
-  display: flex; align-items: center; justify-content: center;
-  text-align: center;
-  padding: 24px 16px;
-  box-sizing: border-box;
-  z-index: 1;
-}
-.ig-page .igd-ovlp-set::before {
-  content: ''; position: absolute; inset: 0;
-  border-radius: 50%;
-  background: var(--accent, #2563EB); opacity: 0.18;
-}
-.ig-page .igd-ovlp-set--left  { margin-right: -36px; }
-.ig-page .igd-ovlp-set--right { margin-left: -36px; }
-.ig-page .igd-ovlp-both {
-  z-index: 2; text-align: center;
-  position: relative; padding: 0 6px;
-}
+.ig-page .igd-venn-svg-wrap svg { width: 100%; height: auto; max-width: 420px; }
 
-/* ── matrix-2x2 ── */
-.ig-page .igd-matrix-wrap {
-  padding: 8px 0;
-}
-.ig-page .igd-matrix-axis-row {
-  display: flex; align-items: center; gap: 4px; margin-bottom: 4px;
-}
-.ig-page .igd-matrix-axis-label {
-  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
-  font-size: 0.65em; font-weight: 600; color: var(--text-secondary, #6b7280);
-  text-transform: uppercase; letter-spacing: 0.04em;
-  text-align: center; flex: 1;
-}
-.ig-page .igd-matrix-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 2px; border-radius: var(--radius-card, 10px); overflow: hidden;
-  border: 1px solid var(--card-border, #e5e7eb);
-}
-.ig-page .igd-matrix-cell {
-  background: var(--card-bg, #fff);
-  padding: 14px 12px; overflow: hidden;
-  border: 1px solid var(--card-border, #e5e7eb);
-}
-.ig-page .igd-matrix-cell--accent {
-  background: var(--accent-soft, rgba(37,99,235,.08));
-}
-.ig-page .igd-matrix-y-wrap {
-  display: flex; gap: 4px; align-items: stretch;
-}
-.ig-page .igd-matrix-y-label {
-  writing-mode: vertical-rl; text-orientation: mixed;
-  transform: rotate(180deg);
-  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
-  font-size: 0.65em; font-weight: 600; color: var(--text-secondary, #6b7280);
-  text-transform: uppercase; letter-spacing: 0.04em;
-  text-align: center; padding: 4px 0;
+/* ── linear-venn shared ── */
+.ig-page .igd-linvenn-wrap {
   display: flex; align-items: center; justify-content: center;
-  min-width: 18px;
+  overflow: hidden; padding: 8px 4px;
 }
+.ig-page .igd-linvenn-wrap svg { width: 100%; height: auto; }
 `;
 
 /**
- * renderVenn — Venn / Relationship / Matrix diagrams
- * Variants: venn-2, venn-3, overlapping-sets, matrix-2x2
+ * renderVenn — Venn / Relationship diagrams
+ * Variants: venn-diagram, linear-venn, linear-venn-filled
  */
 export function renderVenn(items, variant, tone, columns, density) {
-  const list = items.slice(0, 8);
+  const list = items.slice(0, 5);
 
-  /* ── venn-2 ── */
-  if (variant === 'venn-2') {
-    const left  = list[0] || {};
-    const right = list[1] || {};
-    const lt = esc(dgTruncateTitle(left.title  || '', density));
-    const lb = esc(dgTruncateBody(left.body   || '', density));
-    const rt = esc(dgTruncateTitle(right.title || '', density));
-    const rb = esc(dgTruncateBody(right.body  || '', density));
-    return `<div class="igd-venn-wrap">
-      <div class="igd-venn2">
-        <div class="igd-v2-circle igd-v2-circle--left"></div>
-        <div class="igd-v2-circle igd-v2-circle--right"></div>
-        <div class="igd-v2-left-label">
-          <p class="igd-title">${lt}</p>
-          ${lb ? `<p class="igd-body">${lb}</p>` : ''}
-        </div>
-        <div class="igd-v2-overlap-label">
-          <p class="igd-label">Both</p>
-        </div>
-        <div class="igd-v2-right-label">
-          <p class="igd-title">${rt}</p>
-          ${rb ? `<p class="igd-body">${rb}</p>` : ''}
-        </div>
-      </div>
-    </div>`;
-  }
+  /* ── venn-diagram (classic overlapping circles, 2–3 items) ── */
+  if (variant === 'venn-diagram') {
+    const n = Math.min(Math.max(list.length, 2), 3);
+    const data = list.slice(0, n);
 
-  /* ── venn-3 ── */
-  if (variant === 'venn-3') {
-    const a = list[0] || {};
-    const b = list[1] || {};
-    const c = list[2] || {};
-    const at = esc(dgTruncateTitle(a.title || '', density));
-    const ab = esc(dgTruncateBody(a.body  || '', density));
-    const bt = esc(dgTruncateTitle(b.title || '', density));
-    const bb = esc(dgTruncateBody(b.body  || '', density));
-    const ct = esc(dgTruncateTitle(c.title || '', density));
-    const cb = esc(dgTruncateBody(c.body  || '', density));
-    return `<div class="igd-venn-wrap">
-      <div class="igd-venn3">
-        <div class="igd-v3-circle igd-v3-circle--a"></div>
-        <div class="igd-v3-circle igd-v3-circle--b"></div>
-        <div class="igd-v3-circle igd-v3-circle--c"></div>
-        <div class="igd-v3-label igd-v3-label--a">
-          <p class="igd-title">${at}</p>
-          ${ab ? `<p class="igd-body">${ab}</p>` : ''}
-        </div>
-        <div class="igd-v3-label igd-v3-label--b">
-          <p class="igd-title">${bt}</p>
-          ${bb ? `<p class="igd-body">${bb}</p>` : ''}
-        </div>
-        <div class="igd-v3-label igd-v3-label--c">
-          <p class="igd-title">${ct}</p>
-          ${cb ? `<p class="igd-body">${cb}</p>` : ''}
-        </div>
-        <div class="igd-v3-center">
-          <p class="igd-label">All</p>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  /* ── overlapping-sets ── */
-  if (variant === 'overlapping-sets') {
-    const left  = list[0] || {};
-    const right = list[1] || {};
-    const lt = esc(dgTruncateTitle(left.title  || '', density));
-    const lb = esc(dgTruncateBody(left.body   || '', density));
-    const rt = esc(dgTruncateTitle(right.title || '', density));
-    const rb = esc(dgTruncateBody(right.body  || '', density));
-    return `<div class="igd-venn-wrap">
-      <div class="igd-overlap-sets">
-        <div class="igd-ovlp-set igd-ovlp-set--left">
-          <div>
-            <p class="igd-title">${lt}</p>
-            ${lb ? `<p class="igd-body">${lb}</p>` : ''}
-          </div>
-        </div>
-        <div class="igd-ovlp-both">
-          <p class="igd-label">∩</p>
-        </div>
-        <div class="igd-ovlp-set igd-ovlp-set--right">
-          <div>
-            <p class="igd-title">${rt}</p>
-            ${rb ? `<p class="igd-body">${rb}</p>` : ''}
-          </div>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  /* ── matrix-2x2 ── */
-  if (variant === 'matrix-2x2') {
-    // items[0]=TL, items[1]=TR, items[2]=BL, items[3]=BR
-    const cells = [0, 1, 2, 3].map(i => {
-      const item  = list[i] || {};
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      const body  = esc(dgTruncateBody(item.body  || '', density));
-      const accent = (i === 1 || i === 2) ? ' igd-matrix-cell--accent' : '';
-      return `<div class="igd-matrix-cell${accent}">
-        <p class="igd-title">${title}</p>
-        ${body ? `<p class="igd-body">${body}</p>` : ''}
+    if (n === 2) {
+      const r   = 110;
+      const gap = 90; // center-to-center (gives ~40% overlap: 2r-gap=130, /2r=0.59... ok, ~40% of radius)
+      const c1x = 200 - gap / 2;
+      const c2x = 200 + gap / 2;
+      const cy  = 150;
+      const t0  = esc(trunc(data[0]?.title || '', 22));
+      const t1  = esc(trunc(data[1]?.title || '', 22));
+      return `<div class="igd-venn-svg-wrap">
+        <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="${c1x}" cy="${cy}" r="${r}" fill="var(--accent)" opacity="0.35"/>
+          <circle cx="${c2x}" cy="${cy}" r="${r}" fill="var(--accent)" opacity="0.55"/>
+          <text x="${c1x - 32}" y="${cy + 5}" text-anchor="middle"
+            font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+            font-size="13" font-weight="700" fill="var(--text-primary,#111827)">${t0}</text>
+          <text x="${c2x + 32}" y="${cy + 5}" text-anchor="middle"
+            font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+            font-size="13" font-weight="700" fill="var(--text-primary,#111827)">${t1}</text>
+          <text x="200" y="${cy + 5}" text-anchor="middle"
+            font-family="var(--font-body,'Plus Jakarta Sans',sans-serif)"
+            font-size="10" fill="var(--text-secondary,#6b7280)" opacity="0.8">∩</text>
+        </svg>
       </div>`;
-    }).join('');
-    return `<div class="igd-matrix-wrap">
-      <div class="igd-matrix-axis-row">
-        <div style="width:18px;flex-shrink:0"></div>
-        <div class="igd-matrix-axis-label">← Low</div>
-        <div class="igd-matrix-axis-label">High →</div>
-      </div>
-      <div class="igd-matrix-y-wrap">
-        <div class="igd-matrix-y-label">← Low · High →</div>
-        <div class="igd-matrix-grid">${cells}</div>
-      </div>
+    }
+
+    // 3-circle triangle arrangement
+    const r3  = 95;
+    // Triangle of centers: equilateral, side ≈ 140px
+    const side = 138;
+    const ax = 200, ay = 110;
+    const bx = 200 - side / 2, by = 110 + side * 0.866;
+    const cx3 = 200 + side / 2, cy3 = by;
+    const ta = esc(trunc(data[0]?.title || '', 18));
+    const tb = esc(trunc(data[1]?.title || '', 18));
+    const tc = esc(trunc(data[2]?.title || '', 18));
+    return `<div class="igd-venn-svg-wrap">
+      <svg viewBox="0 0 400 330" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="${ax}" cy="${ay}" r="${r3}" fill="var(--accent)" opacity="0.30"/>
+        <circle cx="${bx.toFixed(0)}" cy="${by.toFixed(0)}" r="${r3}" fill="var(--accent)" opacity="0.45"/>
+        <circle cx="${cx3.toFixed(0)}" cy="${cy3.toFixed(0)}" r="${r3}" fill="var(--accent)" opacity="0.60"/>
+        <text x="${ax}" y="${ay - 55}" text-anchor="middle"
+          font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+          font-size="12" font-weight="700" fill="var(--text-primary,#111827)">${ta}</text>
+        <text x="${(bx - 38).toFixed(0)}" y="${(by + 45).toFixed(0)}" text-anchor="end"
+          font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+          font-size="12" font-weight="700" fill="var(--text-primary,#111827)">${tb}</text>
+        <text x="${(cx3 + 38).toFixed(0)}" y="${(cy3 + 45).toFixed(0)}" text-anchor="start"
+          font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+          font-size="12" font-weight="700" fill="var(--text-primary,#111827)">${tc}</text>
+        <text x="200" y="${(ay + (by - ay) * 0.5 + 8).toFixed(0)}" text-anchor="middle"
+          font-family="var(--font-body,'Plus Jakarta Sans',sans-serif)"
+          font-size="9" fill="var(--text-secondary,#6b7280)" opacity="0.7">∩</text>
+      </svg>
     </div>`;
   }
 
-  return renderVenn(items, 'matrix-2x2', tone, columns, density);
+  /* ── linear-venn (outline circles in a row) ── */
+  if (variant === 'linear-venn') {
+    const n    = Math.min(Math.max(list.length, 2), 5);
+    const data = list.slice(0, n);
+    const r    = 55;
+    const step = r * 1.4; // center-to-center (30% overlap on diameter = 0.3*2r=33, step=2r-33=77... approx)
+    const totalW = 2 * r + (n - 1) * step;
+    const vbW    = Math.max(totalW + 20, 200);
+    const vbH    = 2 * r + 50; // +50 for text below
+    const startX = (vbW - totalW) / 2 + r;
+    const cy2    = r + 4;
+
+    let circles = '', labels = '';
+    for (let i = 0; i < n; i++) {
+      const x     = startX + i * step;
+      const title = esc(trunc(data[i]?.title || '', 15));
+      const body  = esc(trunc(data[i]?.body || '', 18));
+      circles += `<circle cx="${x.toFixed(1)}" cy="${cy2}" r="${r}"
+        fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.8"/>`;
+      labels += `<text x="${x.toFixed(1)}" y="${cy2 - 4}" text-anchor="middle"
+        font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+        font-size="11" font-weight="700" fill="var(--text-primary,#111827)">${title}</text>`;
+      if (body) {
+        labels += `<text x="${x.toFixed(1)}" y="${cy2 + 13}" text-anchor="middle"
+          font-family="var(--font-body,'Plus Jakarta Sans',sans-serif)"
+          font-size="9" fill="var(--text-secondary,#6b7280)">${body}</text>`;
+      }
+    }
+
+    return `<div class="igd-linvenn-wrap">
+      <svg viewBox="0 0 ${vbW.toFixed(0)} ${vbH}" xmlns="http://www.w3.org/2000/svg">
+        ${circles}${labels}
+      </svg>
+    </div>`;
+  }
+
+  /* ── linear-venn-filled (filled circles in a row) ── */
+  if (variant === 'linear-venn-filled') {
+    const n    = Math.min(Math.max(list.length, 2), 5);
+    const data = list.slice(0, n);
+    const r    = 55;
+    const step = r * 1.4;
+    const totalW = 2 * r + (n - 1) * step;
+    const vbW    = Math.max(totalW + 20, 200);
+    const vbH    = 2 * r + 8;
+    const startX = (vbW - totalW) / 2 + r;
+    const cy2    = r + 4;
+
+    let circles = '', labels = '';
+    for (let i = 0; i < n; i++) {
+      const x     = startX + i * step;
+      const alpha = parseFloat((0.35 + i * (0.45 / Math.max(n - 1, 1))).toFixed(2));
+      const title = esc(trunc(data[i]?.title || '', 15));
+      const body  = esc(trunc(data[i]?.body || '', 18));
+      circles += `<circle cx="${x.toFixed(1)}" cy="${cy2}" r="${r}"
+        fill="var(--accent)" opacity="${alpha}"/>`;
+      labels += `<text x="${x.toFixed(1)}" y="${cy2 - 4}" text-anchor="middle"
+        font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+        font-size="11" font-weight="700" fill="#fff">${title}</text>`;
+      if (body) {
+        labels += `<text x="${x.toFixed(1)}" y="${cy2 + 13}" text-anchor="middle"
+          font-family="var(--font-body,'Plus Jakarta Sans',sans-serif)"
+          font-size="9" fill="rgba(255,255,255,0.85)">${body}</text>`;
+      }
+    }
+
+    return `<div class="igd-linvenn-wrap">
+      <svg viewBox="0 0 ${vbW.toFixed(0)} ${vbH}" xmlns="http://www.w3.org/2000/svg">
+        ${circles}${labels}
+      </svg>
+    </div>`;
+  }
+
+  return renderVenn(items, 'venn-diagram', tone, columns, density);
 }
 
 /* ═══════════════════════════════════════════════════════════════
    FAMILY 5 — PROCESS
-   Variants: circular-flow, swimlane, branching, infinity-loop
+   Variants: infinity-loop
    Item roles:
-     circular-flow — items[0..n-1] flow in a circle (arrows between each)
-     swimlane      — each item = a lane row
-     branching     — items[0] = decision, items[1] = yes, items[2] = no,
-                     items[3..] = further nodes
-     infinity-loop — first half = left loop, second half = right loop
+     infinity-loop — exactly 4 items: [0]=TL, [1]=TR, [2]=BL, [3]=BR
 ═══════════════════════════════════════════════════════════════ */
 
 export const PROCESS_CSS = `
-/* ── circular-flow ── */
-.ig-page .igd-circ-flow {
-  position: relative; margin: 0 auto;
-}
-.ig-page .igd-cf-node {
-  position: absolute;
-  background: var(--card-bg, #fff);
-  border: 2px solid var(--accent);
-  border-radius: var(--radius-card, 10px);
-  padding: 8px 10px;
-  text-align: center;
-  box-shadow: var(--card-shadow, 0 1px 4px rgba(0,0,0,.08));
-  transform: translate(-50%, -50%);
-  overflow: hidden;
-  max-width: 90px;
-}
-.ig-page .igd-cf-node .igd-title { font-size: 0.78em; }
-.ig-page .igd-cf-node .igd-body  { font-size: 0.66em; }
-.ig-page .igd-cf-arrow {
-  position: absolute;
-  color: var(--accent);
-  font-size: 1.1em; font-weight: 700;
-  transform: translate(-50%, -50%);
-  z-index: 3; line-height: 1;
-}
-
-/* ── swimlane ── */
-.ig-page .igd-swimlane {
-  display: flex; flex-direction: column;
-  border: 1px solid var(--card-border, #e5e7eb);
-  border-radius: var(--radius-card, 10px); overflow: hidden;
-}
-.ig-page .igd-sw-lane {
-  display: flex; align-items: stretch;
-  border-bottom: 1px solid var(--card-border, #e5e7eb);
-}
-.ig-page .igd-sw-lane:last-child { border-bottom: none; }
-.ig-page .igd-sw-num {
-  width: 36px; min-width: 36px;
-  background: var(--accent);
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 0.82em; font-weight: 700; color: #fff;
-  flex-shrink: 0;
-}
-.ig-page .igd-sw-content {
-  padding: 10px 14px; flex: 1; overflow: hidden;
-}
-.ig-page .igd-sw-phase {
-  display: inline-block;
-  background: var(--accent-soft, rgba(37,99,235,.1));
-  color: var(--accent);
-  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 0.62em; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 8px; border-radius: 10px; margin-bottom: 4px;
-}
-
-/* ── branching ── */
-.ig-page .igd-branch {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 8px; gap: 0;
-}
-.ig-page .igd-branch-node {
-  background: var(--card-bg, #fff);
-  border: 2px solid var(--accent);
-  border-radius: var(--radius-card, 10px);
-  padding: 10px 16px; text-align: center;
-  box-shadow: var(--card-shadow, 0 1px 4px rgba(0,0,0,.08));
-  overflow: hidden; max-width: 160px;
-}
-.ig-page .igd-branch-root-node {
-  background: var(--accent); border-color: var(--accent);
-}
-.ig-page .igd-branch-root-node .igd-title { color: #fff; }
-.ig-page .igd-branch-connector-v {
-  width: 2px; height: 20px;
-  background: var(--accent-soft, rgba(37,99,235,.3));
-  margin: 0 auto;
-}
-.ig-page .igd-branch-arms {
-  display: flex; gap: 16px; position: relative;
-  padding-top: 0;
-}
-.ig-page .igd-branch-arms::before {
-  content: ''; position: absolute;
-  top: 0; left: 50%; right: auto;
-  width: 0; height: 20px;
-  border-left: 2px solid var(--accent-soft, rgba(37,99,235,.3));
-}
-.ig-page .igd-branch-arms::after {
-  content: ''; position: absolute;
-  top: 0; left: 15%; right: 15%;
-  height: 2px;
-  background: var(--accent-soft, rgba(37,99,235,.3));
-}
-.ig-page .igd-branch-arm {
-  display: flex; flex-direction: column; align-items: center; gap: 0;
-  padding-top: 0; position: relative;
-}
-.ig-page .igd-branch-arm::before {
-  content: ''; width: 2px; height: 20px;
-  background: var(--accent-soft, rgba(37,99,235,.3));
-}
-.ig-page .igd-branch-tag {
-  display: inline-block;
-  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 0.62em; font-weight: 700;
-  padding: 2px 8px; border-radius: 10px;
-  margin-bottom: 4px;
-}
-.ig-page .igd-branch-tag--yes {
-  background: rgba(16,185,129,0.15); color: #059669;
-}
-.ig-page .igd-branch-tag--no {
-  background: rgba(239,68,68,0.15); color: #DC2626;
-}
-.ig-page .igd-branch-tag--else {
-  background: var(--accent-soft, rgba(37,99,235,.1)); color: var(--accent);
-}
-
 /* ── infinity-loop ── */
-.ig-page .igd-infinity {
+.ig-page .igd-inf-outer {
+  display: grid;
+  grid-template-areas: "tl svg tr" "bl svg br";
+  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px 12px;
+  padding: 12px;
+  min-height: 190px;
+  align-items: center;
+}
+.ig-page .igd-inf-svg-area {
+  grid-area: svg;
   display: flex; align-items: center; justify-content: center;
-  gap: 0; padding: 12px 8px;
 }
-.ig-page .igd-inf-loop {
-  width: 160px; height: 120px;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
-  background: var(--accent-soft, rgba(37,99,235,.08));
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: 12px; gap: 4px; text-align: center;
-  overflow: hidden;
-  position: relative;
+.ig-page .igd-inf-svg-area svg { width: 100%; height: auto; }
+.ig-page .igd-inf-box-tl { grid-area: tl; text-align: right; }
+.ig-page .igd-inf-box-tr { grid-area: tr; }
+.ig-page .igd-inf-box-bl { grid-area: bl; text-align: right; }
+.ig-page .igd-inf-box-br { grid-area: br; }
+.ig-page .igd-inf-box {
+  display: flex; flex-direction: column; gap: 2px;
 }
-.ig-page .igd-inf-loop--left  { margin-right: -24px; z-index: 1; }
-.ig-page .igd-inf-loop--right { margin-left: -24px; z-index: 1; }
-.ig-page .igd-inf-loop-label {
-  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 0.62em; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--accent); margin-bottom: 2px;
+.ig-page .igd-inf-dot {
+  display: inline-block;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); opacity: 0.7;
+  flex-shrink: 0; margin-top: 5px;
 }
-.ig-page .igd-inf-items {
-  display: flex; flex-direction: column; gap: 3px; width: 100%;
-}
+.ig-page .igd-inf-box .igd-title { font-size: 0.82em; }
 `;
 
 /**
  * renderProcess — Process / Motion / Flow diagrams
- * Variants: circular-flow, swimlane, branching, infinity-loop
+ * Variants: infinity-loop (exactly 4 items)
  */
 export function renderProcess(items, variant, tone, columns, density) {
-  const list = items.slice(0, 8);
 
-  /* ── circular-flow ── */
-  if (variant === 'circular-flow') {
-    const n      = list.length;
-    const cSize  = 280;
-    const radius = (cSize / 2) - 52;
-    const positions = radialPositions(n, (radius / (cSize / 2)) * 50);
-    const nodes = list.map((item, i) => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      const body  = esc(dgTruncateBody(item.body || '', density));
-      const x     = positions[i].x;
-      const y     = positions[i].y;
-      return `<div class="igd-cf-node" style="left:${x}%;top:${y}%">
-        <p class="igd-title">${title}</p>
-        ${body ? `<p class="igd-body">${body}</p>` : ''}
-      </div>`;
-    }).join('');
-    // Arrow indicators midway between each consecutive pair
-    const arrows = list.map((_, i) => {
-      const next = (i + 1) % n;
-      const ax   = (positions[i].x + positions[next].x) / 2;
-      const ay   = (positions[i].y + positions[next].y) / 2;
-      return `<div class="igd-cf-arrow" style="left:${ax}%;top:${ay}%">›</div>`;
-    }).join('');
-    return `<div class="igd-circ-flow" style="width:${cSize}px;height:${cSize}px">
-      ${nodes}${arrows}
-    </div>`;
-  }
-
-  /* ── swimlane ── */
-  if (variant === 'swimlane') {
-    const lanes = list.map((item, i) => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      const body  = esc(dgTruncateBody(item.body || '', density));
-      return `<div class="igd-sw-lane">
-        <div class="igd-sw-num">${i + 1}</div>
-        <div class="igd-sw-content">
-          <p class="igd-title">${title}</p>
-          ${body ? `<p class="igd-body">${body}</p>` : ''}
-        </div>
-      </div>`;
-    }).join('');
-    return `<div class="igd-swimlane">${lanes}</div>`;
-  }
-
-  /* ── branching ── */
-  if (variant === 'branching') {
-    const root    = list[0];
-    const yesNode = list[1];
-    const noNode  = list[2];
-    const rest    = list.slice(3);
-    const rTitle  = esc(dgTruncateTitle(root?.title || 'Decision', density));
-    const rBody   = esc(dgTruncateBody(root?.body || '', density));
-    const yTitle  = esc(dgTruncateTitle(yesNode?.title || 'Yes path', density));
-    const yBody   = esc(dgTruncateBody(yesNode?.body || '', density));
-    const nTitle  = esc(dgTruncateTitle(noNode?.title || 'No path', density));
-    const nBody   = esc(dgTruncateBody(noNode?.body || '', density));
-    const extraArms = rest.map((item, i) => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      const body  = esc(dgTruncateBody(item.body || '', density));
-      return `<div class="igd-branch-arm">
-        <div class="igd-branch-tag igd-branch-tag--else">Path ${i + 3}</div>
-        <div class="igd-branch-node">
-          <p class="igd-title">${title}</p>
-          ${body ? `<p class="igd-body">${body}</p>` : ''}
-        </div>
-      </div>`;
-    }).join('');
-    return `<div class="igd-branch">
-      <div class="igd-branch-node igd-branch-root-node">
-        <p class="igd-title">${rTitle}</p>
-        ${rBody ? `<p class="igd-body">${rBody}</p>` : ''}
-      </div>
-      <div class="igd-branch-connector-v"></div>
-      <div class="igd-branch-arms">
-        <div class="igd-branch-arm">
-          <div class="igd-branch-tag igd-branch-tag--yes">Yes</div>
-          <div class="igd-branch-node">
-            <p class="igd-title">${yTitle}</p>
-            ${yBody ? `<p class="igd-body">${yBody}</p>` : ''}
-          </div>
-        </div>
-        <div class="igd-branch-arm">
-          <div class="igd-branch-tag igd-branch-tag--no">No</div>
-          <div class="igd-branch-node">
-            <p class="igd-title">${nTitle}</p>
-            ${nBody ? `<p class="igd-body">${nBody}</p>` : ''}
-          </div>
-        </div>
-        ${extraArms}
-      </div>
-    </div>`;
-  }
-
-  /* ── infinity-loop ── */
+  /* ── infinity-loop (SVG lemniscate + 4 corner text boxes) ── */
   if (variant === 'infinity-loop') {
-    const half    = Math.ceil(list.length / 2);
-    const leftItems  = list.slice(0, half);
-    const rightItems = list.slice(half);
-    const leftHtml = leftItems.map(item => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      return `<p class="igd-title" style="font-size:0.78em">${title}</p>`;
-    }).join('');
-    const rightHtml = rightItems.map(item => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      return `<p class="igd-title" style="font-size:0.78em">${title}</p>`;
-    }).join('');
-    return `<div class="igd-infinity">
-      <div class="igd-inf-loop igd-inf-loop--left">
-        <div class="igd-inf-loop-label">Cycle A</div>
-        <div class="igd-inf-items">${leftHtml}</div>
+    // Always use exactly 4 items, pad if needed
+    const data = [0, 1, 2, 3].map(i => items[i] || { title: `Item ${i + 1}`, body: '' });
+    const tlT = esc(trunc(data[0].title || '', 25));
+    const trT = esc(trunc(data[1].title || '', 25));
+    const blT = esc(trunc(data[2].title || '', 25));
+    const brT = esc(trunc(data[3].title || '', 25));
+
+    // SVG infinity/lemniscate using cubic bezier curves
+    // viewBox: 0 0 400 200, center at (200, 100)
+    // Two loops: right loop center ~(290,100), left loop center ~(110,100)
+    const infPath = `M 200,100
+      C 200,42 310,42 310,100
+      C 310,158 200,158 200,100
+      C 200,42 90,42 90,100
+      C 90,158 200,158 200,100 Z`;
+
+    const svgHtml = `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="infGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:var(--accent);stop-opacity:0.55"/>
+          <stop offset="50%" style="stop-color:var(--accent);stop-opacity:0.75"/>
+          <stop offset="100%" style="stop-color:var(--accent);stop-opacity:0.60"/>
+        </linearGradient>
+      </defs>
+      <path d="${infPath}" fill="url(#infGrad)"/>
+      <path d="${infPath}" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.4"/>
+    </svg>`;
+
+    return `<div class="igd-inf-outer">
+      <div class="igd-inf-box-tl igd-inf-box">
+        <p class="igd-title">${tlT}</p>
+        <span class="igd-inf-dot" style="align-self:flex-end"></span>
       </div>
-      <div class="igd-inf-loop igd-inf-loop--right">
-        <div class="igd-inf-loop-label">Cycle B</div>
-        <div class="igd-inf-items">${rightHtml}</div>
+      <div class="igd-inf-box-tr igd-inf-box">
+        <p class="igd-title">${trT}</p>
+        <span class="igd-inf-dot"></span>
+      </div>
+      <div class="igd-inf-svg-area">${svgHtml}</div>
+      <div class="igd-inf-box-bl igd-inf-box">
+        <span class="igd-inf-dot" style="align-self:flex-end"></span>
+        <p class="igd-title">${blT}</p>
+      </div>
+      <div class="igd-inf-box-br igd-inf-box">
+        <span class="igd-inf-dot"></span>
+        <p class="igd-title">${brT}</p>
       </div>
     </div>`;
   }
 
-  return renderProcess(items, 'swimlane', tone, columns, density);
+  // fallback
+  return renderProcess(items, 'infinity-loop', tone, columns, density);
 }
 
 /* ═══════════════════════════════════════════════════════════════
    FAMILY 6 — BUSINESS
-   Variants: swot, competitive-map, value-chain, bmc
+   Variants: swot, competitive-map, chain
    Item roles:
      swot           — items[0]=Strengths, items[1]=Weaknesses,
                       items[2]=Opportunities, items[3]=Threats
      competitive-map — items[0..n-1] positioned on a 2-axis grid
-     value-chain    — items[0..n-1] = sequential value-adding blocks
-     bmc            — items[0..5] mapped to canvas blocks
-                      [0]=Value Prop, [1]=Customer Segments,
-                      [2]=Key Partners, [3]=Key Activities,
-                      [4]=Revenue Streams, [5]=Cost Structure
+     chain          — items[0..5] = sequential chain links (min 2, max 6)
 ═══════════════════════════════════════════════════════════════ */
 
 export const BUSINESS_CSS = `
@@ -1617,117 +1319,24 @@ export const BUSINESS_CSS = `
 .ig-page .igd-cm-axis-row {
   display: flex; justify-content: space-between; padding: 0 4px;
 }
-.ig-page .igd-cm-y-labels {
-  display: flex; flex-direction: column; justify-content: space-between;
-  align-items: flex-end; padding: 4px 0;
-}
 
-/* ── value-chain ── */
-.ig-page .igd-vchain {
-  display: flex; align-items: stretch;
-  gap: 0; overflow: hidden;
-  border: 1px solid var(--card-border, #e5e7eb);
-  border-radius: var(--radius-card, 10px);
+/* ── chain diagram ── */
+.ig-page .igd-chain-wrap {
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; padding: 8px 4px;
 }
-.ig-page .igd-vc-item {
-  flex: 1; position: relative; overflow: visible;
-}
-.ig-page .igd-vc-block {
-  background: var(--card-bg, #fff);
-  padding: 12px 14px 12px 10px;
-  height: 100%; overflow: hidden;
-  border-right: 1px solid var(--card-border, #e5e7eb);
-}
-.ig-page .igd-vc-item:last-child .igd-vc-block {
-  border-right: none;
-  background: var(--accent-soft, rgba(37,99,235,.08));
-}
-.ig-page .igd-vc-arrow {
-  position: absolute;
-  right: -11px; top: 50%;
-  transform: translateY(-50%);
-  width: 0; height: 0;
-  border-top: 14px solid transparent;
-  border-bottom: 14px solid transparent;
-  border-left: 11px solid var(--card-border, #e5e7eb);
-  z-index: 2;
-}
-.ig-page .igd-vc-arrow::after {
-  content: '';
-  position: absolute;
-  top: -13px; left: -9px;
-  width: 0; height: 0;
-  border-top: 13px solid transparent;
-  border-bottom: 13px solid transparent;
-  border-left: 10px solid var(--card-bg, #fff);
-}
-.ig-page .igd-vc-item:last-child .igd-vc-arrow { display: none; }
-.ig-page .igd-vc-step-num {
-  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 0.6em; font-weight: 700; color: var(--accent);
-  text-transform: uppercase; letter-spacing: 0.04em;
-  margin-bottom: 4px;
-}
-
-/* ── bmc ── */
-.ig-page .igd-bmc {
-  border: 1px solid var(--card-border, #e5e7eb);
-  border-radius: var(--radius-card, 10px); overflow: hidden;
-  background: var(--card-bg, #fff);
-}
-.ig-page .igd-bmc-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  min-height: 200px;
-}
-.ig-page .igd-bmc-cell {
-  padding: 10px 12px;
-  border-right: 1px solid var(--card-border, #e5e7eb);
-  border-bottom: 1px solid var(--card-border, #e5e7eb);
-  overflow: hidden;
-}
-.ig-page .igd-bmc-cell:nth-child(5),
-.ig-page .igd-bmc-cell:nth-child(10) { border-right: none; }
-.ig-page .igd-bmc-cell:nth-child(6),
-.ig-page .igd-bmc-cell:nth-child(7),
-.ig-page .igd-bmc-cell:nth-child(8),
-.ig-page .igd-bmc-cell:nth-child(9),
-.ig-page .igd-bmc-cell:nth-child(10) { border-bottom: none; }
-.ig-page .igd-bmc-cell-tag {
-  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
-  font-size: 0.58em; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.04em; color: var(--accent);
-  margin-bottom: 4px; display: block;
-}
-.ig-page .igd-bmc-cell--vp {
-  background: var(--accent-soft, rgba(37,99,235,.08));
-  grid-row: 1 / 3;
-}
-.ig-page .igd-bmc-footer {
-  display: grid; grid-template-columns: 1fr 1fr;
-  border-top: 1px solid var(--card-border, #e5e7eb);
-}
-.ig-page .igd-bmc-footer-cell {
-  padding: 10px 12px; overflow: hidden;
-}
-.ig-page .igd-bmc-footer-cell:first-child {
-  border-right: 1px solid var(--card-border, #e5e7eb);
-}
-.ig-page .igd-bmc-footer-cell .igd-bmc-cell-tag { display: block; }
+.ig-page .igd-chain-wrap svg { width: 100%; height: auto; }
 `;
 
 /**
  * renderBusiness — Business / Framework diagrams
- * Variants: swot, competitive-map, value-chain, bmc
+ * Variants: swot, competitive-map, chain
  */
 export function renderBusiness(items, variant, tone, columns, density) {
   const list = items.slice(0, 9);
 
   /* ── swot ── */
   if (variant === 'swot') {
-    // items[0]=Strengths, items[1]=Weaknesses, items[2]=Opportunities, items[3]=Threats
-    // Pad to 4 items
     const swotItems = [0, 1, 2, 3].map(i => list[i] || { title: ['Strengths', 'Weaknesses', 'Opportunities', 'Threats'][i], body: '' });
     const swotMeta  = [
       { cls: 's', letter: 'S', name: 'Strengths' },
@@ -1753,16 +1362,9 @@ export function renderBusiness(items, variant, tone, columns, density) {
 
   /* ── competitive-map ── */
   if (variant === 'competitive-map') {
-    // Pre-computed positions that spread items nicely across the grid
     const POSITIONS = [
-      { x: 72, y: 25 }, // top-right (high/high)
-      { x: 25, y: 70 }, // bottom-left (low/low)
-      { x: 65, y: 68 }, // bottom-right (high/low)
-      { x: 28, y: 26 }, // top-left (low/high)
-      { x: 55, y: 44 }, // center-right
-      { x: 38, y: 55 }, // center-left
-      { x: 78, y: 50 }, // right-mid
-      { x: 20, y: 42 }, // left-mid
+      { x: 72, y: 25 }, { x: 25, y: 70 }, { x: 65, y: 68 }, { x: 28, y: 26 },
+      { x: 55, y: 44 }, { x: 38, y: 55 }, { x: 78, y: 50 }, { x: 20, y: 42 },
     ];
     const dots = list.map((item, i) => {
       const pos   = POSITIONS[i % POSITIONS.length];
@@ -1788,68 +1390,47 @@ export function renderBusiness(items, variant, tone, columns, density) {
     </div>`;
   }
 
-  /* ── value-chain ── */
-  if (variant === 'value-chain') {
-    const chainItems = list.slice(0, 6);
-    const blocks = chainItems.map((item, i) => {
-      const title = esc(dgTruncateTitle(item.title || '', density));
-      const body  = esc(dgTruncateBody(item.body || '', density));
-      return `<div class="igd-vc-item">
-        <div class="igd-vc-block">
-          <div class="igd-vc-step-num">Step ${i + 1}</div>
-          <p class="igd-title">${title}</p>
-          ${body ? `<p class="igd-body">${body}</p>` : ''}
-        </div>
-        <div class="igd-vc-arrow"></div>
-      </div>`;
-    }).join('');
-    return `<div class="igd-vchain">${blocks}</div>`;
-  }
+  /* ── chain diagram (SVG horizontal interlocking chain links) ── */
+  if (variant === 'chain') {
+    const n      = Math.min(Math.max(list.length, 2), 6);
+    const data   = list.slice(0, n);
+    const linkW  = 80;   // link width
+    const linkH  = 50;   // link height
+    const rx     = 25;   // corner radius (makes it look oval/pill)
+    const overlapPx = linkW * 0.30; // 30% overlap
+    const step   = linkW - overlapPx; // center-to-center x advance = 56px
+    const totalW = linkW + (n - 1) * step;
+    const vbW    = 500;
+    const vbH    = 150;
+    const startX = (vbW - totalW) / 2; // left edge of first link
+    const linkTop = (vbH - linkH) / 2; // y position of link top = 50
 
-  /* ── bmc (Business Model Canvas, simplified) ── */
-  if (variant === 'bmc') {
-    // Canvas slots: Key Partners | Key Activities | Value Proposition | Customer Relationships | Customer Segments
-    //              Key Partners  | Key Resources  | (VP spans 2 rows) | Channels               | (CS spans 2 rows)
-    // Footer: Cost Structure | Revenue Streams
-    const slots = [
-      { key: 'Key Partners',       item: list[2] },
-      { key: 'Key Activities',     item: list[3] },
-      { key: 'Value Proposition',  item: list[0] },
-      { key: 'Customer Relations', item: list[4] },
-      { key: 'Customer Segments',  item: list[1] },
-    ];
-    // Row 2 (fill remaining for Key Resources & Channels)
-    const row2 = [
-      { key: 'Key Resources', item: list[5] || { title: 'Key Resources', body: '' } },
-      { key: 'Channels',      item: list[5] || { title: 'Channels', body: '' } },
-    ];
-    const mainCells = slots.map(({ key, item }) => {
-      const i = item || {};
-      const title = esc(dgTruncateTitle(i.title || key, density));
-      const body  = esc(dgTruncateBody(i.body || '', density));
-      const vpClass = key === 'Value Proposition' ? ' igd-bmc-cell--vp' : '';
-      return `<div class="igd-bmc-cell${vpClass}">
-        <span class="igd-bmc-cell-tag">${esc(key)}</span>
-        <p class="igd-title">${title}</p>
-        ${body ? `<p class="igd-body">${body}</p>` : ''}
-      </div>`;
-    }).join('');
-    const footerCost = list[6] || list[4] || { title: 'Cost Structure', body: '' };
-    const footerRev  = list[7] || list[5] || { title: 'Revenue Streams', body: '' };
-    return `<div class="igd-bmc">
-      <div class="igd-bmc-grid">${mainCells}</div>
-      <div class="igd-bmc-footer">
-        <div class="igd-bmc-footer-cell">
-          <span class="igd-bmc-cell-tag">Cost Structure</span>
-          <p class="igd-title">${esc(dgTruncateTitle(footerCost.title || 'Cost Structure', density))}</p>
-          ${footerCost.body ? `<p class="igd-body">${esc(dgTruncateBody(footerCost.body, density))}</p>` : ''}
-        </div>
-        <div class="igd-bmc-footer-cell">
-          <span class="igd-bmc-cell-tag">Revenue Streams</span>
-          <p class="igd-title">${esc(dgTruncateTitle(footerRev.title || 'Revenue Streams', density))}</p>
-          ${footerRev.body ? `<p class="igd-body">${esc(dgTruncateBody(footerRev.body, density))}</p>` : ''}
-        </div>
-      </div>
+    let links = '', titleLabels = '';
+    for (let i = 0; i < n; i++) {
+      const lx    = startX + i * step;
+      const lCx   = lx + linkW / 2; // link center x
+      const alpha = parseFloat((0.35 + i * (0.40 / Math.max(n - 1, 1))).toFixed(2));
+      links += `<rect x="${lx.toFixed(1)}" y="${linkTop}" width="${linkW}" height="${linkH}" rx="${rx}"
+        fill="var(--accent)" opacity="${alpha}"/>`;
+
+      const title = esc(trunc(data[i]?.title || '', 25));
+      const above = i % 2 === 0;
+      const ty    = above ? 22 : 138;
+      titleLabels += `<text x="${lCx.toFixed(1)}" y="${ty}" text-anchor="middle"
+        font-family="var(--font-heading,'Space Grotesk',sans-serif)"
+        font-size="11" font-weight="700" fill="var(--text-primary,#111827)">${title}</text>`;
+
+      // Small connector dot between title and link
+      const dotY = above ? 28 : 132;
+      const dotDir = above ? 1 : -1;
+      titleLabels += `<circle cx="${lCx.toFixed(1)}" cy="${(dotY + dotDir * 4).toFixed(1)}" r="2.5"
+        fill="var(--accent)" opacity="0.6"/>`;
+    }
+
+    return `<div class="igd-chain-wrap">
+      <svg viewBox="0 0 ${vbW} ${vbH}" xmlns="http://www.w3.org/2000/svg">
+        ${links}${titleLabels}
+      </svg>
     </div>`;
   }
 
@@ -1858,7 +1439,7 @@ export function renderBusiness(items, variant, tone, columns, density) {
 
 /* ═══════════════════════════════════════════════════════════════
    COMBINED DIAGRAM CSS EXPORT
-   All 6 families concatenated — injected once by renderer.js
+   All families concatenated — injected once by renderer.js
 ═══════════════════════════════════════════════════════════════ */
 
 export const DIAGRAM_CSS = [
@@ -1884,38 +1465,31 @@ export const DIAGRAM_FAMILIES = {
   business:  renderBusiness,
 };
 
-/* Variant → family lookup (all 24 diagram variants) */
+/* Variant → family lookup (18 diagram variants) */
 export const DIAGRAM_VARIANT_FAMILY_MAP = {
   // road
-  'road-horizontal':   'road',
-  'road-vertical':     'road',
-  'journey-map':       'road',
-  'experience-map':    'road',
+  'road-horizontal':     'road',
+  'road-vertical':       'road',
+  'journey-map':         'road',
+  'experience-map':      'road',
   // target
-  'bullseye':          'target',
-  'radial':            'target',
-  'orbit':             'target',
-  'sunburst':          'target',
+  'bullseye':            'target',
+  'radial':              'target',
+  'orbit':               'target',
   // hierarchy
-  'org-chart':         'hierarchy',
-  'tree-horizontal':   'hierarchy',
-  'pyramid-diagram':   'hierarchy',
-  'nested-boxes':      'hierarchy',
+  'org-chart':           'hierarchy',
+  'pyramid-diagram':     'hierarchy',
+  'nested-diamonds':     'hierarchy',
   // venn
-  'venn-2':            'venn',
-  'venn-3':            'venn',
-  'overlapping-sets':  'venn',
-  'matrix-2x2':        'venn',
+  'venn-diagram':        'venn',
+  'linear-venn':         'venn',
+  'linear-venn-filled':  'venn',
   // process
-  'circular-flow':     'process',
-  'swimlane':          'process',
-  'branching':         'process',
-  'infinity-loop':     'process',
+  'infinity-loop':       'process',
   // business
-  'swot':              'business',
-  'competitive-map':   'business',
-  'value-chain':       'business',
-  'bmc':               'business',
+  'swot':                'business',
+  'competitive-map':     'business',
+  'chain':               'business',
 };
 
 /**
