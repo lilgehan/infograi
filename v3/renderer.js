@@ -24,6 +24,7 @@ import {
 import { DIAGRAM_CSS } from './smart-diagrams.js';
 import { GRID_CSS } from './grid.js';
 import { COMPOSITION_CSS, applyComposition } from './compositions.js';
+import { assembleContent } from './assembly.js';
 
 /* ── Local SVG map — critical icons embedded as data URIs ──
    These load instantly with zero network requests, zero CORS issues.
@@ -348,8 +349,12 @@ export function renderFromContent(contentJson, tone, size, accentColor, composit
     accentRgb  = `${r},${g},${b}`;
   } catch (_) { /* use default */ }
 
+  // ── Assembly pass: validate + adjust content before rendering ──
+  // Ensures every section's item count and text lengths fit the chosen variant.
+  const { adjusted: assembledJson } = assembleContent(contentJson, sizeId);
+
   // Render each content section via smart-layouts engine
-  const sections = Array.isArray(contentJson.sections) ? contentJson.sections : [];
+  const sections = Array.isArray(assembledJson.sections) ? assembledJson.sections : [];
   const renderedSections = sections.map(
     section => `<div class="ig-content-section">${renderSection(section, toneId)}</div>`
   );
@@ -361,11 +366,11 @@ export function renderFromContent(contentJson, tone, size, accentColor, composit
   // Wrap in the flex-fill composition wrapper
   const sectionsHtml = `<div class="ig-composition-wrap">${composedHtml}</div>`;
 
-  // Build chrome
-  const header  = buildContentHeader(contentJson);
-  const stats   = buildStatsHtml(contentJson.stats);
-  const callout = buildCalloutHtml(contentJson.callout);
-  const footer  = buildFooterHtml(contentJson.footer_brand);
+  // Build chrome (use assembledJson so header/stats also reflect any assembly changes)
+  const header  = buildContentHeader(assembledJson);
+  const stats   = buildStatsHtml(assembledJson.stats);
+  const callout = buildCalloutHtml(assembledJson.callout);
+  const footer  = buildFooterHtml(assembledJson.footer_brand);
 
   const accentOverrideCSS = `:root { --accent: ${accent}; --accent-soft: ${accentSoft}; --accent-rgb: ${accentRgb}; }`;
 

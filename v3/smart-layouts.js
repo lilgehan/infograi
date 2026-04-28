@@ -1182,265 +1182,282 @@ export function renderSequence(items, variant = 'timeline', tone = 'professional
 ═══════════════════════════════════════════════════════════════ */
 
 export const NUMBERS_CSS = `
-/* stats */
-.ig-page .igs-stats-grid {
-  display: grid;
-  gap: 0.65rem;
+/* ── Numbers: stats (giant number hero display) ── */
+.ig-page .igs-stats-row {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
 }
-.ig-page .igs-stat-item {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  padding: 0.8rem 1rem;
-  text-align: center;
-  box-shadow: var(--card-shadow);
-}
-.ig-page .igs-stat-num {
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 2rem;
-  color: var(--accent);
-  line-height: 1.1;
-}
-.ig-page .igs-stat-label {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-top: 0.25rem;
-  line-height: 1.35;
-}
-/* circle-stats */
-.ig-page .igs-circle-stat-item {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  padding: 0.8rem 0.6rem;
+.ig-page .igs-stat-col {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
-  box-shadow: var(--card-shadow);
-}
-.ig-page .igs-circle-stat-ring {
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 50%;
-  border: 4px solid var(--accent);
-  background: var(--accent-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ig-page .igs-circle-stat-ring .igs-stat-num {
-  font-size: 1rem;
-  margin: 0;
-}
-.ig-page .igs-circle-stat-item .igs-stat-label {
-  font-size: 0.72rem;
   text-align: center;
+  padding: 1rem 0.75rem;
+  border-right: 1px solid var(--card-border);
 }
-/* bar-stats */
-.ig-page .igs-bar-stat-item {
+.ig-page .igs-stat-col:last-child { border-right: none; }
+.ig-page .igs-stat-number {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 3em;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+.ig-page .igs-stat-title {
+  font-family: var(--font-heading);
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.15rem;
+}
+.ig-page .igs-stat-desc {
+  font-family: var(--font-body);
+  font-size: 0.72em;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+/* ── Numbers: circle-stats / circle-bold-line / circle-external-line (SVG donuts) ── */
+.ig-page .igs-circstat-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+.ig-page .igs-circstat-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 120px;
+  max-width: 160px;
+  flex: 1;
+}
+.ig-page .igs-circstat-svg {
+  width: 100%;
+  max-width: 120px;
+  display: block;
+}
+.ig-page .igs-circstat-title {
+  font-family: var(--font-heading);
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0.4rem;
+}
+.ig-page .igs-circstat-desc {
+  font-family: var(--font-body);
+  font-size: 0.71em;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+  line-height: 1.35;
+}
+
+/* ── Numbers: bar-stats (horizontal progress bars, stacked) ── */
+.ig-page .igs-barstat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+}
+.ig-page .igs-barstat-item {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  margin-bottom: 0.6rem;
 }
-.ig-page .igs-bar-stat-header {
+.ig-page .igs-barstat-header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-.ig-page .igs-bar-stat-label {
-  font-family: var(--font-body);
-  font-size: 0.84rem;
-  color: var(--text-primary);
-  font-weight: 600;
-}
-.ig-page .igs-bar-stat-num {
+.ig-page .igs-barstat-title {
   font-family: var(--font-heading);
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ig-page .igs-barstat-num {
+  font-family: var(--font-heading);
+  font-size: 0.85em;
   font-weight: 800;
-  font-size: 0.88rem;
   color: var(--accent);
 }
-.ig-page .igs-bar-track {
+.ig-page .igs-barstat-track {
   width: 100%;
-  height: 0.55rem;
-  background: var(--card-border);
-  border-radius: 999px;
+  height: 10px;
+  background: var(--accent-soft);
+  border-radius: 5px;
   overflow: hidden;
 }
-.ig-page .igs-bar-fill {
+.ig-page .igs-barstat-fill {
   height: 100%;
   background: var(--accent);
-  border-radius: 999px;
-  transition: width 0.4s ease;
+  border-radius: 5px;
 }
-/* star-rating */
-.ig-page .igs-star-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--card-border);
-}
-.ig-page .igs-star-item:last-child { border-bottom: none; }
-.ig-page .igs-star-title {
-  flex: 1;
+.ig-page .igs-barstat-desc {
   font-family: var(--font-body);
-  font-size: 0.85rem;
-  color: var(--text-primary);
-  font-weight: 600;
+  font-size: 0.72em;
+  color: var(--text-secondary);
 }
-.ig-page .igs-star-stars {
+
+/* ── Numbers: star-rating ── */
+.ig-page .igs-starrating-list {
   display: flex;
-  gap: 0.1rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
-.ig-page .igs-star-full { color: var(--accent); font-size: 0.9rem; }
-.ig-page .igs-star-half { color: var(--accent); font-size: 0.9rem; opacity: 0.7; }
-.ig-page .igs-star-empty { color: var(--card-border); font-size: 0.9rem; }
-.ig-page .igs-star-score {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.82rem;
-  color: var(--accent);
-  min-width: 2rem;
-  text-align: right;
-}
-/* dot-grid */
-.ig-page .igs-dotgrid-item {
+.ig-page .igs-starrating-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.6rem;
+  text-align: center;
+  padding: 0.75rem 1rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
+  flex: 1;
+  min-width: 110px;
+  box-shadow: var(--card-shadow);
 }
-.ig-page .igs-dotgrid-dots {
+.ig-page .igs-starrating-stars {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem;
-  justify-content: center;
-  max-width: 6rem;
+  gap: 0.08rem;
+  margin-bottom: 0.3rem;
 }
-.ig-page .igs-dotgrid-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
+.ig-page .igs-star-full  { color: var(--accent); font-size: 1.1rem; }
+.ig-page .igs-star-empty { color: var(--card-border); font-size: 1.1rem; }
+.ig-page .igs-star-partial {
+  position: relative;
+  display: inline-block;
+  font-size: 1.1rem;
+  color: var(--card-border);
 }
-.ig-page .igs-dotgrid-dot.filled { background: var(--accent); }
-.ig-page .igs-dotgrid-dot.empty  { background: var(--card-border); }
-.ig-page .igs-dotgrid-label {
+.ig-page .igs-star-partial-fg {
+  position: absolute;
+  top: 0; left: 0;
+  overflow: hidden;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.ig-page .igs-starrating-score {
+  font-family: var(--font-heading);
+  font-size: 1.6em;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+.ig-page .igs-starrating-title {
+  font-family: var(--font-heading);
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0.2rem;
+}
+.ig-page .igs-starrating-desc {
   font-family: var(--font-body);
-  font-size: 0.72rem;
+  font-size: 0.71em;
   color: var(--text-secondary);
-  text-align: center;
+  margin-top: 0.1rem;
 }
-/* dot-line */
-.ig-page .igs-dotline-item {
+
+/* ── Numbers: dot-grid (10×10 dot matrix) ── */
+.ig-page .igs-dotgrid-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+.ig-page .igs-dotgrid-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+  min-width: 110px;
+  max-width: 150px;
+}
+.ig-page .igs-dotgrid-header {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 0.3rem;
+  align-items: baseline;
+}
+.ig-page .igs-dotgrid-num {
+  font-family: var(--font-heading);
+  font-size: 1em;
+  font-weight: 800;
+  color: var(--accent);
+}
+.ig-page .igs-dotgrid-lbl {
+  font-family: var(--font-body);
+  font-size: 0.72em;
+  color: var(--text-secondary);
+}
+.ig-page .igs-dotgrid-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  width: 100%;
+}
+.ig-page .igs-dg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  aspect-ratio: 1;
+}
+.ig-page .igs-dg-dot.filled { background: var(--accent); }
+.ig-page .igs-dg-dot.empty  { background: #e5e7eb; }
+
+/* ── Numbers: dot-line (single row of 10 dots) ── */
+.ig-page .igs-dotline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.ig-page .igs-dotline-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.45rem;
 }
-.ig-page .igs-dotline-title {
+.ig-page .igs-dotline-label {
   flex-shrink: 0;
   width: 5.5rem;
   font-family: var(--font-body);
-  font-size: 0.82rem;
+  font-size: 0.82em;
   color: var(--text-primary);
   font-weight: 600;
 }
-.ig-page .igs-dotline-dots {
+.ig-page .igs-dotline-track {
   display: flex;
-  gap: 0.18rem;
+  gap: 3px;
   flex: 1;
+  align-items: center;
 }
-.ig-page .igs-dotline-dot {
-  width: 0.65rem;
-  height: 0.65rem;
+.ig-page .igs-dl-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
-.ig-page .igs-dotline-dot.filled { background: var(--accent); }
-.ig-page .igs-dotline-dot.empty  { background: var(--card-border); }
-.ig-page .igs-dotline-num {
+.ig-page .igs-dl-dot.filled { background: var(--accent); }
+.ig-page .igs-dl-dot.empty  { background: #e5e7eb; }
+.ig-page .igs-dl-dot.half   { background: linear-gradient(90deg, var(--accent) 50%, #e5e7eb 50%); }
+.ig-page .igs-dotline-val {
   font-family: var(--font-heading);
+  font-size: 0.78em;
   font-weight: 700;
-  font-size: 0.78rem;
   color: var(--accent);
-  min-width: 2rem;
+  min-width: 2.5rem;
   text-align: right;
-}
-/* circle-bold-line */
-.ig-page .igs-cbl-item {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--card-border);
-}
-.ig-page .igs-cbl-item:last-child { border-bottom: none; }
-.ig-page .igs-cbl-circle {
-  flex-shrink: 0;
-  width: 2.8rem;
-  height: 2.8rem;
-  border-radius: 50%;
-  background: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 0.85rem;
-  color: #fff;
-}
-.ig-page .igs-cbl-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-cbl-body {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-top: 0.15rem;
-}
-/* circle-external-line */
-.ig-page .igs-cel-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 0.65rem;
-}
-.ig-page .igs-cel-circle {
-  flex-shrink: 0;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  border: 3px solid var(--accent);
-  background: var(--accent-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 0.85rem;
-  color: var(--accent);
-}
-.ig-page .igs-cel-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-cel-body {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-top: 0.15rem;
 }
 `;
 
@@ -1456,6 +1473,26 @@ function parseStars(str) {
   return m ? Math.min(5, parseFloat(m[1])) : 4;
 }
 
+/**
+ * Parse a number string for fill visualizations.
+ * Returns { pct: number|null, isPercent: boolean }
+ *   "70%"  → { pct: 70,   isPercent: true  }
+ *   "70"   → { pct: 70,   isPercent: false }
+ *   "$2.4M"→ { pct: null, isPercent: false }  (has non-numeric chars → no fill)
+ */
+function parsePctFill(str) {
+  if (!str) return { pct: null, isPercent: false };
+  const s = String(str).trim();
+  // Explicit percent
+  const pctMatch = s.match(/^(\d+(?:\.\d+)?)\s*%/);
+  if (pctMatch) return { pct: parseFloat(pctMatch[1]), isPercent: true };
+  // Plain integer/decimal only → treat as percent value
+  const plainMatch = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (plainMatch) return { pct: Math.min(100, parseFloat(plainMatch[1])), isPercent: false };
+  // Has other characters ($, +, M, etc.) → display only, no fill
+  return { pct: null, isPercent: false };
+}
+
 function renderStarHtml(score) {
   let html = '';
   for (let i = 1; i <= 5; i++) {
@@ -1467,136 +1504,173 @@ function renderStarHtml(score) {
 }
 
 export function renderNumbers(items, variant = 'stats', tone = 'professional', columns = 3, density = 'standard') {
+  // Primary display field is item.number; fall back to item.title
+  const getNum = item => item.number || item.title || '—';
+
+  /* ── stats: giant number hero ── */
   if (variant === 'stats') {
-    const cols = Math.min(columns, items.length, 4);
-    const cards = items.map(item => {
-      const num   = item.title || '—';
-      const label = density === 'compact' ? '' : truncateBody(item.body || item.label || '', density);
-      return `<div class="igs-stat-item">
-        <div class="igs-stat-num">${esc(num)}</div>
-        ${label ? `<div class="igs-stat-label">${esc(label)}</div>` : ''}
+    const cols = items.map(item => {
+      const num   = esc(getNum(item));
+      const title = item.title ? esc(truncateTitle(item.title, density)) : '';
+      const desc  = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      return `<div class="igs-stat-col">
+        <div class="igs-stat-number">${num}</div>
+        ${title ? `<div class="igs-stat-title">${title}</div>` : ''}
+        ${desc  ? `<div class="igs-stat-desc">${desc}</div>`   : ''}
       </div>`;
     });
-    return `<div class="igs-stats-grid" style="grid-template-columns:repeat(${cols},1fr)">${cards.join('')}</div>`;
+    return `<div class="igs-stats-row">${cols.join('')}</div>`;
   }
 
-  if (variant === 'circle-stats') {
-    const cols = Math.min(columns, items.length, 4);
-    const cards = items.map(item => {
-      const num   = item.title || '—';
-      const label = density === 'compact' ? '' : truncateBody(item.body || item.label || '', density);
-      return `<div class="igs-circle-stat-item">
-        <div class="igs-circle-stat-ring">
-          <div class="igs-stat-num">${esc(num)}</div>
-        </div>
-        ${label ? `<div class="igs-stat-label">${esc(label)}</div>` : ''}
+  /* ── circle-stats / circle-bold-line / circle-external-line: SVG donut rings ── */
+  if (variant === 'circle-stats' || variant === 'circle-bold-line' || variant === 'circle-external-line') {
+    const sw   = variant === 'circle-bold-line' ? 12 : 8;
+    const r    = variant === 'circle-bold-line' ? 38 : 40;
+    const circ = +(2 * Math.PI * r).toFixed(2);
+
+    const cols = items.map(item => {
+      const numStr = getNum(item);
+      const { pct, isPercent } = parsePctFill(numStr);
+      const showFill = pct !== null;
+      const fillLen  = showFill ? +((pct / 100) * circ).toFixed(2) : 0;
+      const title    = item.title ? esc(truncateTitle(item.title, density)) : '';
+      const desc     = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+
+      // Outer decorative ring for circle-external-line
+      const outerRing = variant === 'circle-external-line'
+        ? `<circle cx="50" cy="50" r="46" fill="none" stroke="var(--accent-soft)" stroke-width="2"/>`
+        : '';
+
+      // Track ring (unfilled)
+      const trackRing = `<circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--accent-soft)" stroke-width="${sw}"/>`;
+
+      // Fill ring (only for parseable percentages or plain numbers)
+      const fillRing = showFill
+        ? `<circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--accent)" stroke-width="${sw}"
+             stroke-dasharray="${fillLen} ${circ}" stroke-linecap="round"
+             transform="rotate(-90 50 50)"/>`
+        : '';
+
+      // Adaptive font size: shorter strings get larger text
+      const numEsc = esc(numStr);
+      const fontSize = numEsc.length <= 3 ? 22 : numEsc.length <= 5 ? 17 : 13;
+
+      const svg = `<svg class="igs-circstat-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        ${outerRing}${trackRing}${fillRing}
+        <text x="50" y="50" text-anchor="middle" dominant-baseline="central"
+          fill="var(--accent)" font-weight="bold" font-family="var(--font-heading)"
+          font-size="${fontSize}">${numEsc}</text>
+      </svg>`;
+
+      return `<div class="igs-circstat-col">
+        ${svg}
+        ${title ? `<div class="igs-circstat-title">${title}</div>` : ''}
+        ${desc  ? `<div class="igs-circstat-desc">${desc}</div>`   : ''}
       </div>`;
     });
-    return `<div class="igs-stats-grid" style="grid-template-columns:repeat(${cols},1fr)">${cards.join('')}</div>`;
+    return `<div class="igs-circstat-row">${cols.join('')}</div>`;
   }
 
+  /* ── bar-stats: horizontal progress bars stacked ── */
   if (variant === 'bar-stats') {
     const rows = items.map(item => {
-      const label = truncateTitle(item.body || item.label || item.title || '');
-      const num   = item.title || '0%';
-      const pct   = parsePercent(num);
-      return `<div class="igs-bar-stat-item">
-        <div class="igs-bar-stat-header">
-          <span class="igs-bar-stat-label">${esc(label)}</span>
-          <span class="igs-bar-stat-num">${esc(num)}</span>
+      const numStr = getNum(item);
+      const { pct } = parsePctFill(numStr);
+      const fillW  = pct !== null ? Math.min(100, Math.max(0, pct)) : 0;
+      const title  = esc(truncateTitle(item.title || '', density));
+      const desc   = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      return `<div class="igs-barstat-item">
+        <div class="igs-barstat-header">
+          <span class="igs-barstat-title">${title}</span>
+          <span class="igs-barstat-num">${esc(numStr)}</span>
         </div>
-        <div class="igs-bar-track">
-          <div class="igs-bar-fill" style="width:${Math.min(100, pct)}%"></div>
-        </div>
+        ${pct !== null
+          ? `<div class="igs-barstat-track"><div class="igs-barstat-fill" style="width:${fillW}%"></div></div>`
+          : ''}
+        ${desc ? `<div class="igs-barstat-desc">${desc}</div>` : ''}
       </div>`;
     });
-    return `<div>${rows.join('')}</div>`;
+    return `<div class="igs-barstat-list">${rows.join('')}</div>`;
   }
 
+  /* ── star-rating: partial-star support ── */
   if (variant === 'star-rating') {
     const rows = items.map(item => {
-      const title = truncateTitle(item.title || '');
-      const score = parseStars(item.body || '4');
-      return `<div class="igs-star-item">
-        <span class="igs-star-title">${esc(title)}</span>
-        <span class="igs-star-stars">${renderStarHtml(score)}</span>
-        <span class="igs-star-score">${score.toFixed(1)}</span>
-      </div>`;
-    });
-    return `<div>${rows.join('')}</div>`;
-  }
-
-  if (variant === 'dot-grid') {
-    const cols = Math.min(columns, items.length, 4);
-    const TOTAL_DOTS = 20;
-    const cards = items.map(item => {
-      const num   = item.title || '50%';
-      const label = density === 'compact' ? '' : truncateBody(item.body || item.label || '', density);
-      const pct   = parsePercent(num);
-      const filled = Math.round((pct / 100) * TOTAL_DOTS);
-      let dots = '';
-      for (let d = 0; d < TOTAL_DOTS; d++) {
-        dots += `<span class="igs-dotgrid-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
+      const numStr = getNum(item);
+      const score  = parseStars(numStr);
+      const title  = item.title ? esc(truncateTitle(item.title, density)) : '';
+      const desc   = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      let starsHtml = '';
+      for (let i = 1; i <= 5; i++) {
+        if (score >= i) {
+          starsHtml += `<span class="igs-star-full">★</span>`;
+        } else {
+          const frac = score - (i - 1);
+          if (frac > 0.05 && frac < 0.95) {
+            const pct = Math.round(frac * 100);
+            starsHtml += `<span class="igs-star-partial">★<span class="igs-star-partial-fg" style="width:${pct}%">★</span></span>`;
+          } else {
+            starsHtml += `<span class="igs-star-empty">★</span>`;
+          }
+        }
       }
-      return `<div class="igs-dotgrid-item">
-        <div class="igs-stat-num" style="font-size:1.1rem">${esc(num)}</div>
-        <div class="igs-dotgrid-dots">${dots}</div>
-        ${label ? `<div class="igs-dotgrid-label">${esc(label)}</div>` : ''}
+      return `<div class="igs-starrating-item">
+        <div class="igs-starrating-stars">${starsHtml}</div>
+        <div class="igs-starrating-score">${score.toFixed(1)}</div>
+        ${title ? `<div class="igs-starrating-title">${title}</div>` : ''}
+        ${desc  ? `<div class="igs-starrating-desc">${desc}</div>`   : ''}
       </div>`;
     });
-    return `<div class="igs-stats-grid" style="grid-template-columns:repeat(${cols},1fr)">${cards.join('')}</div>`;
+    return `<div class="igs-starrating-list">${rows.join('')}</div>`;
   }
 
+  /* ── dot-grid: 10×10 dot matrix ── */
+  if (variant === 'dot-grid') {
+    const TOTAL = 100;
+    const cols = items.map(item => {
+      const numStr = getNum(item);
+      const { pct } = parsePctFill(numStr);
+      const filled = pct !== null ? Math.round((pct / 100) * TOTAL) : 0;
+      const title  = esc(truncateTitle(item.title || '', density));
+      let dots = '';
+      for (let d = 0; d < TOTAL; d++) {
+        dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
+      }
+      return `<div class="igs-dotgrid-col">
+        <div class="igs-dotgrid-header">
+          <span class="igs-dotgrid-num">${esc(numStr)}</span>
+          <span class="igs-dotgrid-lbl">${title}</span>
+        </div>
+        <div class="igs-dotgrid-grid">${dots}</div>
+      </div>`;
+    });
+    return `<div class="igs-dotgrid-row">${cols.join('')}</div>`;
+  }
+
+  /* ── dot-line: single row of 10 dots ── */
   if (variant === 'dot-line') {
     const DOT_COUNT = 10;
     const rows = items.map(item => {
-      const label  = truncateTitle(item.body || item.label || item.title || '');
-      const num    = item.title || '50%';
-      const pct    = parsePercent(num);
-      const filled = Math.round((pct / 100) * DOT_COUNT);
+      const numStr    = getNum(item);
+      const { pct }   = parsePctFill(numStr);
+      const exactFill = pct !== null ? (pct / 100) * DOT_COUNT : 0;
+      const fullFill  = Math.floor(exactFill);
+      const fracPart  = exactFill - fullFill;
+      const hasFrac   = fracPart >= 0.2 && fracPart < 0.8;
+      const title     = esc(truncateTitle(item.title || '', density));
       let dots = '';
       for (let d = 0; d < DOT_COUNT; d++) {
-        dots += `<span class="igs-dotline-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
+        if (d < fullFill)                       dots += `<span class="igs-dl-dot filled"></span>`;
+        else if (d === fullFill && hasFrac)      dots += `<span class="igs-dl-dot half"></span>`;
+        else                                     dots += `<span class="igs-dl-dot empty"></span>`;
       }
-      return `<div class="igs-dotline-item">
-        <span class="igs-dotline-title">${esc(label)}</span>
-        <span class="igs-dotline-dots">${dots}</span>
-        <span class="igs-dotline-num">${esc(num)}</span>
+      return `<div class="igs-dotline-row">
+        <span class="igs-dotline-label">${title}</span>
+        <span class="igs-dotline-track">${dots}</span>
+        <span class="igs-dotline-val">${esc(numStr)}</span>
       </div>`;
     });
-    return `<div>${rows.join('')}</div>`;
-  }
-
-  if (variant === 'circle-bold-line') {
-    const rows = items.map(item => {
-      const num   = item.title || '—';
-      const title = truncateTitle(item.body || item.label || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-cbl-item">
-        <div class="igs-cbl-circle">${esc(num)}</div>
-        <div>
-          <div class="igs-cbl-title">${esc(title || num)}</div>
-          ${body ? `<div class="igs-cbl-body">${esc(body)}</div>` : ''}
-        </div>
-      </div>`;
-    });
-    return `<div>${rows.join('')}</div>`;
-  }
-
-  if (variant === 'circle-external-line') {
-    const rows = items.map(item => {
-      const num   = item.title || '—';
-      const title = truncateTitle(item.body || item.label || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-cel-item">
-        <div class="igs-cel-circle">${esc(num)}</div>
-        <div>
-          <div class="igs-cel-title">${esc(title || num)}</div>
-          ${body ? `<div class="igs-cel-body">${esc(body)}</div>` : ''}
-        </div>
-      </div>`;
-    });
-    return `<div>${rows.join('')}</div>`;
+    return `<div class="igs-dotline-list">${rows.join('')}</div>`;
   }
 
   // fallback
