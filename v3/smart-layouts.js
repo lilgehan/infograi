@@ -1683,308 +1683,316 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
 ═══════════════════════════════════════════════════════════════ */
 
 export const CIRCLES_CSS = `
-/* cycle */
-.ig-page .igs-cycle-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.ig-page .igs-cycle-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
-  padding: 0.5rem 0.7rem;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-}
-.ig-page .igs-cycle-step {
-  flex-shrink: 0;
-  width: 1.7rem;
-  height: 1.7rem;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 0.1rem;
-}
-.ig-page .igs-cycle-arrow {
-  text-align: center;
-  font-size: 1rem;
-  color: var(--accent);
-  line-height: 1;
-  padding: 0.15rem 0;
-}
-.ig-page .igs-cycle-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-cycle-body {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-top: 0.15rem;
-}
-/* flower */
-.ig-page .igs-flower-center {
-  background: var(--accent);
-  color: #fff;
-  border-radius: var(--radius-card);
-  padding: 0.7rem 1rem;
-  text-align: center;
-  margin-bottom: 0.5rem;
-}
-.ig-page .igs-flower-center .igs-flower-title {
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 1rem;
-  color: #fff;
-}
-.ig-page .igs-flower-center .igs-flower-body {
-  font-size: 0.78rem;
-  color: rgba(255,255,255,0.85);
-  margin-top: 0.2rem;
-}
-.ig-page .igs-flower-petals {
-  display: grid;
-  gap: 0.5rem;
-}
-.ig-page .igs-flower-petal {
-  background: var(--accent-soft);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  padding: 0.55rem 0.7rem;
-  text-align: center;
-}
-.ig-page .igs-flower-petal .igs-flower-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-flower-petal .igs-flower-body {
-  font-family: var(--font-body);
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-top: 0.1rem;
-}
-/* circle (icon-in-circle grid) */
-.ig-page .igs-circle-grid {
-  display: grid;
-  gap: 0.65rem;
-}
-.ig-page .igs-circle-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.7rem 0.5rem;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  text-align: center;
-  box-shadow: var(--card-shadow);
-}
-.ig-page .igs-circle-bubble {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  border: 2px solid var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 0.85rem;
-  color: var(--accent);
-}
-.ig-page .igs-circle-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-circle-body {
-  font-family: var(--font-body);
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  line-height: 1.35;
-}
-/* ring */
-.ig-page .igs-ring-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.ig-page .igs-ring-item {
+/* ── Circles: shared layout (SVG centre + text boxes around) ── */
+.ig-page .igs-circ-layout {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  width: 100%;
 }
-.ig-page .igs-ring-bubble {
+.ig-page .igs-circ-svg-wrap {
   flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  border: 3px solid var(--accent);
-  background: transparent;
+  width: 260px;
+  max-width: 260px;
+}
+.ig-page .igs-circ-svg-wrap svg {
+  width: 100%;
+  display: block;
+}
+.ig-page .igs-circ-left,
+.ig-page .igs-circ-right {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.75rem;
-  color: var(--accent);
-}
-.ig-page .igs-ring-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-ring-body {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-top: 0.1rem;
-}
-/* semi-circle (tiered rows) */
-.ig-page .igs-semi-tier {
-  display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-bottom: 0.4rem;
-}
-.ig-page .igs-semi-item {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  padding: 0.5rem 0.65rem;
-  text-align: center;
-  box-shadow: var(--card-shadow);
+  flex-direction: column;
+  gap: 0.55rem;
   flex: 1;
-  max-width: 10rem;
+  min-width: 0;
 }
-.ig-page .igs-semi-title {
+.ig-page .igs-circ-left  { align-items: flex-end;   text-align: right; }
+.ig-page .igs-circ-right { align-items: flex-start; text-align: left;  }
+.ig-page .igs-circ-textbox {
+  max-width: 175px;
+}
+.ig-page .igs-circ-textbox .igs-title {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 0.82rem;
+  font-size: 0.9em;
   color: var(--text-primary);
+  line-height: 1.3;
+  margin: 0;
 }
-.ig-page .igs-semi-body {
+.ig-page .igs-circ-textbox .igs-body {
   font-family: var(--font-body);
-  font-size: 0.72rem;
+  font-size: 0.78em;
   color: var(--text-secondary);
-  margin-top: 0.1rem;
+  line-height: 1.35;
+  margin: 0.1rem 0 0;
+}
+
+/* ── semi-circle: SVG above, text boxes below ── */
+.ig-page .igs-semi-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+}
+.ig-page .igs-semi-svg-wrap {
+  width: 100%;
+  max-width: 280px;
+}
+.ig-page .igs-semi-svg-wrap svg { width: 100%; display: block; }
+.ig-page .igs-semi-texts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.ig-page .igs-semi-textbox {
+  text-align: center;
+  max-width: 130px;
+  flex: 1;
+  min-width: 80px;
+}
+.ig-page .igs-semi-textbox .igs-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.85em;
+  color: var(--text-primary);
+  margin: 0;
+}
+.ig-page .igs-semi-textbox .igs-body {
+  font-family: var(--font-body);
+  font-size: 0.74em;
+  color: var(--text-secondary);
+  margin: 0.1rem 0 0;
 }
 `;
 
-export function renderCircles(items, variant = 'cycle', tone = 'professional', columns = 3, density = 'standard') {
-  if (variant === 'cycle') {
-    const rows = items.map((item, i) => {
-      const title = truncateTitle(item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      const arrow = i < items.length - 1
-        ? `<div class="igs-cycle-arrow">›</div>`
-        : `<div class="igs-cycle-arrow">↩</div>`;
-      return `
-        <div class="igs-cycle-item">
-          <div class="igs-cycle-step">${i + 1}</div>
-          <div>
-            <div class="igs-cycle-title">${esc(title)}</div>
-            ${body ? `<div class="igs-cycle-body">${esc(body)}</div>` : ''}
-          </div>
-        </div>
-        ${arrow}`;
-    });
-    return `<div class="igs-cycle-list">${rows.join('')}</div>`;
-  }
+/* ─────────────────────────────────────────
+   SVG SHAPE HELPERS (circles + steps families)
+───────────────────────────────────────── */
 
-  if (variant === 'flower') {
-    const center  = items[0];
-    const petals  = items.slice(1);
-    const cols    = Math.min(columns, petals.length, 3);
-    const cTitle  = truncateTitle(center?.title || '');
-    const cBody   = density === 'compact' ? '' : truncateBody(center?.body || '', density);
-    const petalHtml = petals.map(item => {
-      const t = truncateTitle(item.title || '');
-      const b = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-flower-petal">
-        <div class="igs-flower-title">${esc(t)}</div>
-        ${b ? `<div class="igs-flower-body">${esc(b)}</div>` : ''}
-      </div>`;
-    }).join('');
-    return `<div>
-      <div class="igs-flower-center">
-        <div class="igs-flower-title">${esc(cTitle)}</div>
-        ${cBody ? `<div class="igs-flower-body">${esc(cBody)}</div>` : ''}
-      </div>
-      <div class="igs-flower-petals" style="grid-template-columns:repeat(${cols},1fr)">
-        ${petalHtml}
-      </div>
+/** Degrees → radians */
+function toRad(deg) { return deg * Math.PI / 180; }
+
+/**
+ * Build an SVG path for an annular sector (donut slice).
+ * startDeg / endDeg in SVG coordinate space (0 = right, clockwise).
+ * gapDeg shrinks each end to create visible gaps between segments.
+ */
+function arcPath(cx, cy, rOut, rIn, startDeg, endDeg, gapDeg = 1.5) {
+  const s    = toRad(startDeg + gapDeg);
+  const e    = toRad(endDeg   - gapDeg);
+  const span = endDeg - startDeg - 2 * gapDeg;
+  const large = span > 180 ? 1 : 0;
+  const cos = Math.cos, sin = Math.sin;
+  const x1 = cx + rOut * cos(s), y1 = cy + rOut * sin(s);
+  const x2 = cx + rOut * cos(e), y2 = cy + rOut * sin(e);
+  const x3 = cx + rIn  * cos(e), y3 = cy + rIn  * sin(e);
+  const x4 = cx + rIn  * cos(s), y4 = cy + rIn  * sin(s);
+  return [
+    `M ${x1.toFixed(2)} ${y1.toFixed(2)}`,
+    `A ${rOut} ${rOut} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`,
+    `L ${x3.toFixed(2)} ${y3.toFixed(2)}`,
+    `A ${rIn} ${rIn} 0 ${large} 0 ${x4.toFixed(2)} ${y4.toFixed(2)}`,
+    'Z'
+  ].join(' ');
+}
+
+/**
+ * Build an SVG path for a full pie slice (from centre).
+ */
+function piePath(cx, cy, r, startDeg, endDeg, gapDeg = 1) {
+  const s    = toRad(startDeg + gapDeg);
+  const e    = toRad(endDeg   - gapDeg);
+  const span = endDeg - startDeg - 2 * gapDeg;
+  const large = span > 180 ? 1 : 0;
+  const x1 = cx + r * Math.cos(s), y1 = cy + r * Math.sin(s);
+  const x2 = cx + r * Math.cos(e), y2 = cy + r * Math.sin(e);
+  return `M ${cx} ${cy} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+}
+
+/** Centre point of an arc segment, at radius r. */
+function arcMid(cx, cy, r, startDeg, endDeg) {
+  const mid = toRad((startDeg + endDeg) / 2);
+  return [cx + r * Math.cos(mid), cy + r * Math.sin(mid)];
+}
+
+/** Opacity that ramps from 0.3 (i=0) to 1.0 (i=N-1). */
+function segOpacity(i, n) {
+  return (0.3 + (i / Math.max(n - 1, 1)) * 0.7).toFixed(2);
+}
+
+/**
+ * Split N items into [leftIndices, rightIndices] for side-by-side layout.
+ * Left column gets the first floor(N/2) items; right gets the rest.
+ */
+function splitLR(n) {
+  const mid = Math.floor(n / 2);
+  const L = [], R = [];
+  for (let i = 0; i < n; i++) (i < mid ? L : R).push(i);
+  return [L, R];
+}
+
+/** Build a text box HTML for a circle-family item. */
+function circTextBox(item, density) {
+  const title = esc(truncateTitle(item.title || '', density));
+  const body  = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+  return `<div class="igs-circ-textbox">
+    <p class="igs-title">${title}</p>
+    ${body ? `<p class="igs-body">${body}</p>` : ''}
+  </div>`;
+}
+
+export function renderCircles(items, variant = 'cycle', tone = 'professional', columns = 3, density = 'standard') {
+  const n = Math.max(2, Math.min(items.length, 6));
+  const safeItems = items.slice(0, n);
+
+  /* ── cycle: donut wheel divided into N equal segments ── */
+  if (variant === 'cycle') {
+    const cx = 150, cy = 150, rOut = 130, rIn = 80;
+    const segAngle = 360 / n;
+    let paths = '';
+    // SVG starts from top (-90° offset), goes clockwise
+    for (let i = 0; i < n; i++) {
+      const start = -90 + i * segAngle;
+      const end   = start + segAngle;
+      const op    = segOpacity(i, n);
+      paths += `<path d="${arcPath(cx, cy, rOut, rIn, start, end)}" fill="var(--accent)" opacity="${op}"/>`;
+      const [tx, ty] = arcMid(cx, cy, (rOut + rIn) / 2, start, end);
+      paths += `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="22">${i + 1}</text>`;
+    }
+    const svg = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
+
+    const [L, R] = splitLR(n);
+    const leftHtml  = L.map(i => circTextBox(safeItems[i], density)).join('');
+    const rightHtml = R.map(i => circTextBox(safeItems[i], density)).join('');
+    return `<div class="igs-circ-layout">
+      <div class="igs-circ-left">${leftHtml}</div>
+      <div class="igs-circ-svg-wrap">${svg}</div>
+      <div class="igs-circ-right">${rightHtml}</div>
     </div>`;
   }
 
-  if (variant === 'circle') {
-    const cols  = Math.min(columns, items.length, 4);
-    const cards = items.map((item, i) => {
-      const num   = item.title || String(i + 1);
-      const title = truncateTitle(item.body || item.label || item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-circle-item">
-        <div class="igs-circle-bubble">${esc(num.slice(0, 4))}</div>
-        <div class="igs-circle-title">${esc(title)}</div>
-        ${body ? `<div class="igs-circle-body">${esc(body)}</div>` : ''}
-      </div>`;
-    });
-    return `<div class="igs-circle-grid" style="grid-template-columns:repeat(${cols},1fr)">${cards.join('')}</div>`;
-  }
-
-  if (variant === 'ring') {
-    const rows = items.map((item, i) => {
-      const title = truncateTitle(item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-ring-item">
-        <div class="igs-ring-bubble">${i + 1}</div>
-        <div>
-          <div class="igs-ring-title">${esc(title)}</div>
-          ${body ? `<div class="igs-ring-body">${esc(body)}</div>` : ''}
-        </div>
-      </div>`;
-    });
-    return `<div class="igs-ring-list">${rows.join('')}</div>`;
-  }
-
-  if (variant === 'semi-circle') {
-    // Tiered rows: row 0 = 1 item, row 1 = 2 items, row 2 = 3 items, etc.
-    const tiers = [];
-    let idx = 0;
-    let rowSize = 1;
-    while (idx < items.length) {
-      tiers.push(items.slice(idx, idx + rowSize));
-      idx += rowSize;
-      rowSize++;
+  /* ── flower: petal/clover SVG ── */
+  if (variant === 'flower') {
+    const nf  = Math.max(3, Math.min(n, 5));
+    const cx  = 150, cy = 150;
+    const pDist = 58, rx = 44, ry = 68;
+    let petals = '';
+    for (let i = 0; i < nf; i++) {
+      const angle = (i / nf) * 360;
+      const op    = segOpacity(i, nf);
+      // Petal ellipse is above the centre before rotation
+      petals += `<g transform="rotate(${angle}, ${cx}, ${cy})">
+        <ellipse cx="${cx}" cy="${cy - pDist}" rx="${rx}" ry="${ry}" fill="var(--accent)" opacity="${op}"/>
+        <text x="${cx}" y="${cy - pDist}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="24">${i + 1}</text>
+      </g>`;
     }
-    const tiersHtml = tiers.map(tierItems => {
-      const cells = tierItems.map(item => {
-        const title = truncateTitle(item.title || '');
-        const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-        return `<div class="igs-semi-item">
-          <div class="igs-semi-title">${esc(title)}</div>
-          ${body ? `<div class="igs-semi-body">${esc(body)}</div>` : ''}
-        </div>`;
-      }).join('');
-      return `<div class="igs-semi-tier">${cells}</div>`;
+    // White centre disc to clean up overlap
+    petals += `<circle cx="${cx}" cy="${cy}" r="28" fill="var(--card-bg)"/>`;
+    const svg = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">${petals}</svg>`;
+
+    const fItems = safeItems.slice(0, nf);
+    const [L, R] = splitLR(nf);
+    const leftHtml  = L.map(i => circTextBox(fItems[i], density)).join('');
+    const rightHtml = R.map(i => circTextBox(fItems[i], density)).join('');
+    return `<div class="igs-circ-layout">
+      <div class="igs-circ-left">${leftHtml}</div>
+      <div class="igs-circ-svg-wrap">${svg}</div>
+      <div class="igs-circ-right">${rightHtml}</div>
+    </div>`;
+  }
+
+  /* ── circle: pie chart style ── */
+  if (variant === 'circle') {
+    const nc = Math.max(3, Math.min(n, 5));
+    const cx = 150, cy = 150, r = 130;
+    const segAngle = 360 / nc;
+    let slices = '';
+    for (let i = 0; i < nc; i++) {
+      const start = -90 + i * segAngle;
+      const end   = start + segAngle;
+      const op    = segOpacity(i, nc);
+      slices += `<path d="${piePath(cx, cy, r, start, end)}" fill="var(--accent)" opacity="${op}"/>`;
+      const [tx, ty] = arcMid(cx, cy, r * 0.65, start, end);
+      slices += `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="22">${i + 1}</text>`;
+    }
+    const svg = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">${slices}</svg>`;
+
+    const cItems = safeItems.slice(0, nc);
+    const [L, R] = splitLR(nc);
+    const leftHtml  = L.map(i => circTextBox(cItems[i], density)).join('');
+    const rightHtml = R.map(i => circTextBox(cItems[i], density)).join('');
+    return `<div class="igs-circ-layout">
+      <div class="igs-circ-left">${leftHtml}</div>
+      <div class="igs-circ-svg-wrap">${svg}</div>
+      <div class="igs-circ-right">${rightHtml}</div>
+    </div>`;
+  }
+
+  /* ── ring: concentric rings ── */
+  if (variant === 'ring') {
+    const nr  = Math.max(2, Math.min(n, 5));
+    const cx  = 150, cy = 150;
+    const maxR = 128, minR = 20;
+    const step = (maxR - minR) / nr;
+    let rings = '';
+    // Draw outermost first (i=0 = outermost, opacity 0.3 → innermost opacity 1.0)
+    for (let i = 0; i < nr; i++) {
+      const rOuter = maxR - i * step;
+      const rInner = rOuter - step + 4; // 4px gap between rings
+      const op     = segOpacity(i, nr);
+      const rMid = (rOuter + Math.max(rInner, 8)) / 2;
+      rings += `<path d="${arcPath(cx, cy, rOuter, Math.max(rInner, 8), -89, 270)}" fill="var(--accent)" opacity="${op}"/>`;
+      // Number at 3-o'clock position on each ring
+      rings += `<text x="${(cx + rMid).toFixed(1)}" y="${cy}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="15">${i + 1}</text>`;
+    }
+    const svg = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">${rings}</svg>`;
+
+    const rItems = safeItems.slice(0, nr);
+    const [L, R] = splitLR(nr);
+    const leftHtml  = L.map(i => circTextBox(rItems[i], density)).join('');
+    const rightHtml = R.map(i => circTextBox(rItems[i], density)).join('');
+    return `<div class="igs-circ-layout">
+      <div class="igs-circ-left">${leftHtml}</div>
+      <div class="igs-circ-svg-wrap">${svg}</div>
+      <div class="igs-circ-right">${rightHtml}</div>
+    </div>`;
+  }
+
+  /* ── semi-circle: top half of donut divided into N segments ── */
+  if (variant === 'semi-circle') {
+    const ns   = Math.max(2, Math.min(n, 5));
+    const cx   = 150, cy = 168;
+    const rOut = 128, rIn = 78;
+    // Arc spans from 180° (left) to 360° (right) — top half in SVG coords
+    const segAngle = 180 / ns;
+    let paths = '';
+    for (let i = 0; i < ns; i++) {
+      const start = 180 + i * segAngle;
+      const end   = start + segAngle;
+      const op    = segOpacity(i, ns);
+      paths += `<path d="${arcPath(cx, cy, rOut, rIn, start, end)}" fill="var(--accent)" opacity="${op}"/>`;
+      const [tx, ty] = arcMid(cx, cy, (rOut + rIn) / 2, start, end);
+      paths += `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="20">${i + 1}</text>`;
+    }
+    const svg = `<svg viewBox="0 0 300 175" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
+
+    const sItems = safeItems.slice(0, ns);
+    const textBoxes = sItems.map((item, i) => {
+      const title = esc(truncateTitle(item.title || '', density));
+      const body  = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      return `<div class="igs-semi-textbox">
+        <p class="igs-title">${title}</p>
+        ${body ? `<p class="igs-body">${body}</p>` : ''}
+      </div>`;
     }).join('');
-    return `<div>${tiersHtml}</div>`;
+
+    return `<div class="igs-semi-layout">
+      <div class="igs-semi-svg-wrap">${svg}</div>
+      <div class="igs-semi-texts">${textBoxes}</div>
+    </div>`;
   }
 
   // fallback
@@ -2033,60 +2041,64 @@ export const QUOTES_CSS = `
   font-size: 0.78rem;
   color: var(--accent);
 }
-/* speech-bubbles */
-.ig-page .igs-bubble-item {
+/* ── speech-bubbles: actual bubble shapes with CSS triangle tail ── */
+.ig-page .igs-spbubbles-wrap {
   display: flex;
-  margin-bottom: 0.8rem;
-  gap: 0.6rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
 }
-.ig-page .igs-bubble-item.right {
-  flex-direction: row-reverse;
-}
-.ig-page .igs-bubble-avatar {
-  flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  background: var(--accent);
+.ig-page .igs-spbubble-col {
+  flex: 1;
+  min-width: 160px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: #fff;
-  margin-top: 0.1rem;
+  flex-direction: column;
+  align-items: flex-start;
 }
-.ig-page .igs-bubble-content {
-  max-width: 80%;
+.ig-page .igs-spbubble-col.even {
+  align-items: flex-end;
 }
-.ig-page .igs-bubble-box {
+.ig-page .igs-spbubble-box {
+  position: relative;
   background: var(--accent-soft);
-  border: 1px solid var(--card-border);
-  border-radius: 0 var(--radius-card) var(--radius-card) var(--radius-card);
-  padding: 0.55rem 0.75rem;
+  border-radius: 16px;
+  padding: 0.65rem 0.85rem;
+  max-width: 100%;
   font-family: var(--font-body);
-  font-size: 0.85rem;
-  color: var(--text-primary);
-  line-height: 1.45;
+  font-size: 0.88em;
   font-style: italic;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 0.55rem;
 }
-.ig-page .igs-bubble-item.right .igs-bubble-box {
-  border-radius: var(--radius-card) 0 var(--radius-card) var(--radius-card);
-  background: var(--card-bg);
+/* Tail: points down-left (odd items) */
+.ig-page .igs-spbubble-box::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 18px;
+  border-width: 10px 8px 0 0;
+  border-style: solid;
+  border-color: var(--accent-soft) transparent transparent transparent;
 }
-.ig-page .igs-bubble-attr {
+/* Tail: points down-right (even items) */
+.ig-page .igs-spbubble-col.even .igs-spbubble-box::after {
+  left: auto;
+  right: 18px;
+  border-width: 10px 0 0 8px;
+  border-color: var(--accent-soft) transparent transparent transparent;
+}
+.ig-page .igs-spbubble-speaker {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.78em;
   color: var(--accent);
-  margin-top: 0.2rem;
-  padding-left: 0.3rem;
+  padding-left: 4px;
 }
-.ig-page .igs-bubble-item.right .igs-bubble-attr {
-  text-align: right;
+.ig-page .igs-spbubble-col.even .igs-spbubble-speaker {
   padding-left: 0;
-  padding-right: 0.3rem;
+  padding-right: 4px;
+  text-align: right;
 }
 `;
 
@@ -2106,20 +2118,16 @@ export function renderQuotes(items, variant = 'quote-boxes', tone = 'professiona
   }
 
   if (variant === 'speech-bubbles') {
-    const rows = items.map((item, i) => {
-      const quote = item.body || item.title || '';
-      const attr  = item.title !== quote ? (item.title || '') : '';
-      const side  = i % 2 === 1 ? 'right' : '';
-      const initials = attr ? attr.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : String(i + 1);
-      return `<div class="igs-bubble-item ${side}">
-        <div class="igs-bubble-avatar">${esc(initials)}</div>
-        <div class="igs-bubble-content">
-          <div class="igs-bubble-box">${esc(quote)}</div>
-          ${attr ? `<div class="igs-bubble-attr">${esc(attr)}</div>` : ''}
-        </div>
+    const cols = items.map((item, i) => {
+      const quote   = esc(item.body || item.title || '');
+      const speaker = item.title && item.title !== item.body ? esc(item.title) : '';
+      const isEven  = i % 2 === 1;
+      return `<div class="igs-spbubble-col${isEven ? ' even' : ''}">
+        <div class="igs-spbubble-box">${quote}</div>
+        ${speaker ? `<div class="igs-spbubble-speaker">${speaker}</div>` : ''}
       </div>`;
     });
-    return `<div>${rows.join('')}</div>`;
+    return `<div class="igs-spbubbles-wrap">${cols.join('')}</div>`;
   }
 
   // fallback
@@ -2133,14 +2141,15 @@ export function renderQuotes(items, variant = 'quote-boxes', tone = 'professiona
 ═══════════════════════════════════════════════════════════════ */
 
 export const STEPS_CSS = `
-/* staircase */
+/* ── staircase ── */
 .ig-page .igs-stair-item {
   background: var(--accent-soft);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
   padding: 0.55rem 0.8rem;
   margin-bottom: 0.4rem;
-  opacity: 0.5;
+  min-height: 3.2rem;
+  overflow: hidden;
 }
 .ig-page .igs-stair-title {
   font-family: var(--font-heading);
@@ -2153,330 +2162,379 @@ export const STEPS_CSS = `
   font-size: 0.78rem;
   color: var(--text-secondary);
   margin-top: 0.1rem;
-}
-/* steps */
-.ig-page .igs-step-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.7rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--card-border);
-}
-.ig-page .igs-step-item:last-child { border-bottom: none; }
-.ig-page .igs-step-num {
-  flex-shrink: 0;
-  width: 1.8rem;
-  height: 1.8rem;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 0.82rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ig-page .igs-step-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-step-body {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-top: 0.15rem;
-}
-/* box-steps */
-.ig-page .igs-boxstep-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.6rem 0.75rem;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  margin-bottom: 0.45rem;
-  box-shadow: var(--card-shadow);
-}
-.ig-page .igs-boxstep-num {
-  flex-shrink: 0;
-  width: 1.7rem;
-  height: 1.7rem;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ig-page .igs-boxstep-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-boxstep-body {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-top: 0.15rem;
-}
-/* arrow-steps */
-.ig-page .igs-arrowstep-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.ig-page .igs-arrowstep-item {
-  display: flex;
-  align-items: center;
-  padding: 0.55rem 0.9rem 0.55rem 1.3rem;
-  background: var(--accent-soft);
-  border: 1px solid var(--card-border);
-  margin-bottom: 0.25rem;
-  clip-path: polygon(0 0, calc(100% - 0.7rem) 0, 100% 50%, calc(100% - 0.7rem) 100%, 0 100%, 0.7rem 50%);
-  position: relative;
-}
-.ig-page .igs-arrowstep-item:first-child {
-  clip-path: polygon(0 0, calc(100% - 0.7rem) 0, 100% 50%, calc(100% - 0.7rem) 100%, 0 100%);
-  padding-left: 0.9rem;
-}
-.ig-page .igs-arrowstep-item:nth-child(even) {
-  background: var(--card-bg);
-}
-.ig-page .igs-arrowstep-num {
-  flex-shrink: 0;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 0.8rem;
-  color: var(--accent);
-  margin-right: 0.5rem;
-}
-.ig-page .igs-arrowstep-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.88rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-arrowstep-body {
-  font-family: var(--font-body);
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-top: 0.1rem;
-}
-/* steps-with-icons */
-.ig-page .igs-stepicon-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.7rem;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid var(--card-border);
-}
-.ig-page .igs-stepicon-item:last-child { border-bottom: none; }
-.ig-page .igs-stepicon-icon {
-  flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
-  background: var(--accent-soft);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.ig-page .igs-stepicon-icon img,
-.ig-page .igs-stepicon-icon svg {
-  display: block;
-  width: 1.3rem;
-  height: 1.3rem;
-  object-fit: contain;
+
+/* ── steps: horizontal progress bars ── */
+.ig-page .igs-steps-horiz {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  width: 100%;
+  align-items: flex-start;
 }
-.ig-page .igs-stepicon-title {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-.ig-page .igs-stepicon-body {
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  margin-top: 0.15rem;
-}
-/* pyramid */
-.ig-page .igs-pyramid-list {
+.ig-page .igs-steps-horiz-cell {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
-.ig-page .igs-pyramid-item {
-  background: var(--accent-soft);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  padding: 0.5rem 0.7rem;
-  text-align: center;
-  transition: width 0.3s;
+.ig-page .igs-steps-horiz-bar {
+  height: 6px;
+  width: 100%;
+  border-radius: 3px;
 }
-.ig-page .igs-pyramid-item .igs-pyramid-title {
+.ig-page .igs-steps-horiz-title {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.85em;
   color: var(--text-primary);
+  line-height: 1.3;
 }
-.ig-page .igs-pyramid-item .igs-pyramid-body {
+.ig-page .igs-steps-horiz-body {
   font-family: var(--font-body);
-  font-size: 0.75rem;
+  font-size: 0.74em;
   color: var(--text-secondary);
-  margin-top: 0.1rem;
+  line-height: 1.35;
 }
-/* vertical-funnel */
-.ig-page .igs-funnel-list {
+
+/* ── box-steps: numbered boxes in a horizontal row ── */
+.ig-page .igs-boxstep-row {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  flex-direction: row;
+  align-items: stretch;
+  width: 100%;
   gap: 0;
 }
-.ig-page .igs-funnel-item {
-  background: var(--accent);
-  padding: 0.5rem 0.7rem;
-  text-align: center;
-  margin-bottom: 0.25rem;
-  border-radius: var(--radius-card);
-  transition: width 0.3s;
-  opacity: 0.85;
+.ig-page .igs-boxstep-conn {
+  width: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.ig-page .igs-funnel-item:nth-child(even) { opacity: 0.7; }
-.ig-page .igs-funnel-title {
+.ig-page .igs-boxstep-conn-line {
+  width: 100%;
+  height: 2px;
+  background: var(--accent-soft);
+}
+.ig-page .igs-boxstep-box {
+  flex: 1;
+  border: 1px solid var(--accent-soft);
+  border-radius: 8px;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.2rem;
+  background: var(--card-bg);
+}
+.ig-page .igs-boxstep-box-num {
+  font-family: var(--font-heading);
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.ig-page .igs-boxstep-box-title {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 0.88rem;
-  color: #fff;
+  font-size: 0.85em;
+  color: var(--text-primary);
+  line-height: 1.3;
 }
-.ig-page .igs-funnel-body {
+.ig-page .igs-boxstep-box-body {
   font-family: var(--font-body);
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.85);
+  font-size: 0.74em;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+/* ── arrow-steps: horizontal chevrons ── */
+.ig-page .igs-arrowstep-row {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  overflow: hidden;
+}
+.ig-page .igs-arrowstep-chev {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 8px 10px 22px;
+  min-height: 52px;
+  text-align: center;
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%, 15px 50%);
+}
+.ig-page .igs-arrowstep-chev:first-child {
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%);
+  padding-left: 10px;
+}
+.ig-page .igs-arrowstep-chev:nth-child(odd)  { background: var(--accent-soft); }
+.ig-page .igs-arrowstep-chev:nth-child(even) { background: var(--accent); }
+.ig-page .igs-arrowstep-chev:nth-child(odd)  .igs-title { color: var(--text-primary); }
+.ig-page .igs-arrowstep-chev:nth-child(even) .igs-title { color: #fff; }
+.ig-page .igs-arrowstep-chev .igs-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.82em;
+  line-height: 1.25;
+}
+
+/* ── steps-with-icons: icon circles + connecting line ── */
+.ig-page .igs-stepicons-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  width: 100%;
+  position: relative;
+}
+.ig-page .igs-stepicons-row::before {
+  content: '';
+  position: absolute;
+  top: 23px;
+  left: 24px;
+  right: 24px;
+  height: 2px;
+  background: var(--accent-soft);
+  z-index: 0;
+}
+.ig-page .igs-stepicons-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+.ig-page .igs-stepicons-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ig-page .igs-stepicons-circle img,
+.ig-page .igs-stepicons-circle svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+.ig-page .igs-stepicons-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.82em;
+  color: var(--text-primary);
+  margin-top: 0.4rem;
+  line-height: 1.3;
+}
+.ig-page .igs-stepicons-body {
+  font-family: var(--font-body);
+  font-size: 0.72em;
+  color: var(--text-secondary);
   margin-top: 0.1rem;
+  line-height: 1.35;
+}
+
+/* ── pyramid + vertical-funnel: SVG + text column ── */
+.ig-page .igs-pvf-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+.ig-page .igs-pvf-svg-wrap {
+  flex-shrink: 0;
+  width: 220px;
+  max-width: 220px;
+}
+.ig-page .igs-pvf-svg-wrap svg { width: 100%; display: block; }
+.ig-page .igs-pvf-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+}
+.ig-page .igs-pvf-textbox { }
+.ig-page .igs-pvf-textbox .igs-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.9em;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+.ig-page .igs-pvf-textbox .igs-body {
+  font-family: var(--font-body);
+  font-size: 0.78em;
+  color: var(--text-secondary);
+  margin: 0.1rem 0 0;
+  line-height: 1.35;
 }
 `;
 
 export function renderSteps(items, variant = 'steps', tone = 'professional', columns = 1, density = 'standard') {
+
+  /* ── staircase: stepped width boxes (minor fix: min-height, body clamp) ── */
   if (variant === 'staircase') {
-    const n   = items.length || 1;
+    const n    = items.length || 1;
     const minW = 30;
     const rows = items.map((item, i) => {
-      const pct   = Math.round(minW + (i / Math.max(n - 1, 1)) * (100 - minW));
-      const title = truncateTitle(item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      // opacity increases with each step
+      const pct     = Math.round(minW + (i / Math.max(n - 1, 1)) * (100 - minW));
       const opacity = (0.4 + (i / Math.max(n - 1, 1)) * 0.6).toFixed(2);
+      const title   = esc(truncateTitle(item.title || '', density));
+      const body    = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
       return `<div class="igs-stair-item" style="width:${pct}%;opacity:${opacity}">
-        <div class="igs-stair-title">${esc(title)}</div>
-        ${body ? `<div class="igs-stair-body">${esc(body)}</div>` : ''}
+        <div class="igs-stair-title">${title}</div>
+        ${body ? `<div class="igs-stair-body">${body}</div>` : ''}
       </div>`;
     });
     return `<div>${rows.join('')}</div>`;
   }
 
+  /* ── steps: horizontal row, coloured bar on top of each cell ── */
   if (variant === 'steps') {
-    const rows = items.map((item, i) => {
-      const title = truncateTitle(item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-step-item">
-        <div class="igs-step-num">${i + 1}</div>
-        <div>
-          <div class="igs-step-title">${esc(title)}</div>
-          ${body ? `<div class="igs-step-body">${esc(body)}</div>` : ''}
-        </div>
+    const n    = items.length || 1;
+    const cells = items.map((item, i) => {
+      const opacity = (1 - (i / Math.max(n - 1, 1)) * 0.6).toFixed(2);
+      const title   = esc(truncateTitle(item.title || '', density));
+      const body    = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      return `<div class="igs-steps-horiz-cell">
+        <div class="igs-steps-horiz-bar" style="background:var(--accent);opacity:${opacity}"></div>
+        <div class="igs-steps-horiz-title">${title}</div>
+        ${body ? `<div class="igs-steps-horiz-body">${body}</div>` : ''}
       </div>`;
     });
-    return `<div>${rows.join('')}</div>`;
+    return `<div class="igs-steps-horiz">${cells.join('')}</div>`;
   }
 
+  /* ── box-steps: numbered boxes connected by a thin line ── */
   if (variant === 'box-steps') {
-    const rows = items.map((item, i) => {
-      const title = truncateTitle(item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-boxstep-item">
-        <div class="igs-boxstep-num">${i + 1}</div>
-        <div>
-          <div class="igs-boxstep-title">${esc(title)}</div>
-          ${body ? `<div class="igs-boxstep-body">${esc(body)}</div>` : ''}
-        </div>
-      </div>`;
+    const parts = [];
+    items.forEach((item, i) => {
+      const title = esc(truncateTitle(item.title || '', density));
+      const body  = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      parts.push(`<div class="igs-boxstep-box">
+        <div class="igs-boxstep-box-num">${i + 1}</div>
+        <div class="igs-boxstep-box-title">${title}</div>
+        ${body ? `<div class="igs-boxstep-box-body">${body}</div>` : ''}
+      </div>`);
+      if (i < items.length - 1) {
+        parts.push(`<div class="igs-boxstep-conn"><div class="igs-boxstep-conn-line"></div></div>`);
+      }
     });
-    return `<div>${rows.join('')}</div>`;
+    return `<div class="igs-boxstep-row">${parts.join('')}</div>`;
   }
 
+  /* ── arrow-steps: horizontal chevron shapes ── */
   if (variant === 'arrow-steps') {
-    const rows = items.map((item, i) => {
-      const title = truncateTitle(item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-arrowstep-item">
-        <span class="igs-arrowstep-num">${String(i + 1).padStart(2, '0')}</span>
-        <div>
-          <div class="igs-arrowstep-title">${esc(title)}</div>
-          ${body ? `<div class="igs-arrowstep-body">${esc(body)}</div>` : ''}
-        </div>
+    const chevrons = items.map((item, i) => {
+      const title = esc(truncateTitle(item.title || '', density));
+      return `<div class="igs-arrowstep-chev">
+        <span class="igs-title">${title}</span>
       </div>`;
     });
-    return `<div class="igs-arrowstep-list">${rows.join('')}</div>`;
+    return `<div class="igs-arrowstep-row">${chevrons.join('')}</div>`;
   }
 
+  /* ── steps-with-icons: icon circles connected by a horizontal line ── */
   if (variant === 'steps-with-icons') {
-    const rows = items.map(item => {
-      const title    = truncateTitle(item.title || '');
-      const body     = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-stepicon-item">
-        <div class="igs-stepicon-icon">
+    const cols = items.map(item => {
+      const title = esc(truncateTitle(item.title || '', density));
+      const body  = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      return `<div class="igs-stepicons-col">
+        <div class="igs-stepicons-circle">
           ${iconImg(item.icon || 'star', '')}
         </div>
-        <div>
-          <div class="igs-stepicon-title">${esc(title)}</div>
-          ${body ? `<div class="igs-stepicon-body">${esc(body)}</div>` : ''}
-        </div>
+        <div class="igs-stepicons-title">${title}</div>
+        ${body ? `<div class="igs-stepicons-body">${body}</div>` : ''}
       </div>`;
     });
-    return `<div>${rows.join('')}</div>`;
+    return `<div class="igs-stepicons-row">${cols.join('')}</div>`;
   }
 
+  /* ── pyramid: SVG triangle with trapezoid bands, text boxes on the right ── */
   if (variant === 'pyramid') {
-    // first item = apex (narrowest), last = base (widest)
-    const n    = items.length || 1;
-    const minW = 25;
-    const rows = items.map((item, i) => {
-      const pct   = Math.round(minW + (i / Math.max(n - 1, 1)) * (100 - minW));
-      const title = truncateTitle(item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-pyramid-item" style="width:${pct}%">
-        <div class="igs-pyramid-title">${esc(title)}</div>
-        ${body ? `<div class="igs-pyramid-body">${esc(body)}</div>` : ''}
+    const n    = Math.max(3, Math.min(items.length, 6));
+    const safe = items.slice(0, n);
+    // Triangle: apex at top-centre, base at bottom
+    const apexY = 20, baseY = 280, cx = 150;
+    const totalH = baseY - apexY;
+    const bandH  = totalH / n;
+    let paths = '';
+    for (let i = 0; i < n; i++) {
+      const y1   = apexY + i * bandH;
+      const y2   = y1 + bandH;
+      const hw1  = (y1 - apexY) / 2;   // half-width at top of band
+      const hw2  = (y2 - apexY) / 2;   // half-width at bottom of band
+      // Top = darkest (i=0 → opacity 1.0), bottom = lightest
+      const op   = (1 - (i / Math.max(n - 1, 1)) * 0.7).toFixed(2);
+      paths += `<path d="M ${(cx - hw1).toFixed(1)} ${y1.toFixed(1)} L ${(cx + hw1).toFixed(1)} ${y1.toFixed(1)} L ${(cx + hw2).toFixed(1)} ${y2.toFixed(1)} L ${(cx - hw2).toFixed(1)} ${y2.toFixed(1)} Z" fill="var(--accent)" opacity="${op}"/>`;
+      paths += `<text x="${cx}" y="${((y1 + y2) / 2).toFixed(1)}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="20">${i + 1}</text>`;
+    }
+    const svg = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
+    const textBoxes = safe.map(item => {
+      const title = esc(truncateTitle(item.title || '', density));
+      const body  = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      return `<div class="igs-pvf-textbox">
+        <p class="igs-title">${title}</p>
+        ${body ? `<p class="igs-body">${body}</p>` : ''}
       </div>`;
-    });
-    return `<div class="igs-pyramid-list">${rows.join('')}</div>`;
+    }).join('');
+    return `<div class="igs-pvf-layout">
+      <div class="igs-pvf-svg-wrap">${svg}</div>
+      <div class="igs-pvf-texts">${textBoxes}</div>
+    </div>`;
   }
 
+  /* ── vertical-funnel: SVG inverted triangle with trapezoid bands ── */
   if (variant === 'vertical-funnel') {
-    // first item = widest (top), last = narrowest (bottom)
-    const n    = items.length || 1;
-    const minW = 30;
-    const rows = items.map((item, i) => {
-      const pct   = Math.round(100 - (i / Math.max(n - 1, 1)) * (100 - minW));
-      const title = truncateTitle(item.title || '');
-      const body  = density === 'compact' ? '' : truncateBody(item.body || '', density);
-      return `<div class="igs-funnel-item" style="width:${pct}%">
-        <div class="igs-funnel-title">${esc(title)}</div>
-        ${body ? `<div class="igs-funnel-body">${esc(body)}</div>` : ''}
+    const n    = Math.max(3, Math.min(items.length, 6));
+    const safe = items.slice(0, n);
+    const topHW = 130, botHW = 10;
+    const yTop = 20, yBot = 280, cx = 150;
+    const totalH = yBot - yTop;
+    const bandH  = totalH / n;
+    let paths = '';
+    for (let i = 0; i < n; i++) {
+      const y1  = yTop + i * bandH;
+      const y2  = y1 + bandH;
+      const t1  = i / n;
+      const t2  = (i + 1) / n;
+      const hw1 = topHW + (botHW - topHW) * t1;
+      const hw2 = topHW + (botHW - topHW) * t2;
+      // Top = darkest
+      const op  = (1 - (i / Math.max(n - 1, 1)) * 0.7).toFixed(2);
+      paths += `<path d="M ${(cx - hw1).toFixed(1)} ${y1.toFixed(1)} L ${(cx + hw1).toFixed(1)} ${y1.toFixed(1)} L ${(cx + hw2).toFixed(1)} ${y2.toFixed(1)} L ${(cx - hw2).toFixed(1)} ${y2.toFixed(1)} Z" fill="var(--accent)" opacity="${op}"/>`;
+      paths += `<text x="${cx}" y="${((y1 + y2) / 2).toFixed(1)}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="20">${i + 1}</text>`;
+    }
+    const svg = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
+    const textBoxes = safe.map(item => {
+      const title = esc(truncateTitle(item.title || '', density));
+      const body  = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
+      return `<div class="igs-pvf-textbox">
+        <p class="igs-title">${title}</p>
+        ${body ? `<p class="igs-body">${body}</p>` : ''}
       </div>`;
-    });
-    return `<div class="igs-funnel-list">${rows.join('')}</div>`;
+    }).join('');
+    return `<div class="igs-pvf-layout">
+      <div class="igs-pvf-svg-wrap">${svg}</div>
+      <div class="igs-pvf-texts">${textBoxes}</div>
+    </div>`;
   }
 
   // fallback

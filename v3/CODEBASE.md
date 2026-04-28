@@ -2,7 +2,7 @@
 
 > Read this file at the start of every session instead of reading individual files.
 > Only read a specific file when you are about to edit it.
-> Last updated: 2026-04-20
+> Last updated: 2026-04-28
 
 ---
 
@@ -180,7 +180,57 @@ Tone defaults: professional=#2563EB, bold=#F59E0B, minimal=#0F766E, playful=#7C3
 
 ---
 
-## Pending Work (as of 2026-04-20)
+---
+
+### `smart-layouts.js`
+**Exports:** `BOXES_CSS`, `renderBoxes`, `BULLETS_CSS`, `renderBullets`, `SEQUENCE_CSS`, `renderSequence`, `NUMBERS_CSS`, `renderNumbers`, `CIRCLES_CSS`, `renderCircles`, `QUOTES_CSS`, `renderQuotes`, `STEPS_CSS`, `renderSteps`, `LAYOUT_FAMILIES`, `renderSection`
+
+Layer 2 render functions — transform `items[]` arrays into HTML+CSS visualisations. Each family has a CSS string export and a render function.
+
+**Item shape:** `{ title, body, icon, number }` — all optional. `number` is the primary display field for the Numbers family.
+
+**Key helpers (module-level):**
+- `truncateTitle(title, density)` / `truncateBody(body, density)` — adaptive text density
+- `esc(str)` — HTML escape
+- `parsePctFill(str)` — parses `"70%"` → `{pct:70, isPercent:true}`, `"70"` → `{pct:70, isPercent:false}`, `"$2.4M"` → `{pct:null, isPercent:false}`
+- `toRad(deg)`, `arcPath(cx,cy,rOut,rIn,start,end,gap)`, `piePath(cx,cy,r,start,end,gap)`, `arcMid(cx,cy,r,start,end)` — SVG geometry helpers used by Circles family
+- `segOpacity(i,n)` — ramps opacity 0.3→1.0 for SVG segment shading
+- `splitLR(n)` — splits N items into [left, right] index arrays for side-by-side layout
+
+**Numbers family render approach (item.number is PRIMARY):**
+- `stats` — giant numbers in a horizontal row of equal columns separated by dividers
+- `circle-stats` — SVG donut rings (stroke-dasharray fill); ring shown only for parseable percent/plain numbers
+- `circle-bold-line` — same as circle-stats but stroke-width 12
+- `circle-external-line` — same as circle-stats but adds an outer thin ring at r=46
+- `bar-stats` — horizontal progress bars, stacked vertically; bar shown only when number is parseable
+- `star-rating` — 1–5 stars with partial fill via CSS clip; score from item.number
+- `dot-grid` — 10×10 dot matrix filled by percentage
+- `dot-line` — single row of 10 dots; supports half-fill for values like "25%"
+
+**Circles family render approach (SVG shape + text boxes):**
+All variants render an inline SVG shape centred between two text-box columns. Segment shading uses opacity 0.3 (first) → 1.0 (last) on `var(--accent)`.
+- `cycle` — donut wheel, N equal annular sectors
+- `flower` — overlapping ellipse petals rotated around centre
+- `circle` — full pie, N equal slices
+- `ring` — concentric rings; numbers at 3-o'clock on each ring
+- `semi-circle` — top-half donut arc, text boxes below
+
+**Steps family render approach:**
+- `staircase` — unchanged except min-height added and body text clamped to 2 lines
+- `steps` — horizontal flexbox row; coloured top bar per cell (opacity decreasing per step)
+- `box-steps` — horizontal bordered boxes connected by thin connector lines
+- `arrow-steps` — horizontal chevron shapes (CSS clip-path), alternating accent/accent-soft
+- `steps-with-icons` — horizontal icon circles on an accent-soft connecting line
+- `pyramid` — inline SVG trapezoid bands (top=darkest, apex), text column to the right
+- `vertical-funnel` — inline SVG inverted trapezoid bands (top=widest, darkest), text column to the right
+
+**Quotes family:**
+- `quote-boxes` — cards with oversized quotation mark; unchanged
+- `speech-bubbles` — rounded-rect bubbles with CSS triangle tail (::after); odd items tail left, even items tail right
+
+---
+
+## Pending Work (as of 2026-04-28)
 
 - **UnDraw illustration slot** — add `illustration` field to schemas + templates; AI picks slug from category-filtered list; renderer injects inline SVG with accent color
 - **INFOGRAI-SPECS.md** — needs update with illustration architecture decisions (#10 in_progress)
