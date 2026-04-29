@@ -293,18 +293,11 @@
       pointer-events: all;
       cursor: pointer;
     }
+    /* DO NOT set stroke/stroke-width via CSS class — it overrides SVG attributes
+       and prevents property panel changes from working.
+       Stroke and width are set via inline attributes only. */
     .connector-svg .connector-line {
-      stroke: #6b7280;
-      stroke-width: 1.5;
       fill: none;
-    }
-    .connector-svg .connector-line:hover {
-      stroke: var(--accent);
-      stroke-width: 2;
-    }
-    .connector-svg .connector-line.selected {
-      stroke: var(--accent);
-      stroke-width: 2;
     }
     .connector-endpoint {
       position: absolute;
@@ -603,7 +596,7 @@
     <div class="shape-row" id="shapeRow"></div>
   </div>
 
-  <!-- ══ MAIN SCRIPT ══ -->
+  <!-- ══ MAIN SCRIPT — UNIFIED OBJECT MODEL REFACTOR ══ -->
   <script type="module">
     import { renderSection, BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS } from './v3/smart-layouts.js';
     import { renderDiagramSection, DIAGRAM_CSS } from './v3/smart-diagrams.js';
@@ -611,6 +604,25 @@
     const styleEl = document.createElement('style');
     styleEl.textContent = [BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS, DIAGRAM_CSS].join('\n');
     document.head.appendChild(styleEl);
+
+    // ══════════════════════════════════════════════════════════════════
+    // UNIFIED OBJECT MODEL ARCHITECTURE
+    //
+    // Every element on canvas (template or added) becomes one entry in
+    // the `objects` Map, keyed by a unique ID.  One selection system,
+    // one property binding, one update pipeline.
+    //
+    // Object schema:
+    // { id, source:'template'|'added', kind:'text'|'shape'|'connector'|'icon'|'container',
+    //   domRef, x, y, w, h,
+    //   fill, stroke, strokeWidth, color, bgColor, fontSize, fontWeight, fontFamily, textAlign,
+    //   dashArray, arrowHead, visible, ... }
+    //
+    // - Template objects are discovered after render via DOM scan
+    // - Added objects are created by user actions
+    // - ALL property changes go through updateObject(id, props)
+    // - renderAll() re-renders template HTML then re-scans, preserving added objects
+    // ══════════════════════════════════════════════════════════════════
 
     // ═══ VARIANT REGISTRY ═══
     const FAMILIES = {
@@ -641,7 +653,7 @@
       }));
     }
 
-    // ═══ STATE ═══
+    // ═══ CORE STATE ═══
     let currentVariant = 'bullseye';
     let currentItemCount = 4;
     let currentTone = 'professional';
@@ -1261,11 +1273,18 @@
         const dashMap = { solid: '', dashed: '8,4', dotted: '3,3' };
         const dashArray = dashMap[style] || '';
 
-        // Apply directly to the SVG line element
+        // Apply via BOTH attribute AND inline style (inline style wins over CSS classes)
         selectedElement.setAttribute('stroke', color);
+        selectedElement.style.stroke = color;
         selectedElement.setAttribute('stroke-width', width);
-        if (dashArray) selectedElement.setAttribute('stroke-dasharray', dashArray);
-        else selectedElement.removeAttribute('stroke-dasharray');
+        selectedElement.style.strokeWidth = width;
+        if (dashArray) {
+          selectedElement.setAttribute('stroke-dasharray', dashArray);
+          selectedElement.style.strokeDasharray = dashArray;
+        } else {
+          selectedElement.removeAttribute('stroke-dasharray');
+          selectedElement.style.strokeDasharray = '';
+        }
 
         if (arrow === 'end' || arrow === 'both') selectedElement.setAttribute('marker-end', 'url(#arrowHead)');
         else selectedElement.removeAttribute('marker-end');
@@ -1630,9 +1649,17 @@
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', cn.x1); line.setAttribute('y1', cn.y1);
         line.setAttribute('x2', cn.x2); line.setAttribute('y2', cn.y2);
-        line.setAttribute('stroke', cn.stroke || '#6b7280');
-        line.setAttribute('stroke-width', cn.strokeWidth || 1.5);
-        if (cn.dashArray) line.setAttribute('stroke-dasharray', cn.dashArray);
+        // Set via BOTH attribute and inline style — inline style wins over any CSS class
+        const s = cn.stroke || '#6b7280';
+        const w = cn.strokeWidth || 1.5;
+        line.setAttribute('stroke', s);
+        line.setAttribute('stroke-width', w);
+        line.style.stroke = s;
+        line.style.strokeWidth = w;
+        if (cn.dashArray) {
+          line.setAttribute('stroke-dasharray', cn.dashArray);
+          line.style.strokeDasharray = cn.dashArray;
+        }
         if (cn.arrowHead === 'end' || cn.arrowHead === 'both') line.setAttribute('marker-end', 'url(#arrowHead)');
         if (cn.arrowHead === 'start' || cn.arrowHead === 'both') line.setAttribute('marker-start', 'url(#arrowHead)');
         line.classList.add('connector-line');
