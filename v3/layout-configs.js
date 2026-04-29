@@ -51,6 +51,8 @@ export function applyLayoutConfig(container, variant, itemCount) {
         for (const [prop, val] of Object.entries(props)) {
           if (prop === 'textContent') {
             el.textContent = val;
+          } else if (prop.startsWith('attr_')) {
+            el.setAttribute(prop.slice(5), val);
           } else {
             el.style[prop] = val;
           }

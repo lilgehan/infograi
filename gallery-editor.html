@@ -716,6 +716,32 @@
       const t = el.tagName.toLowerCase();
       return ['svg','circle','ellipse','rect','polygon','path','line','polyline','g'].includes(t);
     }
+
+    // ═══ SVG TRANSFORM HELPERS ═══
+    // SVG elements can't use style.left/top — we use transform translate instead
+    function getSvgTranslate(el) {
+      const tr = el.getAttribute('transform') || '';
+      const m = tr.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)/);
+      return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+    }
+    function setSvgTranslate(el, x, y) {
+      let tr = el.getAttribute('transform') || '';
+      // Remove existing translate
+      tr = tr.replace(/translate\([^)]*\)\s*/g, '').trim();
+      tr = `translate(${x}, ${y})` + (tr ? ' ' + tr : '');
+      el.setAttribute('transform', tr);
+    }
+    // Hide an original template element by saving display:none override
+    function hideOriginalElement(el) {
+      if (isSvgElement(el)) {
+        el.setAttribute('visibility', 'hidden');
+      } else {
+        el.style.display = 'none';
+      }
+      saveElementOverride(el);
+      selectElement(null);
+      requestAnimationFrame(() => buildOverlayHandles());
+    }
     function isTextElement(el) {
       if (isSvgElement(el)) return false;
       if (el.tagName.toLowerCase() === 'img') return false;
@@ -764,6 +790,10 @@
       const seen = new Set();
 
       elements.forEach((el, idx) => {
+        // Skip hidden/deleted elements
+        if (el.style.display === 'none') return;
+        if (el.getAttribute('visibility') === 'hidden') return;
+
         const r = el.getBoundingClientRect();
         // For lines, use a wider hit area
         const isLine = el.tagName.toLowerCase() === 'line';
@@ -1039,11 +1069,13 @@
     let dragState = null;
     function startDrag(e, el, handle) {
       e.preventDefault();
+      const isSvg = isSvgElement(el);
+      const svgT = isSvg ? getSvgTranslate(el) : null;
       dragState = {
-        el, handle,
+        el, handle, isSvg,
         startX: e.clientX, startY: e.clientY,
-        origLeft: parseFloat(el.style.left) || 0,
-        origTop: parseFloat(el.style.top) || 0,
+        origLeft: isSvg ? svgT.x : (parseFloat(el.style.left) || 0),
+        origTop: isSvg ? svgT.y : (parseFloat(el.style.top) || 0),
       };
       document.addEventListener('mousemove', onDrag);
       document.addEventListener('mouseup', endDrag);
@@ -1052,9 +1084,13 @@
       if (!dragState) return;
       const dx = e.clientX - dragState.startX;
       const dy = e.clientY - dragState.startY;
-      dragState.el.style.position = 'relative';
-      dragState.el.style.left = (dragState.origLeft + dx) + 'px';
-      dragState.el.style.top = (dragState.origTop + dy) + 'px';
+      if (dragState.isSvg) {
+        setSvgTranslate(dragState.el, dragState.origLeft + dx, dragState.origTop + dy);
+      } else {
+        dragState.el.style.position = 'relative';
+        dragState.el.style.left = (dragState.origLeft + dx) + 'px';
+        dragState.el.style.top = (dragState.origTop + dy) + 'px';
+      }
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const r = dragState.el.getBoundingClientRect();
       dragState.handle.style.left = (r.left - frameRect.left) + 'px';
@@ -1070,8 +1106,9 @@
     let resizeState = null;
     function startResize(e, el, handle, corner) {
       e.preventDefault(); e.stopPropagation();
+      const isSvg = isSvgElement(el);
       resizeState = {
-        el, handle, corner,
+        el, handle, corner, isSvg,
         startX: e.clientX, startY: e.clientY,
         origW: el.getBoundingClientRect().width,
         origH: el.getBoundingClientRect().height,
@@ -1088,9 +1125,22 @@
       if (resizeState.corner.includes('w')) w -= dx;
       if (resizeState.corner.includes('s')) h += dy;
       if (resizeState.corner.includes('n')) h -= dy;
-      resizeState.el.style.width = Math.max(20, w) + 'px';
-      resizeState.el.style.height = Math.max(10, h) + 'px';
-      resizeState.el.style.overflow = 'hidden';
+      w = Math.max(20, w);
+      h = Math.max(10, h);
+      if (resizeState.isSvg) {
+        // For SVG: scale relative to original size via transform
+        const scaleX = w / resizeState.origW;
+        const scaleY = h / resizeState.origH;
+        let tr = resizeState.el.getAttribute('transform') || '';
+        tr = tr.replace(/scale\([^)]*\)\s*/g, '').trim();
+        // Keep existing translate, add scale
+        const existing = tr || '';
+        resizeState.el.setAttribute('transform', existing + ` scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`);
+      } else {
+        resizeState.el.style.width = w + 'px';
+        resizeState.el.style.height = h + 'px';
+        resizeState.el.style.overflow = 'hidden';
+      }
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const r = resizeState.el.getBoundingClientRect();
       resizeState.handle.style.left = (r.left - frameRect.left) + 'px';
@@ -1188,16 +1238,19 @@
       if (document.activeElement?.contentEditable === 'true') return;
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'SELECT') return;
 
-      // Delete: remove selected added element OR connector
+      // Delete: remove selected added element, OR hide original template element
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedElement) {
+          e.preventDefault();
+          pushUndo();
           const addedId = selectedElement.dataset?.addedId;
           if (addedId) {
-            e.preventDefault();
-            pushUndo();
             removeAddedElement(addedId);
-            return;
+          } else {
+            // Original template element — hide it (saved as override)
+            hideOriginalElement(selectedElement);
           }
+          return;
         }
       }
       // Arrow keys: nudge selected element
@@ -1205,13 +1258,22 @@
         e.preventDefault();
         pushUndo();
         const step = e.shiftKey ? 10 : 1;
-        const left = parseFloat(selectedElement.style.left) || 0;
-        const top = parseFloat(selectedElement.style.top) || 0;
-        if (e.key === 'ArrowLeft') selectedElement.style.left = (left - step) + 'px';
-        if (e.key === 'ArrowRight') selectedElement.style.left = (left + step) + 'px';
-        if (e.key === 'ArrowUp') selectedElement.style.top = (top - step) + 'px';
-        if (e.key === 'ArrowDown') selectedElement.style.top = (top + step) + 'px';
-        selectedElement.style.position = 'relative';
+        if (isSvgElement(selectedElement)) {
+          const t = getSvgTranslate(selectedElement);
+          if (e.key === 'ArrowLeft') t.x -= step;
+          if (e.key === 'ArrowRight') t.x += step;
+          if (e.key === 'ArrowUp') t.y -= step;
+          if (e.key === 'ArrowDown') t.y += step;
+          setSvgTranslate(selectedElement, t.x, t.y);
+        } else {
+          const left = parseFloat(selectedElement.style.left) || 0;
+          const top = parseFloat(selectedElement.style.top) || 0;
+          if (e.key === 'ArrowLeft') selectedElement.style.left = (left - step) + 'px';
+          if (e.key === 'ArrowRight') selectedElement.style.left = (left + step) + 'px';
+          if (e.key === 'ArrowUp') selectedElement.style.top = (top - step) + 'px';
+          if (e.key === 'ArrowDown') selectedElement.style.top = (top + step) + 'px';
+          selectedElement.style.position = 'relative';
+        }
         saveElementOverride(selectedElement);
         requestAnimationFrame(() => buildOverlayHandles());
       }
@@ -1329,7 +1391,7 @@
       });
       // Also save SVG attributes for shapes
       if (isSvgElement(el)) {
-        ['fill','stroke','stroke-width','stroke-dasharray'].forEach(a => {
+        ['fill','stroke','stroke-width','stroke-dasharray','visibility','transform'].forEach(a => {
           const v = el.getAttribute(a);
           if (v) o['attr_' + a] = v;
         });
