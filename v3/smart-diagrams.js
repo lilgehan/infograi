@@ -124,17 +124,17 @@ export const ROAD_CSS = `
 /* ── Road / Journey: base ── */
 .ig-page .igd-title {
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 0.88em; font-weight: 700;
+  font-size: 0.85em; font-weight: 700;
   color: var(--text-primary, #111827); margin: 0; line-height: 1.25;
 }
 .ig-page .igd-body {
   font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
-  font-size: 0.75em; color: var(--text-secondary, #6b7280);
+  font-size: 0.72em; color: var(--text-secondary, #6b7280);
   margin: 0; line-height: 1.4;
 }
 .ig-page .igd-label {
   font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
-  font-size: 0.68em; font-weight: 600; text-transform: uppercase;
+  font-size: 0.7em; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-secondary, #6b7280); margin: 0;
 }

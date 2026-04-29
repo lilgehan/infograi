@@ -139,6 +139,27 @@ export const BOXES_CSS = `
 .ig-page .igs-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .ig-page .igs-grid--4 { grid-template-columns: repeat(4, 1fr); }
 
+/* ── Named grid arrangements (NxM = N cols, NpM = mixed rows) ── */
+.ig-page .igs-grid--1x2,
+.ig-page .igs-grid--1x3,
+.ig-page .igs-grid--1x4 { grid-template-columns: 1fr; }
+.ig-page .igs-grid--2x1,
+.ig-page .igs-grid--2x2,
+.ig-page .igs-grid--2x3,
+.ig-page .igs-grid--2x4 { grid-template-columns: repeat(2, 1fr); }
+.ig-page .igs-grid--3x1,
+.ig-page .igs-grid--3x2 { grid-template-columns: repeat(3, 1fr); }
+.ig-page .igs-grid--4x1,
+.ig-page .igs-grid--4x2 { grid-template-columns: repeat(4, 1fr); }
+/* 2p3: 2 items in row 1, 3 items in row 2 */
+.ig-page .igs-grid--2p3 { grid-template-columns: repeat(6, 1fr); }
+.ig-page .igs-grid--2p3 > *:nth-child(-n+2) { grid-column: span 3; }
+.ig-page .igs-grid--2p3 > *:nth-child(n+3)  { grid-column: span 2; }
+/* 3p2: 3 items in row 1, 2 items in row 2 */
+.ig-page .igs-grid--3p2 { grid-template-columns: repeat(6, 1fr); }
+.ig-page .igs-grid--3p2 > *:nth-child(-n+3) { grid-column: span 2; }
+.ig-page .igs-grid--3p2 > *:nth-child(n+4)  { grid-column: span 3; }
+
 /* ── Solid Boxes ── */
 .ig-page .igs-solid {
   background: var(--accent);
@@ -528,8 +549,10 @@ function renderJoinedBoxes(items, withIcons, columns, density) {
    Used by all non-joined variants.
 ───────────────────────────────────────── */
 
-function wrapGrid(itemsHtml, columns) {
-  const colClass = `igs-grid--${Math.min(Math.max(columns, 1), 4)}`;
+function wrapGrid(itemsHtml, columns, gridArrangement) {
+  const colClass = gridArrangement
+    ? `igs-grid--${gridArrangement}`
+    : `igs-grid--${Math.min(Math.max(columns, 1), 4)}`;
   return `<div class="igs-grid ${colClass}">${itemsHtml}</div>`;
 }
 
@@ -548,7 +571,7 @@ function wrapGrid(itemsHtml, columns) {
  * @param {string} density  — 'compact' | 'standard' | 'detailed'
  * @returns {string} HTML string
  */
-export function renderBoxes(items, variant = 'solid-boxes', tone = 'professional', columns = 3, density = 'standard') {
+export function renderBoxes(items, variant = 'solid-boxes', tone = 'professional', columns = 3, density = 'standard', gridArrangement = null) {
   if (!Array.isArray(items) || items.length === 0) {
     return '<div class="igs-grid igs-grid--1"><p style="color:var(--text-secondary)">No content items.</p></div>';
   }
@@ -560,37 +583,37 @@ export function renderBoxes(items, variant = 'solid-boxes', tone = 'professional
 
     case 'solid-boxes': {
       const html = items.map((item, i) => renderSolidItem(item, i, false, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'solid-boxes-icons': {
       const html = items.map((item, i) => renderSolidItem(item, i, true, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'outline-boxes': {
       const html = items.map((item, i) => renderOutlineItem(item, i, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'side-line': {
       const html = items.map((item, i) => renderSidelineItem(item, i, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'side-line-text': {
       const html = items.map((item, i) => renderSidelineTextItem(item, i, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'top-line-text': {
       const html = items.map((item, i) => renderToplineItem(item, i, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'top-circle': {
       const html = items.map((item, i) => renderTopCircleItem(item, i, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'joined-boxes': {
@@ -604,24 +627,24 @@ export function renderBoxes(items, variant = 'solid-boxes', tone = 'professional
 
     case 'leaf-boxes': {
       const html = items.map((item, i) => renderLeafItem(item, i, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'labeled-boxes': {
       const html = items.map((item, i) => renderLabeledItem(item, i, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     case 'alternating-boxes': {
       const html = items.map((item, i) => renderAltItem(item, i, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
 
     default: {
       // Unknown variant — fall back to solid-boxes
       console.warn(`[smart-layouts] Unknown variant "${variant}" — falling back to solid-boxes`);
       const html = items.map((item, i) => renderSolidItem(item, i, false, density)).join('');
-      return wrapGrid(html, cols);
+      return wrapGrid(html, cols, gridArrangement);
     }
   }
 }
@@ -1383,24 +1406,28 @@ export const NUMBERS_CSS = `
   flex: 1;
   min-width: 110px;
   max-width: 150px;
-}
-.ig-page .igs-dotgrid-header {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  margin-bottom: 0.3rem;
-  align-items: baseline;
+  gap: 0.25rem;
 }
 .ig-page .igs-dotgrid-num {
   font-family: var(--font-heading);
-  font-size: 1em;
+  font-size: 2em;
   font-weight: 800;
   color: var(--accent);
+  line-height: 1;
+  margin-bottom: 0.2rem;
 }
 .ig-page .igs-dotgrid-lbl {
+  font-family: var(--font-heading);
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0.25rem;
+}
+.ig-page .igs-dotgrid-desc {
   font-family: var(--font-body);
-  font-size: 0.72em;
+  font-size: 0.68em;
   color: var(--text-secondary);
+  line-height: 1.35;
 }
 .ig-page .igs-dotgrid-grid {
   display: grid;
@@ -1632,16 +1659,16 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
       const { pct } = parsePctFill(numStr);
       const filled = pct !== null ? Math.round((pct / 100) * TOTAL) : 0;
       const title  = esc(truncateTitle(item.title || '', density));
+      const desc   = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
       let dots = '';
       for (let d = 0; d < TOTAL; d++) {
         dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
       }
       return `<div class="igs-dotgrid-col">
-        <div class="igs-dotgrid-header">
-          <span class="igs-dotgrid-num">${esc(numStr)}</span>
-          <span class="igs-dotgrid-lbl">${title}</span>
-        </div>
+        <div class="igs-dotgrid-num">${esc(numStr)}</div>
         <div class="igs-dotgrid-grid">${dots}</div>
+        ${title ? `<div class="igs-dotgrid-lbl">${title}</div>` : ''}
+        ${desc  ? `<div class="igs-dotgrid-desc">${desc}</div>`  : ''}
       </div>`;
     });
     return `<div class="igs-dotgrid-row">${cols.join('')}</div>`;
@@ -1710,19 +1737,19 @@ export const CIRCLES_CSS = `
 .ig-page .igs-circ-left  { align-items: flex-end;   text-align: right; }
 .ig-page .igs-circ-right { align-items: flex-start; text-align: left;  }
 .ig-page .igs-circ-textbox {
-  max-width: 175px;
+  max-width: 180px;
 }
 .ig-page .igs-circ-textbox .igs-title {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 0.9em;
+  font-size: 0.85em;
   color: var(--text-primary);
   line-height: 1.3;
   margin: 0;
 }
 .ig-page .igs-circ-textbox .igs-body {
   font-family: var(--font-body);
-  font-size: 0.78em;
+  font-size: 0.75em;
   color: var(--text-secondary);
   line-height: 1.35;
   margin: 0.1rem 0 0;
@@ -1886,7 +1913,7 @@ export function renderCircles(items, variant = 'cycle', tone = 'professional', c
       // Petal ellipse is above the centre before rotation
       petals += `<g transform="rotate(${angle}, ${cx}, ${cy})">
         <ellipse cx="${cx}" cy="${cy - pDist}" rx="${rx}" ry="${ry}" fill="var(--accent)" opacity="${op}"/>
-        <text x="${cx}" y="${cy - pDist}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="24">${i + 1}</text>
+        <text x="${cx}" y="${cy - pDist}" transform="rotate(${-angle}, ${cx}, ${cy - pDist})" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="24">${i + 1}</text>
       </g>`;
     }
     // White centre disc to clean up overlap
@@ -1946,7 +1973,7 @@ export function renderCircles(items, variant = 'cycle', tone = 'professional', c
       const rMid = (rOuter + Math.max(rInner, 8)) / 2;
       rings += `<path d="${arcPath(cx, cy, rOuter, Math.max(rInner, 8), -89, 270)}" fill="var(--accent)" opacity="${op}"/>`;
       // Number at 3-o'clock position on each ring
-      rings += `<text x="${(cx + rMid).toFixed(1)}" y="${cy}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="15">${i + 1}</text>`;
+      rings += `<text x="${(cx + rMid).toFixed(1)}" y="${cy}" text-anchor="middle" dominant-baseline="central" fill="white" font-weight="bold" font-family="var(--font-heading)" font-size="15">${nr - i}</text>`;
     }
     const svg = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">${rings}</svg>`;
 
@@ -2505,7 +2532,7 @@ export function renderSteps(items, variant = 'steps', tone = 'professional', col
   if (variant === 'vertical-funnel') {
     const n    = Math.max(3, Math.min(items.length, 6));
     const safe = items.slice(0, n);
-    const topHW = 130, botHW = 10;
+    const topHW = 130, botHW = 2;
     const yTop = 20, yBot = 280, cx = 150;
     const totalH = yBot - yTop;
     const bandH  = totalH / n;
@@ -2622,12 +2649,12 @@ const VARIANT_FAMILY_MAP = {
  * @returns {string} HTML string
  */
 export function renderSection(section, tone = 'professional') {
-  const { items = [], variant = 'solid-boxes', columns = 3, style: density = 'standard' } = section;
+  const { items = [], variant = 'solid-boxes', columns = 3, style: density = 'standard', grid: gridArrangement } = section;
   const family = VARIANT_FAMILY_MAP[variant];
   const fn = family ? LAYOUT_FAMILIES[family] : null;
-  if (fn) return fn(items, variant, tone, columns, density);
+  if (fn) return fn(items, variant, tone, columns, density, gridArrangement);
   // Try diagram families before falling back to solid-boxes
   const diagramHtml = renderDiagramSection(section, tone);
   if (diagramHtml !== null) return diagramHtml;
-  return renderBoxes(items, 'solid-boxes', tone, columns, density);
+  return renderBoxes(items, 'solid-boxes', tone, columns, density, gridArrangement);
 }

@@ -279,6 +279,33 @@ Layer 2 render functions for relationship/hierarchy/movement diagrams. Each fami
 
 ---
 
+## Session 2 Hotfixes (2026-04-28)
+
+Applied to `smart-layouts.js`, `smart-diagrams.js`, and `gallery.html`:
+
+**FIX 1 — dot-grid layout:** Restructured HTML order to: large percentage number (`2em`, above) → 10×10 dot grid → title label → body desc. Removed old `.igs-dotgrid-header` flex row. New classes: `.igs-dotgrid-desc` for body text.
+
+**FIX 2 — dot-line:** Verified already correct — `.igs-dl-dot` is 10px, exactly 10 dots rendered. No changes needed.
+
+**FIX 3 — flower counter-rotation:** Added `transform="rotate(${-angle}, ${cx}, ${cy - pDist})"` to the `<text>` element inside each rotated petal `<g>`, so numbers always read upright regardless of petal rotation angle.
+
+**FIX 4 — ring numbering:** Changed label from `${i + 1}` (outermost=1) to `${nr - i}` (innermost=1). Ring 1 = innermost/center, Ring N = outermost.
+
+**FIX 5 — vertical-funnel point:** Reduced `botHW` from `10` to `2` (bottom is now ~4px wide = near-point at the base of the funnel).
+
+**FIX 6 — global text sizes:**
+- `CIRCLES_CSS`: `.igs-circ-textbox` max-width → 180px; `.igs-title` → 0.85em; `.igs-body` → 0.75em
+- `ROAD_CSS` (smart-diagrams.js): `.igd-title` → 0.85em; `.igd-body` → 0.72em; `.igd-label` → 0.7em
+
+**FIX 7 — grid arrangement system:**
+- Added named CSS grid classes to `BOXES_CSS`: `NxM` variants (1x2, 2x1, 2x2, 3x1, 3x2, 4x1, 4x2, 2x3, 2x4, 1x3, 1x4) and mixed-row `NpM` variants (`2p3`: 2-item row then 3-item row, `3p2`: 3-item row then 2-item row). Mixed rows use `repeat(6, 1fr)` with `:nth-child` `grid-column: span` selectors.
+- `wrapGrid(itemsHtml, columns, gridArrangement)` — 3rd param overrides column class if provided.
+- `renderBoxes(...)` — added `gridArrangement = null` as 6th param; passes to all `wrapGrid` calls.
+- `renderSection(section, tone)` — extracts `grid` field from section object; threads as `gridArrangement` through layout render functions and fallback `renderBoxes`.
+- `gallery.html`: FAMILIES object updated to match Session 1 variant changes; added `gridArrangements = {}` state; `ARRANGEMENTS_FOR_COUNT` maps item count → available arrangement keys; `arrangementSvg(key)` renders tiny 24×16 SVG thumbnail icon; second control row (`.grid-arr-bar`) added below item-count buttons; clicking an arrangement re-renders with `grid: arr` in section; clicking active arrangement deselects it (toggle); arrangement resets on item-count change.
+
+---
+
 ## Pending Work (as of 2026-04-28)
 
 - **UnDraw illustration slot** — add `illustration` field to schemas + templates; AI picks slug from category-filtered list; renderer injects inline SVG with accent color
