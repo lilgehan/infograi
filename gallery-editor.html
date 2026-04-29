@@ -312,23 +312,14 @@
       display: none;
     }
 
-    /* ── Status badge ── */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 0.75em;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-weight: 600;
+    /* ── Draft indicator (subtle) ── */
+    .draft-indicator {
+      font-size: 0.7em;
+      color: #9ca3af;
+      font-style: italic;
     }
-    .status-badge.approved {
-      background: #d1fae5;
-      color: #065f46;
-    }
-    .status-badge.draft {
-      background: #fef3c7;
-      color: #92400e;
+    .draft-indicator.has-draft {
+      color: #fbbf24;
     }
 
     /* ── Add element toolbar ── */
@@ -348,6 +339,12 @@
       cursor: pointer;
     }
     .add-btn:hover { color: white; border-color: #9ca3af; }
+
+    /* SVG text overlays — transparent by default, show dashed border on hover */
+    .svg-text-overlay:hover {
+      border-color: rgba(37,99,235,0.4) !important;
+      background: rgba(255,255,255,0.3) !important;
+    }
 
     /* No selection message */
     .no-selection {
@@ -422,11 +419,11 @@
 
     <div class="spacer"></div>
 
-    <span class="status-badge draft" id="statusBadge">Draft</span>
-    <button class="btn-primary" id="saveBtn">Save</button>
-    <button class="btn-success" id="approveBtn">Approve</button>
-    <button class="btn-danger" id="resetBtn">Reset</button>
-    <button id="exportBtn">Export JSON</button>
+    <span class="draft-indicator" id="draftIndicator"></span>
+    <button id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
+    <button class="btn-primary" id="saveBtn" title="Save draft to browser">Save</button>
+    <button class="btn-success" id="exportBtn" title="Export layout-configs.js for gallery + generator">Export</button>
+    <button class="btn-danger" id="resetBtn" title="Reset all changes for this layout">Reset</button>
     <button id="shapeLibBtn">Shapes</button>
   </div>
 
@@ -738,7 +735,7 @@
 
     function renderAll() {
       buildItemPills();
-      updateStatusBadge();
+      updateDraftIndicator();
       const items = makeItems(currentItemCount);
       const section = { variant: currentVariant, items, columns: 3, style: currentDensity };
       const type = findFamilyType(currentVariant);
@@ -753,6 +750,7 @@
       // Make renderTarget position:relative so absolute children work
       renderTarget.style.position = 'relative';
       applyOverrides();
+      convertSvgTextToOverlays();
       renderAddedElements();
       renderConnectors();
       requestAnimationFrame(() => buildOverlayHandles());
@@ -813,6 +811,91 @@
       if (cls.includes('icon')) return 'icon';
       if (cls.includes('box') || cls.includes('card') || cls.includes('node')) return 'container';
       return 'text';
+    }
+
+    // ═══ SVG TEXT → HTML OVERLAY CONVERSION ═══
+    // Scans all SVG <text> elements in the rendered template,
+    // hides them, and creates HTML overlay divs that are draggable/editable.
+    // Applies to: bullseye numbers, flower labels, diagram text, step numbers, etc.
+    function convertSvgTextToOverlays() {
+      const svgTexts = renderTarget.querySelectorAll('svg text');
+      if (svgTexts.length === 0) return;
+
+      const containerRect = renderTarget.getBoundingClientRect();
+
+      svgTexts.forEach((textEl, idx) => {
+        // Skip if already hidden by a previous conversion or override
+        if (textEl.getAttribute('visibility') === 'hidden') return;
+        if (textEl.style.display === 'none') return;
+
+        // Read text content
+        const content = textEl.textContent.trim();
+        if (!content) return;
+
+        // Get position on screen relative to renderTarget
+        const textRect = textEl.getBoundingClientRect();
+        const x = textRect.left - containerRect.left;
+        const y = textRect.top - containerRect.top;
+        const w = Math.max(textRect.width, 20);
+        const h = Math.max(textRect.height, 16);
+
+        // Read styling from SVG text
+        const computed = window.getComputedStyle(textEl);
+        const fontSize = computed.fontSize || '14px';
+        const fontWeight = computed.fontWeight || '600';
+        const fontFamily = computed.fontFamily || 'var(--font-heading)';
+        const fill = textEl.getAttribute('fill') || computed.color || '#111827';
+        const textAnchor = textEl.getAttribute('text-anchor') || 'middle';
+        const alignMap = { start: 'left', middle: 'center', end: 'right' };
+        const textAlign = alignMap[textAnchor] || 'center';
+
+        // Generate a stable ID based on variant + item count + index
+        const overlayId = `svgtxt_${currentVariant}_${currentItemCount}_${idx}`;
+
+        // Check if there's already saved data for this overlay in addedElements
+        const key = configKey();
+        const added = addedElements[key];
+        let savedData = null;
+        if (added?.textboxes) {
+          savedData = added.textboxes.find(tb => tb.id === overlayId);
+        }
+
+        // Hide original SVG text
+        textEl.setAttribute('visibility', 'hidden');
+
+        // Create HTML overlay div
+        const div = document.createElement('div');
+        div.className = 'added-textbox svg-text-overlay';
+        div.dataset.addedId = overlayId;
+        div.dataset.svgTextIdx = idx;
+        div.textContent = savedData?.text || content;
+
+        const ox = savedData?.x ?? x;
+        const oy = savedData?.y ?? y;
+        const ow = savedData?.width ?? w + 8; // slight padding
+        const oh = savedData?.height ?? h + 4;
+        const oFontSize = savedData?.fontSize ?? fontSize;
+        const oFontWeight = savedData?.fontWeight ?? fontWeight;
+        const oFontFamily = savedData?.fontFamily ?? fontFamily;
+        const oColor = savedData?.color ?? fill;
+        const oTextAlign = savedData?.textAlign ?? textAlign;
+
+        div.style.cssText = `position:absolute; left:${ox}px; top:${oy}px; width:${ow}px; min-height:${oh}px; font-size:${oFontSize}; font-weight:${oFontWeight}; font-family:${oFontFamily}; color:${oColor}; text-align:${oTextAlign}; padding:2px 4px; cursor:move; background:transparent; border:1px dashed transparent; border-radius:2px; line-height:1.2; display:flex; align-items:center; justify-content:${oTextAlign === 'center' ? 'center' : oTextAlign === 'right' ? 'flex-end' : 'flex-start'};`;
+
+        renderTarget.appendChild(div);
+
+        // If no saved data yet, auto-save so it persists through re-renders
+        if (!savedData) {
+          ensureAdded().textboxes.push({
+            id: overlayId, text: content,
+            x: ox, y: oy, width: ow, height: oh,
+            fontSize: oFontSize, fontWeight: oFontWeight, fontFamily: oFontFamily,
+            color: oColor, textAlign: oTextAlign,
+            isSvgOverlay: true, svgTextIdx: idx,
+          });
+          saveAddedElements();
+        }
+      });
     }
 
     // ═══ OVERLAY HANDLES ═══
@@ -996,8 +1079,14 @@
 
       document.getElementById('propType').textContent = type;
       document.getElementById('propTag').textContent = `<${tag}> .${cls.split(' ').filter(c=>c).join('.')}`;
-      document.getElementById('propX').value = Math.round(rect.left - parentRect.left);
-      document.getElementById('propY').value = Math.round(rect.top - parentRect.top);
+      if (isSvgElement(el)) {
+        const t = getSvgTranslate(el);
+        document.getElementById('propX').value = Math.round(t.x);
+        document.getElementById('propY').value = Math.round(t.y);
+      } else {
+        document.getElementById('propX').value = Math.round(rect.left - parentRect.left);
+        document.getElementById('propY').value = Math.round(rect.top - parentRect.top);
+      }
       document.getElementById('propW').value = Math.round(rect.width);
       document.getElementById('propH').value = Math.round(rect.height);
 
@@ -1093,6 +1182,65 @@
 
     // ═══ PROPERTY CHANGE LISTENERS ═══
     function setupPropListeners() {
+      // ── Position & Size properties (work for SVG and HTML elements) ──
+      function applyPosition() {
+        if (!selectedElement) return;
+        pushUndo();
+        const x = parseFloat(document.getElementById('propX').value) || 0;
+        const y = parseFloat(document.getElementById('propY').value) || 0;
+        if (isSvgElement(selectedElement)) {
+          setSvgTranslate(selectedElement, x, y);
+        } else {
+          selectedElement.style.position = 'relative';
+          selectedElement.style.left = x + 'px';
+          selectedElement.style.top = y + 'px';
+        }
+        if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
+        else saveElementOverride(selectedElement);
+        requestAnimationFrame(() => buildOverlayHandles());
+      }
+      function applySize() {
+        if (!selectedElement) return;
+        pushUndo();
+        const w = parseFloat(document.getElementById('propW').value) || 0;
+        const h = parseFloat(document.getElementById('propH').value) || 0;
+        if (isSvgElement(selectedElement)) {
+          const tag = selectedElement.tagName.toLowerCase();
+          if (tag === 'circle') {
+            selectedElement.setAttribute('r', Math.min(w, h) / 2);
+          } else if (tag === 'ellipse') {
+            selectedElement.setAttribute('rx', w / 2);
+            selectedElement.setAttribute('ry', h / 2);
+          } else if (tag === 'rect' || tag === 'image') {
+            selectedElement.setAttribute('width', w);
+            selectedElement.setAttribute('height', h);
+          } else {
+            // For complex shapes (path, polygon, etc.), use scale transform
+            const origRect = selectedElement.getBoundingClientRect();
+            if (origRect.width > 0 && origRect.height > 0) {
+              const scaleX = w / origRect.width;
+              const scaleY = h / origRect.height;
+              let tr = selectedElement.getAttribute('transform') || '';
+              tr = tr.replace(/scale\([^)]*\)\s*/g, '').trim();
+              selectedElement.setAttribute('transform', tr + ` scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`);
+            }
+          }
+          saveElementOverride(selectedElement);
+        } else {
+          selectedElement.style.width = w + 'px';
+          selectedElement.style.height = h + 'px';
+          if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
+          else saveElementOverride(selectedElement);
+        }
+        requestAnimationFrame(() => buildOverlayHandles());
+      }
+      ['change','input'].forEach(evt => {
+        document.getElementById('propX').addEventListener(evt, applyPosition);
+        document.getElementById('propY').addEventListener(evt, applyPosition);
+        document.getElementById('propW').addEventListener(evt, applySize);
+        document.getElementById('propH').addEventListener(evt, applySize);
+      });
+
       // ── Text properties ──
       const textStyleProps = [
         { id:'propFontSize', style:'fontSize' },
@@ -1168,6 +1316,7 @@
           if (data) { data.fill = color; saveAddedElements(); }
         } else if (isSvgElement(selectedElement)) {
           selectedElement.setAttribute('fill', color);
+          selectedElement.style.fill = color;
           saveElementOverride(selectedElement);
         }
       }
@@ -1181,6 +1330,7 @@
           if (data) { data.stroke = color; saveAddedElements(); }
         } else if (isSvgElement(selectedElement)) {
           selectedElement.setAttribute('stroke', color);
+          selectedElement.style.stroke = color;
           saveElementOverride(selectedElement);
         }
       }
@@ -1224,6 +1374,7 @@
             if (data) { data.strokeWidth = parseFloat(w) || 1.5; saveAddedElements(); }
           } else if (isSvgElement(selectedElement)) {
             selectedElement.setAttribute('stroke-width', w);
+            selectedElement.style.strokeWidth = w;
             saveElementOverride(selectedElement);
           }
         });
@@ -1592,6 +1743,8 @@
       if (!added) return;
 
       (added.textboxes || []).forEach(tb => {
+        // Skip SVG text overlays — they're created by convertSvgTextToOverlays()
+        if (tb.isSvgOverlay) return;
         const div = document.createElement('div');
         div.className = 'added-textbox';
         div.dataset.addedId = tb.id;
@@ -1794,6 +1947,11 @@
     }
 
     // ═══ BUTTONS ═══
+
+    // Undo button
+    document.getElementById('undoBtn').addEventListener('click', () => popUndo());
+
+    // Save = draft autosave to localStorage (so you don't lose work mid-session)
     document.getElementById('saveBtn').addEventListener('click', () => {
       const key = configKey();
       configs[key] = {
@@ -1803,19 +1961,15 @@
         savedAt: new Date().toISOString(),
       };
       localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
-      updateStatusBadge();
+      updateDraftIndicator();
+      // Brief visual feedback
+      const btn = document.getElementById('saveBtn');
+      const orig = btn.textContent;
+      btn.textContent = 'Saved!';
+      setTimeout(() => btn.textContent = orig, 1200);
     });
-    document.getElementById('approveBtn').addEventListener('click', () => {
-      const key = configKey();
-      configs[key] = {
-        overrides: elementOverrides[key] || {},
-        added: addedElements[key] || {},
-        tone: currentTone, density: currentDensity,
-        approved: true, approvedAt: new Date().toISOString(),
-      };
-      localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
-      updateStatusBadge();
-    });
+
+    // Reset
     document.getElementById('resetBtn').addEventListener('click', () => {
       if (!confirm(`Reset all adjustments for "${currentVariant}" × ${currentItemCount}?`)) return;
       pushUndo();
@@ -1825,19 +1979,179 @@
       localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
       localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
       localStorage.setItem('igEditorAdded', JSON.stringify(addedElements));
+      updateDraftIndicator();
       renderAll();
     });
+
+    // Export = generate a real layout-configs.js file for the project
+    // This is the PRODUCTION save path. The downloaded file replaces v3/layout-configs.js
     document.getElementById('exportBtn').addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify({ configs, overrides: elementOverrides, added: addedElements, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = 'layout-configs.json'; a.click();
+      // Build the full LAYOUT_CONFIGS object from ALL saved configs
+      // First, make sure current layout is saved into configs
+      const key = configKey();
+      if (elementOverrides[key] || addedElements[key]) {
+        configs[key] = {
+          overrides: elementOverrides[key] || {},
+          added: addedElements[key] || {},
+          tone: currentTone, density: currentDensity,
+          savedAt: new Date().toISOString(),
+        };
+      }
+
+      // Also collect any other configs from localStorage that weren't touched this session
+      const allConfigs = { ...configs };
+
+      // Generate the JS module content
+      const configsJson = JSON.stringify(allConfigs, null, 2);
+
+      const fileContent = `/**
+ * Infogr.ai v3 — Layout Configuration Overrides
+ *
+ * AUTO-GENERATED by gallery-editor.html Export on ${new Date().toISOString()}
+ * Do NOT edit manually — use the editor, then re-export.
+ *
+ * Structure:
+ * {
+ *   "variant__itemCount": {
+ *     overrides: { "css-selector-path": { left, top, width, fontSize, ... } },
+ *     added: { textboxes: [...], icons: [...], connectors: [...], shapes: [...] },
+ *     savedAt: ISO string,
+ *   }
+ * }
+ */
+
+export const LAYOUT_CONFIGS = ${configsJson};
+
+/**
+ * Apply saved config overrides to a rendered HTML container.
+ * Call this after inserting rendered HTML into the DOM.
+ *
+ * @param {HTMLElement} container - The .ig-page element containing rendered output
+ * @param {string} variant - The variant name (e.g., 'bullseye', 'solid-boxes')
+ * @param {number} itemCount - Number of items rendered
+ */
+export function applyLayoutConfig(container, variant, itemCount) {
+  const key = \`\${variant}__\${itemCount}\`;
+  const cfg = LAYOUT_CONFIGS[key];
+  if (!cfg) return;
+
+  // Apply element overrides (position, font, size adjustments)
+  if (cfg.overrides) {
+    for (const [selector, props] of Object.entries(cfg.overrides)) {
+      try {
+        const el = container.querySelector(selector);
+        if (!el) continue;
+        for (const [prop, val] of Object.entries(props)) {
+          if (prop === 'textContent') {
+            el.textContent = val;
+          } else if (prop.startsWith('attr_')) {
+            el.setAttribute(prop.slice(5), val);
+          } else {
+            el.style[prop] = val;
+          }
+        }
+      } catch (e) {
+        // Selector may not match — silently skip
+      }
+    }
+  }
+
+  // Render added elements (text boxes, icons, shapes)
+  if (cfg.added) {
+    const parent = container;
+
+    (cfg.added.textboxes || []).forEach(tb => {
+      const div = document.createElement('div');
+      div.textContent = tb.text;
+      div.style.cssText = \`position:absolute; left:\${tb.x}px; top:\${tb.y}px; width:\${tb.width}px; min-height:\${tb.height}px; font-size:\${tb.fontSize}; font-weight:\${tb.fontWeight}; font-family:\${tb.fontFamily}; color:\${tb.color}; text-align:\${tb.textAlign}; padding:4px 6px;\`;
+      parent.appendChild(div);
     });
-    function updateStatusBadge() {
+
+    (cfg.added.icons || []).forEach(ic => {
+      const div = document.createElement('div');
+      div.innerHTML = \`<img src="" alt="" style="width:100%;height:100%;object-fit:contain;" data-icon="true">\`;
+      div.style.cssText = \`position:absolute; left:\${ic.x}px; top:\${ic.y}px; width:\${ic.width}px; height:\${ic.height}px;\`;
+      parent.appendChild(div);
+    });
+
+    (cfg.added.shapes || []).forEach(sh => {
+      const div = document.createElement('div');
+      div.style.cssText = \`position:absolute; left:\${sh.x}px; top:\${sh.y}px; width:\${sh.width}px; height:\${sh.height}px; background:\${sh.fill}; border:\${sh.strokeWidth}px solid \${sh.stroke}; border-radius:\${sh.borderRadius || 0}px;\`;
+      parent.appendChild(div);
+    });
+
+    // Render connectors as SVG overlay
+    if (cfg.added.connectors && cfg.added.connectors.length > 0) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;';
+      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+      marker.setAttribute('id', 'cfgArrow');
+      marker.setAttribute('markerWidth', '8');
+      marker.setAttribute('markerHeight', '6');
+      marker.setAttribute('refX', '7');
+      marker.setAttribute('refY', '3');
+      marker.setAttribute('orient', 'auto');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M0,0 L8,3 L0,6 Z');
+      path.setAttribute('fill', '#6b7280');
+      marker.appendChild(path);
+      defs.appendChild(marker);
+      svg.appendChild(defs);
+
+      cfg.added.connectors.forEach(cn => {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', cn.x1);
+        line.setAttribute('y1', cn.y1);
+        line.setAttribute('x2', cn.x2);
+        line.setAttribute('y2', cn.y2);
+        line.setAttribute('stroke', cn.stroke || '#6b7280');
+        line.setAttribute('stroke-width', cn.strokeWidth || 1.5);
+        line.style.stroke = cn.stroke || '#6b7280';
+        line.style.strokeWidth = cn.strokeWidth || 1.5;
+        if (cn.dashArray) {
+          line.setAttribute('stroke-dasharray', cn.dashArray);
+          line.style.strokeDasharray = cn.dashArray;
+        }
+        if (cn.arrowHead === 'end' || cn.arrowHead === 'both') {
+          line.setAttribute('marker-end', 'url(#cfgArrow)');
+        }
+        svg.appendChild(line);
+      });
+
+      parent.style.position = 'relative';
+      parent.appendChild(svg);
+    }
+  }
+}
+`;
+
+      const blob = new Blob([fileContent], { type: 'application/javascript' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'layout-configs.js';
+      a.click();
+
+      // Also save to localStorage as backup
+      localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
+
+      // Visual feedback
+      const btn = document.getElementById('exportBtn');
+      const orig = btn.textContent;
+      btn.textContent = 'Exported!';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+
+    function updateDraftIndicator() {
       const cfg = configs[configKey()];
-      const b = document.getElementById('statusBadge');
-      if (cfg?.approved) { b.className = 'status-badge approved'; b.textContent = 'Approved'; }
-      else if (cfg) { b.className = 'status-badge draft'; b.textContent = 'Saved'; }
-      else { b.className = 'status-badge draft'; b.textContent = 'Draft'; }
+      const el = document.getElementById('draftIndicator');
+      if (cfg?.savedAt) {
+        el.className = 'draft-indicator has-draft';
+        el.textContent = 'draft saved';
+      } else {
+        el.className = 'draft-indicator';
+        el.textContent = '';
+      }
     }
 
     // ═══ SHAPE LIBRARY ═══

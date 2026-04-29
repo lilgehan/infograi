@@ -245,6 +245,7 @@
   <script type="module">
     import { renderSection, BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS } from './v3/smart-layouts.js';
     import { renderDiagramSection, DIAGRAM_CSS } from './v3/smart-diagrams.js';
+    import { applyLayoutConfig } from './v3/layout-configs.js';
 
     // Inject all CSS into the page
     const styleEl = document.createElement('style');
@@ -527,6 +528,12 @@
             </div>
           `;
           grid.appendChild(card);
+
+          // Apply saved layout config overrides from layout-configs.js
+          const renderContainer = card.querySelector('.variant-render');
+          if (renderContainer) {
+            applyLayoutConfig(renderContainer, variant, count);
+          }
         }
       }
 
@@ -564,6 +571,8 @@
           // Re-render just this variant
           const renderDiv = card.querySelector('.variant-render');
           renderDiv.innerHTML = renderVariant(variant, familyName, familyInfo);
+          // Apply saved layout config overrides
+          applyLayoutConfig(renderDiv, variant, n);
         });
       });
 
@@ -588,6 +597,9 @@
         const renderDiv = card.querySelector('.variant-render');
         const familyInfo = FAMILIES[familyName];
         renderDiv.innerHTML = renderVariant(variant, familyName, familyInfo);
+        // Apply saved layout config overrides
+        const count = itemCounts[variant] ?? familyInfo.defaultItems;
+        applyLayoutConfig(renderDiv, variant, count);
       }
 
       // Attach arrangement handlers to initially-built buttons
