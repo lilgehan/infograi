@@ -572,14 +572,11 @@
     import { renderSection, BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS } from './v3/smart-layouts.js';
     import { renderDiagramSection, DIAGRAM_CSS } from './v3/smart-diagrams.js';
 
-    // Inject layout/diagram CSS
     const styleEl = document.createElement('style');
     styleEl.textContent = [BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS, DIAGRAM_CSS].join('\n');
     document.head.appendChild(styleEl);
 
-    // ════════════════════════════════════════════════════════════
-    // VARIANT REGISTRY (same as gallery.html)
-    // ════════════════════════════════════════════════════════════
+    // ═══ VARIANT REGISTRY ═══
     const FAMILIES = {
       'Boxes': { type:'layout', variants:['solid-boxes','solid-boxes-icons','outline-boxes','side-line','side-line-text','top-line-text','top-circle','joined-boxes','joined-boxes-icons','leaf-boxes','labeled-boxes','alternating-boxes'], defaultItems:4 },
       'Bullets': { type:'layout', variants:['large-bullets','small-bullets','arrow-bullets','process-steps','solid-box-small-bullets'], defaultItems:4 },
@@ -596,50 +593,68 @@
       'Business': { type:'diagram', variants:['swot','competitive-map','value-chain','bmc'], defaultItems:4 },
     };
 
-    // ════════════════════════════════════════════════════════════
-    // SAMPLE DATA
-    // ════════════════════════════════════════════════════════════
+    // ═══ SAMPLE DATA ═══
     const TITLES = ['Strategic Planning','Market Analysis','Innovation Hub','Customer Focus','Growth Engine','Data Insights','Team Building','Quality Control'];
     const BODIES = ['Drive organizational excellence through data-driven strategies','Analyze market trends and competitive landscapes','Foster breakthrough ideas and rapid prototyping','Deliver exceptional experiences at every touchpoint','Scale revenue through proven acquisition channels','Transform raw data into actionable intelligence','Build high-performing cross-functional teams','Ensure standards through systematic review'];
     const ICONS = ['rocket','chart-increasing','brain','target','star','shield','idea','gear'];
     const NUMS = ['87%','$2.4M','150+','99.9%','3.2x','45K','12','68%'];
-
     function makeItems(n) {
       return Array.from({length: n}, (_, i) => ({
-        title: TITLES[i % TITLES.length],
-        body: BODIES[i % BODIES.length],
-        icon: ICONS[i % ICONS.length],
-        number: NUMS[i % NUMS.length],
+        title: TITLES[i % TITLES.length], body: BODIES[i % BODIES.length],
+        icon: ICONS[i % ICONS.length], number: NUMS[i % NUMS.length],
       }));
     }
 
-    // ════════════════════════════════════════════════════════════
-    // STATE
-    // ════════════════════════════════════════════════════════════
+    // ═══ STATE ═══
     let currentVariant = 'bullseye';
     let currentItemCount = 4;
     let currentTone = 'professional';
     let currentDensity = 'standard';
     let selectedElement = null;
+    let selectedConnectorId = null; // tracks which added connector is selected
     let configs = JSON.parse(localStorage.getItem('igEditorConfigs') || '{}');
-    // Track added elements (text boxes, icons, connectors, shapes) per variant+count
     let addedElements = JSON.parse(localStorage.getItem('igEditorAdded') || '{}');
-    // Track element overrides (position/size/font adjustments)
     let elementOverrides = JSON.parse(localStorage.getItem('igEditorOverrides') || '{}');
 
-    function configKey() { return `${currentVariant}__${currentItemCount}`; }
+    // ═══ UNDO STACK ═══
+    const undoStack = [];
+    const MAX_UNDO = 40;
+    function pushUndo() {
+      undoStack.push({
+        added: JSON.parse(JSON.stringify(addedElements)),
+        overrides: JSON.parse(JSON.stringify(elementOverrides)),
+      });
+      if (undoStack.length > MAX_UNDO) undoStack.shift();
+    }
+    function popUndo() {
+      if (undoStack.length === 0) return;
+      const state = undoStack.pop();
+      addedElements = state.added;
+      elementOverrides = state.overrides;
+      localStorage.setItem('igEditorAdded', JSON.stringify(addedElements));
+      localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
+      renderAll();
+    }
 
-    // ════════════════════════════════════════════════════════════
-    // POPULATE VARIANT SELECT
-    // ════════════════════════════════════════════════════════════
+    function configKey() { return `${currentVariant}__${currentItemCount}`; }
+    function ensureAdded() {
+      const k = configKey();
+      if (!addedElements[k]) addedElements[k] = { textboxes:[], icons:[], connectors:[], shapes:[] };
+      return addedElements[k];
+    }
+
+    // ═══ HELPERS ═══
+    function findFamily(v) { for (const i of Object.values(FAMILIES)) if (i.variants.includes(v)) return i; return null; }
+    function findFamilyType(v) { const f = findFamily(v); return f ? f.type : 'layout'; }
+
+    // ═══ VARIANT SELECT ═══
     const variantSelect = document.getElementById('variantSelect');
     for (const [fam, info] of Object.entries(FAMILIES)) {
       const grp = document.createElement('optgroup');
       grp.label = `${fam} (${info.type})`;
       for (const v of info.variants) {
         const opt = document.createElement('option');
-        opt.value = v;
-        opt.textContent = v;
+        opt.value = v; opt.textContent = v;
         if (v === currentVariant) opt.selected = true;
         grp.appendChild(opt);
       }
@@ -647,26 +662,12 @@
     }
     variantSelect.addEventListener('change', () => {
       currentVariant = variantSelect.value;
-      // Reset item count to family default
       const fam = findFamily(currentVariant);
       if (fam) currentItemCount = fam.defaultItems;
       renderAll();
     });
 
-    function findFamily(variant) {
-      for (const info of Object.values(FAMILIES)) {
-        if (info.variants.includes(variant)) return info;
-      }
-      return null;
-    }
-    function findFamilyType(variant) {
-      const fam = findFamily(variant);
-      return fam ? fam.type : 'layout';
-    }
-
-    // ════════════════════════════════════════════════════════════
-    // ITEM COUNT PILLS
-    // ════════════════════════════════════════════════════════════
+    // ═══ ITEM PILLS ═══
     const itemPills = document.getElementById('itemPills');
     function buildItemPills() {
       itemPills.innerHTML = '';
@@ -674,100 +675,88 @@
         const btn = document.createElement('button');
         btn.className = 'item-pill' + (n === currentItemCount ? ' active' : '');
         btn.textContent = n;
-        btn.addEventListener('click', () => {
-          currentItemCount = n;
-          renderAll();
-        });
+        btn.addEventListener('click', () => { currentItemCount = n; renderAll(); });
         itemPills.appendChild(btn);
       }
     }
 
-    // ════════════════════════════════════════════════════════════
-    // TONE / DENSITY
-    // ════════════════════════════════════════════════════════════
-    document.getElementById('toneSelect').addEventListener('change', e => {
-      currentTone = e.target.value;
-      renderAll();
-    });
-    document.getElementById('densitySelect').addEventListener('change', e => {
-      currentDensity = e.target.value;
-      renderAll();
-    });
+    // ═══ TONE / DENSITY ═══
+    document.getElementById('toneSelect').addEventListener('change', e => { currentTone = e.target.value; renderAll(); });
+    document.getElementById('densitySelect').addEventListener('change', e => { currentDensity = e.target.value; renderAll(); });
 
-    // ════════════════════════════════════════════════════════════
-    // RENDER
-    // ════════════════════════════════════════════════════════════
+    // ═══ RENDER ═══
     const renderTarget = document.getElementById('renderTarget');
     const editorOverlay = document.getElementById('editorOverlay');
-    const connectorSvg = document.getElementById('connectorSvg');
 
     function renderAll() {
       buildItemPills();
       updateStatusBadge();
-
       const items = makeItems(currentItemCount);
       const section = { variant: currentVariant, items, columns: 3, style: currentDensity };
       const type = findFamilyType(currentVariant);
-
       let html;
       try {
-        if (type === 'diagram') {
-          html = renderDiagramSection(section, currentTone);
-          if (html === null) html = '<p style="color:#ef4444;">Diagram returned null</p>';
-        } else {
-          html = renderSection(section, currentTone);
-        }
-      } catch(e) {
-        html = `<p style="color:#ef4444;">Error: ${e.message}</p>`;
-      }
+        html = type === 'diagram'
+          ? (renderDiagramSection(section, currentTone) || '<p style="color:#ef4444;">Diagram returned null</p>')
+          : renderSection(section, currentTone);
+      } catch(e) { html = `<p style="color:#ef4444;">Error: ${e.message}</p>`; }
 
       renderTarget.innerHTML = html;
-
-      // Apply saved overrides
+      // Make renderTarget position:relative so absolute children work
+      renderTarget.style.position = 'relative';
       applyOverrides();
-
-      // Render added elements
       renderAddedElements();
-
-      // Render connectors
       renderConnectors();
-
-      // Build overlay handles
       requestAnimationFrame(() => buildOverlayHandles());
-
-      // Deselect
       selectElement(null);
     }
 
-    // ════════════════════════════════════════════════════════════
-    // OVERLAY HANDLES — clickable boxes over each element
-    // ════════════════════════════════════════════════════════════
+    // ═══ ELEMENT TYPE DETECTION ═══
+    function isSvgElement(el) {
+      const t = el.tagName.toLowerCase();
+      return ['svg','circle','ellipse','rect','polygon','path','line','polyline','g'].includes(t);
+    }
+    function isTextElement(el) {
+      if (isSvgElement(el)) return false;
+      if (el.tagName.toLowerCase() === 'img') return false;
+      return true;
+    }
+    function getElementType(el) {
+      const tag = el.tagName.toLowerCase();
+      const cls = (typeof el.className === 'string' ? el.className : el.className?.baseVal || '');
+      if (el.dataset?.addedId?.startsWith('cn_')) return 'connector';
+      if (tag === 'line' || cls.includes('connector-line')) return 'connector';
+      if (tag === 'img') return 'icon';
+      if (['circle','ellipse','rect','polygon','path','polyline'].includes(tag)) return 'shape';
+      if (cls.includes('added-textbox')) return 'textbox';
+      if (cls.includes('added-icon')) return 'icon';
+      if (cls.includes('added-shape')) return 'shape';
+      if (cls.includes('title') || cls.includes('num') || cls.includes('lbl')) return 'title';
+      if (cls.includes('body') || cls.includes('desc')) return 'body';
+      if (cls.includes('icon')) return 'icon';
+      if (cls.includes('box') || cls.includes('card') || cls.includes('node')) return 'container';
+      return 'text';
+    }
+
+    // ═══ OVERLAY HANDLES ═══
     let handles = [];
 
     function buildOverlayHandles() {
       editorOverlay.innerHTML = '';
       handles = [];
-
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
-      const targetRect = renderTarget.getBoundingClientRect();
-      const offsetX = targetRect.left - frameRect.left;
-      const offsetY = targetRect.top - frameRect.top;
 
-      // Find all selectable elements inside renderTarget
+      // Selectable elements — including SVG lines
       const selectors = [
-        // Text elements
         '.igs-title', '.igs-body', '.igs-number', '.igs-label',
         '.igd-title', '.igd-body', '.igd-label', '.igd-number',
         '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
         '.igs-dotline-label', '.igs-dotline-val',
-        // Icon elements
         'img[data-icon]', '.igs-icon', '.igd-icon',
-        // SVG shapes (inside the rendered output)
         'svg circle', 'svg ellipse', 'svg rect', 'svg polygon', 'svg path',
-        // Containers / cards
+        'svg line', 'svg polyline',
         '.igs-box', '.igs-dotgrid-card', '.igs-dotline-item',
         '.igd-node', '.igd-ring', '.igd-petal',
-        // Added elements
         '.added-textbox', '.added-icon', '.added-shape',
       ];
 
@@ -775,22 +764,27 @@
       const seen = new Set();
 
       elements.forEach((el, idx) => {
-        // Skip tiny or invisible elements
         const r = el.getBoundingClientRect();
-        if (r.width < 4 || r.height < 4) return;
+        // For lines, use a wider hit area
+        const isLine = el.tagName.toLowerCase() === 'line';
+        if (!isLine && (r.width < 4 || r.height < 4)) return;
+        if (isLine && r.width < 2 && r.height < 2) return;
 
-        // Avoid duplicate overlapping handles
-        const key = `${Math.round(r.left)}_${Math.round(r.top)}_${Math.round(r.width)}_${Math.round(r.height)}`;
+        // Make thin lines clickable with padding
+        const padX = isLine && r.width < 12 ? 6 : 0;
+        const padY = isLine && r.height < 12 ? 6 : 0;
+
+        const key = `${Math.round(r.left)}_${Math.round(r.top)}_${Math.round(r.width)}_${Math.round(r.height)}_${el.tagName}`;
         if (seen.has(key)) return;
         seen.add(key);
 
         const handle = document.createElement('div');
         handle.className = 'editor-handle';
         handle.dataset.idx = idx;
-        handle.style.left = (r.left - frameRect.left) + 'px';
-        handle.style.top = (r.top - frameRect.top) + 'px';
-        handle.style.width = r.width + 'px';
-        handle.style.height = r.height + 'px';
+        handle.style.left = (r.left - frameRect.left - padX) + 'px';
+        handle.style.top = (r.top - frameRect.top - padY) + 'px';
+        handle.style.width = (r.width + padX * 2) + 'px';
+        handle.style.height = (r.height + padY * 2) + 'px';
 
         // Resize dots
         ['nw','ne','sw','se'].forEach(corner => {
@@ -802,31 +796,17 @@
 
         handle.addEventListener('mousedown', (e) => {
           if (e.target.classList.contains('resize-dot')) {
+            pushUndo();
             startResize(e, el, handle, e.target.dataset.corner);
           } else {
             selectElement(el, handle);
+            pushUndo();
             startDrag(e, el, handle);
           }
         });
 
         handle.addEventListener('dblclick', () => {
-          // Enable inline text editing
-          if (isTextElement(el)) {
-            el.contentEditable = 'true';
-            el.focus();
-            el.style.outline = '2px solid var(--accent)';
-            el.style.outlineOffset = '2px';
-            const done = () => {
-              el.contentEditable = 'false';
-              el.style.outline = '';
-              el.style.outlineOffset = '';
-              saveTextOverride(el);
-            };
-            el.addEventListener('blur', done, { once: true });
-            el.addEventListener('keydown', (ke) => {
-              if (ke.key === 'Escape' || ke.key === 'Enter') { ke.preventDefault(); el.blur(); }
-            });
-          }
+          if (isTextElement(el)) startInlineEdit(el);
         });
 
         editorOverlay.appendChild(handle);
@@ -834,32 +814,43 @@
       });
     }
 
-    function isTextElement(el) {
-      const tag = el.tagName.toLowerCase();
-      if (tag === 'svg' || tag === 'circle' || tag === 'rect' || tag === 'path' || tag === 'ellipse' || tag === 'polygon' || tag === 'line') return false;
-      if (tag === 'img') return false;
-      return true;
+    // ═══ INLINE TEXT EDITING ═══
+    function startInlineEdit(el) {
+      // Temporarily hide overlay so user can type
+      editorOverlay.style.display = 'none';
+      el.contentEditable = 'true';
+      el.focus();
+      el.style.outline = '2px solid var(--accent)';
+      el.style.outlineOffset = '2px';
+      el.style.zIndex = '20';
+      // Select all text
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      const finish = () => {
+        el.contentEditable = 'false';
+        el.style.outline = '';
+        el.style.outlineOffset = '';
+        el.style.zIndex = '';
+        editorOverlay.style.display = '';
+        pushUndo();
+        saveTextOverride(el);
+        requestAnimationFrame(() => buildOverlayHandles());
+      };
+      el.addEventListener('blur', finish, { once: true });
+      el.addEventListener('keydown', (ke) => {
+        if (ke.key === 'Escape') { ke.preventDefault(); el.blur(); }
+        if (ke.key === 'Enter' && !ke.shiftKey) { ke.preventDefault(); el.blur(); }
+      });
     }
 
-    function getElementType(el) {
-      const tag = el.tagName.toLowerCase();
-      const cls = el.className || '';
-      if (tag === 'img') return 'icon';
-      if (['circle','ellipse','rect','polygon','path'].includes(tag)) return 'shape';
-      if (tag === 'line') return 'connector';
-      if (cls.includes('title') || cls.includes('num') || cls.includes('lbl')) return 'title';
-      if (cls.includes('body') || cls.includes('desc')) return 'body';
-      if (cls.includes('icon')) return 'icon';
-      if (cls.includes('box') || cls.includes('card') || cls.includes('node')) return 'container';
-      return 'text';
-    }
-
-    // ════════════════════════════════════════════════════════════
-    // SELECTION
-    // ════════════════════════════════════════════════════════════
+    // ═══ SELECTION ═══
     function selectElement(el, handle) {
-      // Deselect previous
       handles.forEach(h => h.handle.classList.remove('selected'));
+      selectedConnectorId = null;
 
       if (!el) {
         selectedElement = null;
@@ -867,205 +858,239 @@
         document.getElementById('noSelectionMsg').style.display = 'block';
         return;
       }
-
       selectedElement = el;
       if (handle) handle.classList.add('selected');
 
+      // Track connector selection
+      if (el.dataset?.addedId?.startsWith('cn_')) selectedConnectorId = el.dataset.addedId;
+
       document.getElementById('noSelectionMsg').style.display = 'none';
       document.getElementById('propsContainer').style.display = 'block';
-
       populateProps(el);
     }
 
-    // ════════════════════════════════════════════════════════════
-    // PROPERTIES PANEL
-    // ════════════════════════════════════════════════════════════
+    // ═══ PROPERTIES PANEL ═══
     function populateProps(el) {
       const type = getElementType(el);
       const tag = el.tagName.toLowerCase();
-      const computed = window.getComputedStyle(el);
+      const cls = typeof el.className === 'string' ? el.className : (el.className?.baseVal || '');
       const rect = el.getBoundingClientRect();
       const parentRect = renderTarget.getBoundingClientRect();
 
       document.getElementById('propType').textContent = type;
-      document.getElementById('propTag').textContent = `<${tag}> .${(el.className || '').toString().split(' ').filter(c=>c).join('.')}`;
-
-      // Position
+      document.getElementById('propTag').textContent = `<${tag}> .${cls.split(' ').filter(c=>c).join('.')}`;
       document.getElementById('propX').value = Math.round(rect.left - parentRect.left);
       document.getElementById('propY').value = Math.round(rect.top - parentRect.top);
       document.getElementById('propW').value = Math.round(rect.width);
       document.getElementById('propH').value = Math.round(rect.height);
 
-      // Show/hide sections
       const isText = isTextElement(el);
       const isShape = type === 'shape';
-      const isConnector = type === 'connector' || el.classList.contains('connector-line');
+      const isConn = type === 'connector';
 
       document.getElementById('textSection').style.display = isText ? 'block' : 'none';
       document.getElementById('shapeSection').style.display = isShape ? 'block' : 'none';
-      document.getElementById('connectorSection').style.display = isConnector ? 'block' : 'none';
+      document.getElementById('connectorSection').style.display = isConn ? 'block' : 'none';
 
       if (isText) {
+        const computed = window.getComputedStyle(el);
         document.getElementById('propFontSize').value = computed.fontSize;
         document.getElementById('propFontWeight').value = computed.fontWeight;
         document.getElementById('propColor').value = computed.color;
         document.getElementById('propTextAlign').value = computed.textAlign;
         document.getElementById('propMaxWidth').value = computed.maxWidth;
-        // Try to match font family
         const ff = computed.fontFamily;
-        if (ff.includes('Space Grotesk')) document.getElementById('propFontFamily').value = 'var(--font-heading)';
-        else if (ff.includes('Jakarta')) document.getElementById('propFontFamily').value = 'var(--font-body)';
-        else document.getElementById('propFontFamily').value = 'var(--font-body)';
+        document.getElementById('propFontFamily').value =
+          ff.includes('Space Grotesk') ? 'var(--font-heading)' :
+          ff.includes('monospace') ? 'monospace' : 'var(--font-body)';
       }
-
       if (isShape) {
         document.getElementById('propFill').value = el.getAttribute('fill') || '';
         document.getElementById('propStroke').value = el.getAttribute('stroke') || '';
         document.getElementById('propStrokeWidth').value = el.getAttribute('stroke-width') || '';
       }
+      if (isConn) {
+        // Populate from connector data if it's an added connector
+        const cn = findConnectorData(el);
+        if (cn) {
+          document.getElementById('propLineColor').value = cn.stroke || '#6b7280';
+          document.getElementById('propLineWidth').value = cn.strokeWidth || 1.5;
+          document.getElementById('propArrowHead').value = cn.arrowHead || 'none';
+          const da = cn.dashArray || '';
+          document.getElementById('propLineStyle').value =
+            da.includes('8') ? 'dashed' : da.includes('3') ? 'dotted' : 'solid';
+        } else {
+          // Existing SVG line from the render
+          document.getElementById('propLineColor').value = el.getAttribute('stroke') || '#6b7280';
+          document.getElementById('propLineWidth').value = el.getAttribute('stroke-width') || 1;
+          document.getElementById('propArrowHead').value = el.getAttribute('marker-end') ? 'end' : 'none';
+          const da = el.getAttribute('stroke-dasharray') || '';
+          document.getElementById('propLineStyle').value =
+            da.includes('8') ? 'dashed' : da.includes('3') ? 'dotted' : 'solid';
+        }
+      }
     }
 
-    // ════════════════════════════════════════════════════════════
-    // APPLY PROPERTY CHANGES (live)
-    // ════════════════════════════════════════════════════════════
+    function findConnectorData(el) {
+      const id = el.dataset?.addedId;
+      if (!id) return null;
+      const key = configKey();
+      const added = addedElements[key];
+      if (!added?.connectors) return null;
+      return added.connectors.find(c => c.id === id) || null;
+    }
+
+    // ═══ PROPERTY CHANGE LISTENERS ═══
     function setupPropListeners() {
-      // Text properties
+      // Text properties — apply immediately
       const textProps = [
-        { id: 'propFontSize', style: 'fontSize' },
-        { id: 'propFontWeight', style: 'fontWeight' },
-        { id: 'propFontFamily', style: 'fontFamily' },
-        { id: 'propColor', style: 'color' },
-        { id: 'propTextAlign', style: 'textAlign' },
-        { id: 'propMaxWidth', style: 'maxWidth' },
+        { id:'propFontSize', style:'fontSize' },
+        { id:'propFontWeight', style:'fontWeight' },
+        { id:'propFontFamily', style:'fontFamily' },
+        { id:'propColor', style:'color' },
+        { id:'propTextAlign', style:'textAlign' },
+        { id:'propMaxWidth', style:'maxWidth' },
       ];
-
       textProps.forEach(({ id, style }) => {
-        document.getElementById(id).addEventListener('change', () => {
-          if (!selectedElement || !isTextElement(selectedElement)) return;
-          const val = document.getElementById(id).value;
-          selectedElement.style[style] = val;
-          saveElementOverride(selectedElement);
+        const el = document.getElementById(id);
+        // Use both input and change events for responsiveness
+        ['change','input'].forEach(evt => {
+          el.addEventListener(evt, () => {
+            if (!selectedElement || !isTextElement(selectedElement)) return;
+            pushUndo();
+            selectedElement.style[style] = el.value;
+            saveElementOverride(selectedElement);
+            requestAnimationFrame(() => buildOverlayHandles());
+          });
         });
       });
 
-      // Shape properties
-      ['propFill','propStroke','propStrokeWidth'].forEach(id => {
-        document.getElementById(id).addEventListener('change', () => {
-          if (!selectedElement) return;
-          const val = document.getElementById(id).value;
-          if (id === 'propFill') selectedElement.setAttribute('fill', val);
-          if (id === 'propStroke') selectedElement.setAttribute('stroke', val);
-          if (id === 'propStrokeWidth') selectedElement.setAttribute('stroke-width', val);
-          saveElementOverride(selectedElement);
+      // Shape properties — apply to SVG attributes
+      const shapeProps = [
+        { id:'propFill', attr:'fill' },
+        { id:'propStroke', attr:'stroke' },
+        { id:'propStrokeWidth', attr:'stroke-width' },
+      ];
+      shapeProps.forEach(({ id, attr }) => {
+        const el = document.getElementById(id);
+        ['change','input'].forEach(evt => {
+          el.addEventListener(evt, () => {
+            if (!selectedElement) return;
+            const type = getElementType(selectedElement);
+            if (type !== 'shape') return;
+            pushUndo();
+            selectedElement.setAttribute(attr, el.value);
+            saveElementOverride(selectedElement);
+          });
         });
       });
 
-      // Position/size
-      ['propX','propY','propW','propH'].forEach(id => {
-        document.getElementById(id).addEventListener('change', () => {
-          if (!selectedElement) return;
-          const x = parseInt(document.getElementById('propX').value);
-          const y = parseInt(document.getElementById('propY').value);
-          const w = parseInt(document.getElementById('propW').value);
-          const h = parseInt(document.getElementById('propH').value);
-          selectedElement.style.position = 'relative';
-          selectedElement.style.left = x + 'px';
-          selectedElement.style.top = y + 'px';
-          if (w) selectedElement.style.width = w + 'px';
-          if (h) selectedElement.style.height = h + 'px';
-          saveElementOverride(selectedElement);
-          requestAnimationFrame(() => buildOverlayHandles());
-        });
-      });
-
-      // Connector properties
-      ['propLineStyle','propArrowHead','propLineColor','propLineWidth'].forEach(id => {
-        document.getElementById(id).addEventListener('change', () => {
-          if (!selectedElement) return;
-          // Connector changes handled in connector system
-          saveConnectorOverride(selectedElement);
-        });
-      });
+      // Connector properties — apply to SVG line AND update data
+      document.getElementById('propLineColor').addEventListener('change', applyConnectorProps);
+      document.getElementById('propLineColor').addEventListener('input', applyConnectorProps);
+      document.getElementById('propLineWidth').addEventListener('change', applyConnectorProps);
+      document.getElementById('propLineWidth').addEventListener('input', applyConnectorProps);
+      document.getElementById('propLineStyle').addEventListener('change', applyConnectorProps);
+      document.getElementById('propArrowHead').addEventListener('change', applyConnectorProps);
     }
 
-    // ════════════════════════════════════════════════════════════
-    // DRAG TO MOVE
-    // ════════════════════════════════════════════════════════════
-    let dragState = null;
+    function applyConnectorProps() {
+      if (!selectedElement) return;
+      const type = getElementType(selectedElement);
+      if (type !== 'connector') return;
+      pushUndo();
 
+      const color = document.getElementById('propLineColor').value;
+      const width = document.getElementById('propLineWidth').value;
+      const style = document.getElementById('propLineStyle').value;
+      const arrow = document.getElementById('propArrowHead').value;
+
+      // Compute dash array
+      const dashMap = { solid: '', dashed: '8,4', dotted: '3,3' };
+      const dashArray = dashMap[style] || '';
+
+      // Apply to the SVG element directly
+      selectedElement.setAttribute('stroke', color);
+      selectedElement.setAttribute('stroke-width', width);
+      if (dashArray) selectedElement.setAttribute('stroke-dasharray', dashArray);
+      else selectedElement.removeAttribute('stroke-dasharray');
+
+      // Arrow markers
+      if (arrow === 'end' || arrow === 'both') selectedElement.setAttribute('marker-end', 'url(#arrowHead)');
+      else selectedElement.removeAttribute('marker-end');
+      if (arrow === 'start' || arrow === 'both') selectedElement.setAttribute('marker-start', 'url(#arrowHead)');
+      else selectedElement.removeAttribute('marker-start');
+
+      // Update the connector data if it's an added connector
+      const cn = findConnectorData(selectedElement);
+      if (cn) {
+        cn.stroke = color;
+        cn.strokeWidth = parseFloat(width) || 1.5;
+        cn.dashArray = dashArray;
+        cn.arrowHead = arrow;
+        saveAddedElements();
+      } else {
+        // It's an existing SVG line — save as element override
+        saveElementOverride(selectedElement);
+      }
+    }
+
+    // ═══ DRAG TO MOVE ═══
+    let dragState = null;
     function startDrag(e, el, handle) {
       e.preventDefault();
-      const startX = e.clientX;
-      const startY = e.clientY;
-      const origLeft = parseFloat(el.style.left) || 0;
-      const origTop = parseFloat(el.style.top) || 0;
-
-      dragState = { el, handle, startX, startY, origLeft, origTop };
-
+      dragState = {
+        el, handle,
+        startX: e.clientX, startY: e.clientY,
+        origLeft: parseFloat(el.style.left) || 0,
+        origTop: parseFloat(el.style.top) || 0,
+      };
       document.addEventListener('mousemove', onDrag);
       document.addEventListener('mouseup', endDrag);
     }
-
     function onDrag(e) {
       if (!dragState) return;
       const dx = e.clientX - dragState.startX;
       const dy = e.clientY - dragState.startY;
-
       dragState.el.style.position = 'relative';
       dragState.el.style.left = (dragState.origLeft + dx) + 'px';
       dragState.el.style.top = (dragState.origTop + dy) + 'px';
-
-      // Move handle too
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const r = dragState.el.getBoundingClientRect();
       dragState.handle.style.left = (r.left - frameRect.left) + 'px';
       dragState.handle.style.top = (r.top - frameRect.top) + 'px';
     }
-
     function endDrag() {
-      if (dragState) {
-        saveElementOverride(dragState.el);
-        dragState = null;
-      }
+      if (dragState) { saveElementOverride(dragState.el); dragState = null; }
       document.removeEventListener('mousemove', onDrag);
       document.removeEventListener('mouseup', endDrag);
     }
 
-    // ════════════════════════════════════════════════════════════
-    // RESIZE
-    // ════════════════════════════════════════════════════════════
+    // ═══ RESIZE ═══
     let resizeState = null;
-
     function startResize(e, el, handle, corner) {
-      e.preventDefault();
-      e.stopPropagation();
-      const startX = e.clientX;
-      const startY = e.clientY;
-      const rect = el.getBoundingClientRect();
-
-      resizeState = { el, handle, corner, startX, startY, origW: rect.width, origH: rect.height };
-
+      e.preventDefault(); e.stopPropagation();
+      resizeState = {
+        el, handle, corner,
+        startX: e.clientX, startY: e.clientY,
+        origW: el.getBoundingClientRect().width,
+        origH: el.getBoundingClientRect().height,
+      };
       document.addEventListener('mousemove', onResize);
       document.addEventListener('mouseup', endResize);
     }
-
     function onResize(e) {
       if (!resizeState) return;
       const dx = e.clientX - resizeState.startX;
       const dy = e.clientY - resizeState.startY;
-      let newW = resizeState.origW;
-      let newH = resizeState.origH;
-
-      if (resizeState.corner.includes('e')) newW += dx;
-      if (resizeState.corner.includes('w')) newW -= dx;
-      if (resizeState.corner.includes('s')) newH += dy;
-      if (resizeState.corner.includes('n')) newH -= dy;
-
-      resizeState.el.style.width = Math.max(20, newW) + 'px';
-      resizeState.el.style.height = Math.max(10, newH) + 'px';
+      let w = resizeState.origW, h = resizeState.origH;
+      if (resizeState.corner.includes('e')) w += dx;
+      if (resizeState.corner.includes('w')) w -= dx;
+      if (resizeState.corner.includes('s')) h += dy;
+      if (resizeState.corner.includes('n')) h -= dy;
+      resizeState.el.style.width = Math.max(20, w) + 'px';
+      resizeState.el.style.height = Math.max(10, h) + 'px';
       resizeState.el.style.overflow = 'hidden';
-
-      // Update handle
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const r = resizeState.el.getBoundingClientRect();
       resizeState.handle.style.left = (r.left - frameRect.left) + 'px';
@@ -1073,76 +1098,52 @@
       resizeState.handle.style.width = r.width + 'px';
       resizeState.handle.style.height = r.height + 'px';
     }
-
     function endResize() {
-      if (resizeState) {
-        saveElementOverride(resizeState.el);
-        populateProps(resizeState.el);
-        resizeState = null;
-      }
+      if (resizeState) { saveElementOverride(resizeState.el); populateProps(resizeState.el); resizeState = null; }
       document.removeEventListener('mousemove', onResize);
       document.removeEventListener('mouseup', endResize);
     }
 
-    // ════════════════════════════════════════════════════════════
-    // ADD TEXT BOX
-    // ════════════════════════════════════════════════════════════
+    // ═══ ADD ELEMENTS ═══
     document.getElementById('addTextBtn').addEventListener('click', () => {
-      const key = configKey();
-      if (!addedElements[key]) addedElements[key] = { textboxes: [], icons: [], connectors: [], shapes: [] };
-      addedElements[key].textboxes.push({
-        id: 'tb_' + Date.now(),
-        text: 'New text box',
+      pushUndo();
+      ensureAdded().textboxes.push({
+        id: 'tb_' + Date.now(), text: 'New text box',
         x: 50, y: 50, width: 140, height: 32,
         fontSize: '0.85em', fontWeight: '500', fontFamily: 'var(--font-body)',
         color: '#111827', textAlign: 'left',
       });
-      saveAddedElements();
-      renderAll();
+      saveAddedElements(); renderAll();
     });
-
-    // ════════════════════════════════════════════════════════════
-    // ADD ICON BOX
-    // ════════════════════════════════════════════════════════════
     document.getElementById('addIconBtn').addEventListener('click', () => {
-      const key = configKey();
-      if (!addedElements[key]) addedElements[key] = { textboxes: [], icons: [], connectors: [], shapes: [] };
-      addedElements[key].icons.push({
-        id: 'ic_' + Date.now(),
-        icon: 'star',
+      pushUndo();
+      ensureAdded().icons.push({
+        id: 'ic_' + Date.now(), icon: 'star',
         x: 80, y: 80, width: 36, height: 36,
       });
-      saveAddedElements();
-      renderAll();
+      saveAddedElements(); renderAll();
     });
-
-    // ════════════════════════════════════════════════════════════
-    // ADD SHAPE
-    // ════════════════════════════════════════════════════════════
     document.getElementById('addShapeBtn').addEventListener('click', () => {
-      const key = configKey();
-      if (!addedElements[key]) addedElements[key] = { textboxes: [], icons: [], connectors: [], shapes: [] };
-      addedElements[key].shapes.push({
-        id: 'sh_' + Date.now(),
-        type: 'rect',
+      pushUndo();
+      ensureAdded().shapes.push({
+        id: 'sh_' + Date.now(), type: 'rect',
         x: 100, y: 100, width: 80, height: 60,
-        fill: 'var(--accent-soft)', stroke: 'var(--accent)', strokeWidth: 1.5,
-        borderRadius: 8,
+        fill: 'rgba(37,99,235,0.1)', stroke: 'var(--accent)', strokeWidth: 1.5, borderRadius: 8,
       });
-      saveAddedElements();
-      renderAll();
+      saveAddedElements(); renderAll();
     });
 
-    // ════════════════════════════════════════════════════════════
-    // DRAW CONNECTOR LINE
-    // ════════════════════════════════════════════════════════════
+    // ═══ DRAW CONNECTOR — now supports line (no arrow) by default ═══
     let drawingLine = false;
     let lineStart = null;
+    let lineType = 'line'; // 'line' or 'arrow'
 
-    document.getElementById('addLineBtn').addEventListener('click', () => {
+    document.getElementById('addLineBtn').addEventListener('click', (e) => {
+      // Toggle between line and arrow mode with Shift key
+      lineType = e.shiftKey ? 'arrow' : 'line';
       drawingLine = true;
       document.getElementById('editorCanvas').style.cursor = 'crosshair';
-      // Wait for two clicks on the canvas
+      document.getElementById('addLineBtn').textContent = lineType === 'arrow' ? '+ Arrow (click 2 pts)' : '+ Line (click 2 pts)';
     });
 
     document.getElementById('canvasFrame').addEventListener('click', (e) => {
@@ -1150,45 +1151,59 @@
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const x = e.clientX - frameRect.left;
       const y = e.clientY - frameRect.top;
-
       if (!lineStart) {
         lineStart = { x, y };
       } else {
-        // Second click — create the connector
-        const key = configKey();
-        if (!addedElements[key]) addedElements[key] = { textboxes: [], icons: [], connectors: [], shapes: [] };
-        addedElements[key].connectors.push({
+        pushUndo();
+        ensureAdded().connectors.push({
           id: 'cn_' + Date.now(),
-          x1: lineStart.x, y1: lineStart.y,
-          x2: x, y2: y,
-          stroke: '#6b7280', strokeWidth: 1.5,
-          dashArray: '',
-          arrowHead: 'end',
+          x1: lineStart.x, y1: lineStart.y, x2: x, y2: y,
+          stroke: '#6b7280', strokeWidth: 1.5, dashArray: '',
+          arrowHead: lineType === 'arrow' ? 'end' : 'none',
         });
-        lineStart = null;
-        drawingLine = false;
+        lineStart = null; drawingLine = false;
         document.getElementById('editorCanvas').style.cursor = '';
-        saveAddedElements();
-        renderAll();
+        document.getElementById('addLineBtn').textContent = '+ Line';
+        saveAddedElements(); renderAll();
       }
     });
 
-    // ESC cancels line drawing
+    // ═══ KEYBOARD SHORTCUTS ═══
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        drawingLine = false;
-        lineStart = null;
-        document.getElementById('editorCanvas').style.cursor = '';
+      // Undo: Ctrl+Z / Cmd+Z
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        popUndo();
+        return;
       }
-      // Delete selected element
+      // ESC: cancel line drawing or deselect
+      if (e.key === 'Escape') {
+        drawingLine = false; lineStart = null;
+        document.getElementById('editorCanvas').style.cursor = '';
+        document.getElementById('addLineBtn').textContent = '+ Line';
+        selectElement(null);
+        return;
+      }
+      // Don't handle keys if we're editing text
+      if (document.activeElement?.contentEditable === 'true') return;
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'SELECT') return;
+
+      // Delete: remove selected added element OR connector
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedElement && selectedElement.dataset && selectedElement.dataset.addedId) {
-          removeAddedElement(selectedElement.dataset.addedId);
+        if (selectedElement) {
+          const addedId = selectedElement.dataset?.addedId;
+          if (addedId) {
+            e.preventDefault();
+            pushUndo();
+            removeAddedElement(addedId);
+            return;
+          }
         }
       }
-      // Nudge with arrow keys
+      // Arrow keys: nudge selected element
       if (selectedElement && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
         e.preventDefault();
+        pushUndo();
         const step = e.shiftKey ? 10 : 1;
         const left = parseFloat(selectedElement.style.left) || 0;
         const top = parseFloat(selectedElement.style.top) || 0;
@@ -1202,15 +1217,12 @@
       }
     });
 
-    // ════════════════════════════════════════════════════════════
-    // RENDER ADDED ELEMENTS (text boxes, icons, shapes on canvas)
-    // ════════════════════════════════════════════════════════════
+    // ═══ RENDER ADDED ELEMENTS ═══
     function renderAddedElements() {
       const key = configKey();
       const added = addedElements[key];
       if (!added) return;
 
-      // Text boxes
       (added.textboxes || []).forEach(tb => {
         const div = document.createElement('div');
         div.className = 'added-textbox';
@@ -1219,8 +1231,6 @@
         div.style.cssText = `position:absolute; left:${tb.x}px; top:${tb.y}px; width:${tb.width}px; min-height:${tb.height}px; font-size:${tb.fontSize}; font-weight:${tb.fontWeight}; font-family:${tb.fontFamily}; color:${tb.color}; text-align:${tb.textAlign}; padding:4px 6px; border:1px dashed #d1d5db; border-radius:4px; cursor:move; background:rgba(255,255,255,0.8);`;
         renderTarget.appendChild(div);
       });
-
-      // Icons
       (added.icons || []).forEach(ic => {
         const div = document.createElement('div');
         div.className = 'added-icon';
@@ -1229,67 +1239,51 @@
         div.style.cssText = `position:absolute; left:${ic.x}px; top:${ic.y}px; width:${ic.width}px; height:${ic.height}px; border:1px dashed #d1d5db; border-radius:4px; cursor:move; background:rgba(255,255,255,0.8); display:flex; align-items:center; justify-content:center;`;
         renderTarget.appendChild(div);
       });
-
-      // Shapes
       (added.shapes || []).forEach(sh => {
         const div = document.createElement('div');
         div.className = 'added-shape';
         div.dataset.addedId = sh.id;
-        div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; background:${sh.fill}; border:${sh.strokeWidth}px solid ${sh.stroke}; border-radius:${sh.borderRadius || 0}px; cursor:move;`;
+        div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; background:${sh.fill}; border:${sh.strokeWidth}px solid ${sh.stroke}; border-radius:${sh.borderRadius||0}px; cursor:move;`;
         renderTarget.appendChild(div);
       });
     }
 
-    // ════════════════════════════════════════════════════════════
-    // RENDER CONNECTORS (SVG lines)
-    // ════════════════════════════════════════════════════════════
+    // ═══ RENDER CONNECTORS ═══
     function renderConnectors() {
-      // Clear existing
       const svg = document.getElementById('connectorSvg');
       const defs = svg.querySelector('defs');
       svg.innerHTML = '';
       svg.appendChild(defs);
-
       const key = configKey();
       const added = addedElements[key];
-      if (!added || !added.connectors) return;
+      if (!added?.connectors) return;
 
       added.connectors.forEach(cn => {
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', cn.x1);
-        line.setAttribute('y1', cn.y1);
-        line.setAttribute('x2', cn.x2);
-        line.setAttribute('y2', cn.y2);
+        line.setAttribute('x1', cn.x1); line.setAttribute('y1', cn.y1);
+        line.setAttribute('x2', cn.x2); line.setAttribute('y2', cn.y2);
         line.setAttribute('stroke', cn.stroke || '#6b7280');
         line.setAttribute('stroke-width', cn.strokeWidth || 1.5);
         if (cn.dashArray) line.setAttribute('stroke-dasharray', cn.dashArray);
-        if (cn.arrowHead === 'end' || cn.arrowHead === 'both') {
-          line.setAttribute('marker-end', 'url(#arrowHead)');
-        }
-        if (cn.arrowHead === 'start' || cn.arrowHead === 'both') {
-          line.setAttribute('marker-start', 'url(#arrowHead)');
-        }
+        if (cn.arrowHead === 'end' || cn.arrowHead === 'both') line.setAttribute('marker-end', 'url(#arrowHead)');
+        if (cn.arrowHead === 'start' || cn.arrowHead === 'both') line.setAttribute('marker-start', 'url(#arrowHead)');
         line.classList.add('connector-line');
         line.dataset.addedId = cn.id;
 
-        // Click to select connector
         line.addEventListener('mousedown', (e) => {
           e.stopPropagation();
           selectElement(line, null);
           startConnectorDrag(e, cn, line);
         });
-
         svg.appendChild(line);
       });
     }
 
-    // Drag connector endpoints
     function startConnectorDrag(e, cn, lineEl) {
+      pushUndo();
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const mx = e.clientX - frameRect.left;
       const my = e.clientY - frameRect.top;
-
-      // Determine which endpoint is closer
       const d1 = Math.hypot(mx - cn.x1, my - cn.y1);
       const d2 = Math.hypot(mx - cn.x2, my - cn.y2);
       const endpoint = d1 < d2 ? 'start' : 'end';
@@ -1297,72 +1291,54 @@
       const onMove = (me) => {
         const x = me.clientX - frameRect.left;
         const y = me.clientY - frameRect.top;
-        if (endpoint === 'start') {
-          cn.x1 = x; cn.y1 = y;
-          lineEl.setAttribute('x1', x);
-          lineEl.setAttribute('y1', y);
-        } else {
-          cn.x2 = x; cn.y2 = y;
-          lineEl.setAttribute('x2', x);
-          lineEl.setAttribute('y2', y);
-        }
+        if (endpoint === 'start') { cn.x1 = x; cn.y1 = y; lineEl.setAttribute('x1', x); lineEl.setAttribute('y1', y); }
+        else { cn.x2 = x; cn.y2 = y; lineEl.setAttribute('x2', x); lineEl.setAttribute('y2', y); }
       };
-
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         saveAddedElements();
       };
-
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     }
 
-    // ════════════════════════════════════════════════════════════
-    // SAVE / LOAD
-    // ════════════════════════════════════════════════════════════
+    // ═══ SAVE / LOAD ═══
     function getElementPath(el) {
-      // Create a stable selector path for the element
       const parts = [];
       let node = el;
       while (node && node !== renderTarget) {
         const parent = node.parentElement;
         if (!parent) break;
-        const siblings = Array.from(parent.children);
-        const idx = siblings.indexOf(node);
-        const tag = node.tagName.toLowerCase();
-        parts.unshift(`${tag}:nth-child(${idx + 1})`);
+        const idx = Array.from(parent.children).indexOf(node);
+        parts.unshift(`${node.tagName.toLowerCase()}:nth-child(${idx + 1})`);
         node = parent;
       }
       return parts.join(' > ');
     }
 
     function saveElementOverride(el) {
-      if (!el || el.dataset.addedId) return; // Added elements saved separately
+      if (!el || el.dataset?.addedId) return;
       const key = configKey();
       if (!elementOverrides[key]) elementOverrides[key] = {};
       const path = getElementPath(el);
       if (!path) return;
-
-      const override = {};
-      if (el.style.left) override.left = el.style.left;
-      if (el.style.top) override.top = el.style.top;
-      if (el.style.width) override.width = el.style.width;
-      if (el.style.height) override.height = el.style.height;
-      if (el.style.fontSize) override.fontSize = el.style.fontSize;
-      if (el.style.fontWeight) override.fontWeight = el.style.fontWeight;
-      if (el.style.fontFamily) override.fontFamily = el.style.fontFamily;
-      if (el.style.color) override.color = el.style.color;
-      if (el.style.textAlign) override.textAlign = el.style.textAlign;
-      if (el.style.maxWidth) override.maxWidth = el.style.maxWidth;
-      if (el.style.position) override.position = el.style.position;
-
-      elementOverrides[key][path] = override;
+      const o = {};
+      ['left','top','width','height','fontSize','fontWeight','fontFamily','color','textAlign','maxWidth','position'].forEach(p => {
+        if (el.style[p]) o[p] = el.style[p];
+      });
+      // Also save SVG attributes for shapes
+      if (isSvgElement(el)) {
+        ['fill','stroke','stroke-width','stroke-dasharray'].forEach(a => {
+          const v = el.getAttribute(a);
+          if (v) o['attr_' + a] = v;
+        });
+      }
+      elementOverrides[key][path] = o;
       localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
     }
 
     function saveTextOverride(el) {
-      // Save edited text content
       const key = configKey();
       if (!elementOverrides[key]) elementOverrides[key] = {};
       const path = getElementPath(el);
@@ -1372,28 +1348,20 @@
       localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
     }
 
-    function saveConnectorOverride(el) {
-      // Connector properties are stored in addedElements
-      saveAddedElements();
-    }
-
     function applyOverrides() {
       const key = configKey();
       const overrides = elementOverrides[key];
       if (!overrides) return;
-
       for (const [path, props] of Object.entries(overrides)) {
         try {
           const el = renderTarget.querySelector(path);
           if (!el) continue;
           for (const [prop, val] of Object.entries(props)) {
-            if (prop === 'textContent') {
-              el.textContent = val;
-            } else {
-              el.style[prop] = val;
-            }
+            if (prop === 'textContent') el.textContent = val;
+            else if (prop.startsWith('attr_')) el.setAttribute(prop.slice(5), val);
+            else el.style[prop] = val;
           }
-        } catch(e) { /* selector may not match */ }
+        } catch(e) {}
       }
     }
 
@@ -1406,157 +1374,114 @@
       const added = addedElements[key];
       if (!added) return;
       ['textboxes','icons','connectors','shapes'].forEach(arr => {
-        if (added[arr]) {
-          added[arr] = added[arr].filter(el => el.id !== id);
-        }
+        if (added[arr]) added[arr] = added[arr].filter(el => el.id !== id);
       });
       saveAddedElements();
       selectElement(null);
       renderAll();
     }
 
-    // ════════════════════════════════════════════════════════════
-    // SAVE / APPROVE / RESET / EXPORT BUTTONS
-    // ════════════════════════════════════════════════════════════
+    // ═══ BUTTONS ═══
     document.getElementById('saveBtn').addEventListener('click', () => {
       const key = configKey();
-      if (!configs[key]) configs[key] = {};
-      configs[key].overrides = elementOverrides[key] || {};
-      configs[key].added = addedElements[key] || {};
-      configs[key].tone = currentTone;
-      configs[key].density = currentDensity;
-      configs[key].savedAt = new Date().toISOString();
+      configs[key] = {
+        overrides: elementOverrides[key] || {},
+        added: addedElements[key] || {},
+        tone: currentTone, density: currentDensity,
+        savedAt: new Date().toISOString(),
+      };
       localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
-      alert(`Saved config for "${currentVariant}" with ${currentItemCount} items.`);
       updateStatusBadge();
     });
-
     document.getElementById('approveBtn').addEventListener('click', () => {
       const key = configKey();
-      if (!configs[key]) configs[key] = {};
-      configs[key].overrides = elementOverrides[key] || {};
-      configs[key].added = addedElements[key] || {};
-      configs[key].tone = currentTone;
-      configs[key].density = currentDensity;
-      configs[key].approved = true;
-      configs[key].approvedAt = new Date().toISOString();
+      configs[key] = {
+        overrides: elementOverrides[key] || {},
+        added: addedElements[key] || {},
+        tone: currentTone, density: currentDensity,
+        approved: true, approvedAt: new Date().toISOString(),
+      };
       localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
-      alert(`Approved "${currentVariant}" with ${currentItemCount} items!`);
       updateStatusBadge();
     });
-
     document.getElementById('resetBtn').addEventListener('click', () => {
-      if (!confirm(`Reset all adjustments for "${currentVariant}" with ${currentItemCount} items?`)) return;
-      const key = configKey();
-      delete configs[key];
-      delete elementOverrides[key];
-      delete addedElements[key];
+      if (!confirm(`Reset all adjustments for "${currentVariant}" × ${currentItemCount}?`)) return;
+      pushUndo();
+      delete configs[configKey()];
+      delete elementOverrides[configKey()];
+      delete addedElements[configKey()];
       localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
       localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
       localStorage.setItem('igEditorAdded', JSON.stringify(addedElements));
       renderAll();
     });
-
     document.getElementById('exportBtn').addEventListener('click', () => {
-      const exportData = {
-        configs,
-        overrides: elementOverrides,
-        added: addedElements,
-        exportedAt: new Date().toISOString(),
-      };
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'layout-configs.json';
-      a.click();
-      URL.revokeObjectURL(url);
+      const blob = new Blob([JSON.stringify({ configs, overrides: elementOverrides, added: addedElements, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = 'layout-configs.json'; a.click();
     });
-
     function updateStatusBadge() {
-      const key = configKey();
-      const badge = document.getElementById('statusBadge');
-      const cfg = configs[key];
-      if (cfg && cfg.approved) {
-        badge.className = 'status-badge approved';
-        badge.textContent = 'Approved';
-      } else if (cfg) {
-        badge.className = 'status-badge draft';
-        badge.textContent = 'Saved';
-      } else {
-        badge.className = 'status-badge draft';
-        badge.textContent = 'Draft';
-      }
+      const cfg = configs[configKey()];
+      const b = document.getElementById('statusBadge');
+      if (cfg?.approved) { b.className = 'status-badge approved'; b.textContent = 'Approved'; }
+      else if (cfg) { b.className = 'status-badge draft'; b.textContent = 'Saved'; }
+      else { b.className = 'status-badge draft'; b.textContent = 'Draft'; }
     }
 
-    // ════════════════════════════════════════════════════════════
-    // SHAPE LIBRARY
-    // ════════════════════════════════════════════════════════════
+    // ═══ SHAPE LIBRARY ═══
     document.getElementById('shapeLibBtn').addEventListener('click', () => {
       document.getElementById('shapeLibrary').classList.toggle('open');
     });
-
     function buildShapeLibrary() {
-      const shapeRow = document.getElementById('shapeRow');
       const shapes = [
-        { name: 'Rectangle', svg: '<rect x="4" y="8" width="20" height="12" rx="2" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Rounded Rect', svg: '<rect x="4" y="8" width="20" height="12" rx="5" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Circle', svg: '<circle cx="14" cy="14" r="9" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Oval', svg: '<ellipse cx="14" cy="14" rx="11" ry="7" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Diamond', svg: '<polygon points="14,3 25,14 14,25 3,14" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Pill', svg: '<rect x="3" y="9" width="22" height="10" rx="5" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Triangle', svg: '<polygon points="14,4 25,24 3,24" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Inv Triangle', svg: '<polygon points="3,4 25,4 14,24" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Pentagon', svg: '<polygon points="14,3 25,11 21,24 7,24 3,11" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Hexagon', svg: '<polygon points="7,3 21,3 27,14 21,25 7,25 1,14" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Arrow Right', svg: '<polygon points="3,8 18,8 18,4 27,14 18,24 18,20 3,20" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Arrow Left', svg: '<polygon points="25,8 10,8 10,4 1,14 10,24 10,20 25,20" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Star', svg: '<polygon points="14,2 17,10 26,10 19,16 21,25 14,20 7,25 9,16 2,10 11,10" fill="none" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Line', svg: '<line x1="3" y1="24" x2="25" y2="4" stroke="#6b7280" stroke-width="1.5"/>' },
-        { name: 'Arrow Line', svg: '<line x1="3" y1="14" x2="24" y2="14" stroke="#6b7280" stroke-width="1.5" marker-end="url(#shapeArrow)"/>' },
+        { name:'Rectangle', svg:'<rect x="4" y="8" width="20" height="12" rx="2" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:4 },
+        { name:'Rounded Rect', svg:'<rect x="4" y="8" width="20" height="12" rx="5" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:12 },
+        { name:'Circle', svg:'<circle cx="14" cy="14" r="9" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:999 },
+        { name:'Oval', svg:'<ellipse cx="14" cy="14" rx="11" ry="7" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:999 },
+        { name:'Diamond', svg:'<polygon points="14,3 25,14 14,25 3,14" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:0 },
+        { name:'Pill', svg:'<rect x="3" y="9" width="22" height="10" rx="5" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:20 },
+        { name:'Triangle', svg:'<polygon points="14,4 25,24 3,24" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:0 },
+        { name:'Inv Triangle', svg:'<polygon points="3,4 25,4 14,24" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:0 },
+        { name:'Pentagon', svg:'<polygon points="14,3 25,11 21,24 7,24 3,11" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:0 },
+        { name:'Hexagon', svg:'<polygon points="7,3 21,3 27,14 21,25 7,25 1,14" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:0 },
+        { name:'Arrow Right', svg:'<polygon points="3,8 18,8 18,4 27,14 18,24 18,20 3,20" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:0 },
+        { name:'Arrow Left', svg:'<polygon points="25,8 10,8 10,4 1,14 10,24 10,20 25,20" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:0 },
+        { name:'Star', svg:'<polygon points="14,2 17,10 26,10 19,16 21,25 14,20 7,25 9,16 2,10 11,10" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:0 },
+        { name:'Petal', svg:'<ellipse cx="14" cy="8" rx="6" ry="10" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:999 },
+        { name:'Ring', svg:'<circle cx="14" cy="14" r="10" fill="none" stroke="#6b7280" stroke-width="3"/><circle cx="14" cy="14" r="5" fill="none" stroke="#6b7280" stroke-width="1.5"/>', br:999 },
       ];
-
+      const shapeRow = document.getElementById('shapeRow');
       shapeRow.innerHTML = '';
       shapes.forEach(sh => {
         const thumb = document.createElement('div');
         thumb.className = 'shape-thumb';
         thumb.title = sh.name;
-        thumb.innerHTML = `<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
-          <defs><marker id="shapeArrow" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4 Z" fill="#6b7280"/></marker></defs>
-          ${sh.svg}
-        </svg>`;
+        thumb.innerHTML = `<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">${sh.svg}</svg>`;
         thumb.addEventListener('click', () => {
-          // Add this shape to canvas
-          const key = configKey();
-          if (!addedElements[key]) addedElements[key] = { textboxes: [], icons: [], connectors: [], shapes: [] };
-          addedElements[key].shapes.push({
-            id: 'sh_' + Date.now(),
-            type: sh.name.toLowerCase().replace(/\s+/g, '-'),
-            x: 120, y: 120, width: 80, height: 60,
-            fill: 'rgba(37,99,235,0.1)', stroke: '#6b7280', strokeWidth: 1.5,
-            borderRadius: sh.name.includes('Rounded') || sh.name === 'Pill' ? 20 : sh.name === 'Rectangle' ? 4 : 0,
+          pushUndo();
+          ensureAdded().shapes.push({
+            id:'sh_' + Date.now(), type: sh.name.toLowerCase().replace(/\s+/g,'-'),
+            x:120, y:120, width:80, height:60,
+            fill:'rgba(37,99,235,0.1)', stroke:'#6b7280', strokeWidth:1.5, borderRadius: sh.br || 0,
           });
-          saveAddedElements();
-          renderAll();
+          saveAddedElements(); renderAll();
         });
         shapeRow.appendChild(thumb);
       });
     }
 
-    // ════════════════════════════════════════════════════════════
-    // CLICK CANVAS TO DESELECT
-    // ════════════════════════════════════════════════════════════
+    // ═══ DESELECT ON CANVAS CLICK ═══
     document.getElementById('editorCanvas').addEventListener('mousedown', (e) => {
       if (e.target === document.getElementById('editorCanvas') || e.target === document.getElementById('canvasFrame')) {
         if (!drawingLine) selectElement(null);
       }
     });
 
-    // ════════════════════════════════════════════════════════════
-    // INIT
-    // ════════════════════════════════════════════════════════════
+    // ═══ INIT ═══
     setupPropListeners();
     buildShapeLibrary();
+    // Show shape library by default
+    document.getElementById('shapeLibrary').classList.add('open');
     renderAll();
 
   </script>
