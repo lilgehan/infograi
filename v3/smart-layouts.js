@@ -1390,59 +1390,51 @@ export const NUMBERS_CSS = `
 }
 
 /* ── Numbers: dot-grid (10×10 dot matrix) ── */
-.ig-page .igs-dotgrid-row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 1rem;
-  justify-content: center;
-  align-items: flex-start;
-}
-.ig-page .igs-dotgrid-col {
+.ig-page .igs-dotgrid-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  flex: 1;
-  min-width: 110px;
-  max-width: 150px;
-  gap: 0.25rem;
+  padding: 0.75rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  gap: 0.35rem;
 }
 .ig-page .igs-dotgrid-num {
   font-family: var(--font-heading);
-  font-size: 2em;
+  font-size: 1.6em;
   font-weight: 800;
   color: var(--accent);
   line-height: 1;
-  margin-bottom: 0.2rem;
-}
-.ig-page .igs-dotgrid-lbl {
-  font-family: var(--font-heading);
-  font-size: 0.75em;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-top: 0.25rem;
-}
-.ig-page .igs-dotgrid-desc {
-  font-family: var(--font-body);
-  font-size: 0.68em;
-  color: var(--text-secondary);
-  line-height: 1.35;
 }
 .ig-page .igs-dotgrid-grid {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
+  grid-template-columns: repeat(10, 6px);
+  grid-template-rows: repeat(10, 6px);
   gap: 2px;
-  width: 100%;
+  justify-content: center;
 }
 .ig-page .igs-dg-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  aspect-ratio: 1;
 }
 .ig-page .igs-dg-dot.filled { background: var(--accent); }
 .ig-page .igs-dg-dot.empty  { background: #e5e7eb; }
+.ig-page .igs-dotgrid-lbl {
+  font-family: var(--font-heading);
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0.15rem;
+}
+.ig-page .igs-dotgrid-desc {
+  font-family: var(--font-body);
+  font-size: 0.65em;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
 
 /* ── Numbers: dot-line (single row of 10 dots) ── */
 .ig-page .igs-dotline-list {
@@ -1485,6 +1477,18 @@ export const NUMBERS_CSS = `
   color: var(--accent);
   min-width: 2.5rem;
   text-align: right;
+}
+.ig-page .igs-dotline-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.ig-page .igs-dotline-desc {
+  font-family: var(--font-body);
+  font-size: 0.68em;
+  color: var(--text-secondary);
+  line-height: 1.3;
+  padding-left: 5.5rem;
 }
 `;
 
@@ -1651,10 +1655,10 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
     return `<div class="igs-starrating-list">${rows.join('')}</div>`;
   }
 
-  /* ── dot-grid: 10×10 dot matrix ── */
+  /* ── dot-grid: 10×10 dot matrix — each item is a card with its own dot grid ── */
   if (variant === 'dot-grid') {
     const TOTAL = 100;
-    const cols = items.map(item => {
+    const cards = items.map(item => {
       const numStr = getNum(item);
       const { pct } = parsePctFill(numStr);
       const filled = pct !== null ? Math.round((pct / 100) * TOTAL) : 0;
@@ -1664,17 +1668,19 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
       for (let d = 0; d < TOTAL; d++) {
         dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
       }
-      return `<div class="igs-dotgrid-col">
+      return `<div class="igs-dotgrid-card">
         <div class="igs-dotgrid-num">${esc(numStr)}</div>
         <div class="igs-dotgrid-grid">${dots}</div>
         ${title ? `<div class="igs-dotgrid-lbl">${title}</div>` : ''}
         ${desc  ? `<div class="igs-dotgrid-desc">${desc}</div>`  : ''}
       </div>`;
     });
-    return `<div class="igs-dotgrid-row">${cols.join('')}</div>`;
+    // Use standard grid system so it responds to column arrangement
+    const cols = Math.min(items.length, columns);
+    return wrapGrid(cards.join(''), cols);
   }
 
-  /* ── dot-line: single row of 10 dots ── */
+  /* ── dot-line: single horizontal row of 10 dots per item, stacked vertically ── */
   if (variant === 'dot-line') {
     const DOT_COUNT = 10;
     const rows = items.map(item => {
@@ -1685,16 +1691,20 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
       const fracPart  = exactFill - fullFill;
       const hasFrac   = fracPart >= 0.2 && fracPart < 0.8;
       const title     = esc(truncateTitle(item.title || '', density));
+      const desc      = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
       let dots = '';
       for (let d = 0; d < DOT_COUNT; d++) {
         if (d < fullFill)                       dots += `<span class="igs-dl-dot filled"></span>`;
         else if (d === fullFill && hasFrac)      dots += `<span class="igs-dl-dot half"></span>`;
         else                                     dots += `<span class="igs-dl-dot empty"></span>`;
       }
-      return `<div class="igs-dotline-row">
-        <span class="igs-dotline-label">${title}</span>
-        <span class="igs-dotline-track">${dots}</span>
-        <span class="igs-dotline-val">${esc(numStr)}</span>
+      return `<div class="igs-dotline-item">
+        <div class="igs-dotline-row">
+          <span class="igs-dotline-label">${title}</span>
+          <span class="igs-dotline-track">${dots}</span>
+          <span class="igs-dotline-val">${esc(numStr)}</span>
+        </div>
+        ${desc ? `<div class="igs-dotline-desc">${desc}</div>` : ''}
       </div>`;
     });
     return `<div class="igs-dotline-list">${rows.join('')}</div>`;
