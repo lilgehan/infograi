@@ -364,6 +364,33 @@
       font-size: 0.85em;
       line-height: 1.5;
     }
+
+    /* ── Line width preset buttons ── */
+    .line-width-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 24px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      background: #f9fafb;
+      cursor: pointer;
+      padding: 0;
+    }
+    .line-width-btn:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .line-width-btn.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .line-width-btn svg {
+      width: 28px;
+      height: 16px;
+    }
   </style>
 </head>
 <body>
@@ -512,6 +539,11 @@
             <span class="prop-label">Max width</span>
             <input class="prop-input" type="text" id="propMaxWidth" placeholder="180px">
           </div>
+          <div class="prop-row" id="bgColorRow" style="display:none;">
+            <span class="prop-label">BG color</span>
+            <input type="color" id="propBgColor" value="#2563eb" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
+            <input class="prop-input" type="text" id="propBgColorText" placeholder="#2563eb" style="flex:1;">
+          </div>
         </div>
 
         <div class="sidebar-section" id="shapeSection">
@@ -535,6 +567,15 @@
         <div class="sidebar-section" id="connectorSection">
           <h3>Connector</h3>
           <div class="prop-row">
+            <span class="prop-label">Color</span>
+            <input type="color" id="propLineColor" value="#6b7280" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
+            <input class="prop-input" type="text" id="propLineColorText" placeholder="#6b7280" style="flex:1;">
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Width</span>
+            <div id="propLineWidthPresets" style="display:flex;gap:4px;flex:1;align-items:center;flex-wrap:wrap;"></div>
+          </div>
+          <div class="prop-row">
             <span class="prop-label">Style</span>
             <select class="prop-select" id="propLineStyle">
               <option value="solid">Solid</option>
@@ -550,15 +591,6 @@
               <option value="both">Both</option>
               <option value="none">None</option>
             </select>
-          </div>
-          <div class="prop-row">
-            <span class="prop-label">Color</span>
-            <input type="color" id="propLineColor" value="#6b7280" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
-            <input class="prop-input" type="text" id="propLineColorText" placeholder="#6b7280" style="flex:1;">
-          </div>
-          <div class="prop-row">
-            <span class="prop-label">Width</span>
-            <input class="prop-input" type="number" id="propLineWidth" step="0.5" min="0.5" max="20" placeholder="1.5">
           </div>
         </div>
       </div>
@@ -977,6 +1009,15 @@
         document.getElementById('propFontFamily').value =
           ff.includes('Space Grotesk') ? 'var(--font-heading)' :
           ff.includes('monospace') ? 'monospace' : 'var(--font-body)';
+
+        // Show BG color row if element has a visible background
+        const bg = computed.backgroundColor;
+        const hasBg = bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+        const bgRow = document.getElementById('bgColorRow');
+        bgRow.style.display = hasBg ? 'flex' : 'none';
+        if (hasBg) {
+          setColorPair('propBgColor', 'propBgColorText', bg);
+        }
       }
       if (isShape || isAddedShape) {
         // For added shapes (div), read from style; for SVG shapes, read from attributes
@@ -992,21 +1033,24 @@
       }
       if (isConn) {
         const cn = findConnectorData(el);
+        let lineW, lineColor, lineArrow, lineDash;
         if (cn) {
-          setColorPair('propLineColor', 'propLineColorText', cn.stroke || '#6b7280');
-          document.getElementById('propLineWidth').value = cn.strokeWidth || 1.5;
-          document.getElementById('propArrowHead').value = cn.arrowHead || 'none';
-          const da = cn.dashArray || '';
-          document.getElementById('propLineStyle').value =
-            da.includes('8') ? 'dashed' : da.includes('3') ? 'dotted' : 'solid';
+          lineColor = cn.stroke || '#6b7280';
+          lineW = cn.strokeWidth || 1.5;
+          lineArrow = cn.arrowHead || 'none';
+          lineDash = cn.dashArray || '';
         } else {
-          setColorPair('propLineColor', 'propLineColorText', el.getAttribute('stroke') || '#6b7280');
-          document.getElementById('propLineWidth').value = el.getAttribute('stroke-width') || 1;
-          document.getElementById('propArrowHead').value = el.getAttribute('marker-end') ? 'end' : 'none';
-          const da = el.getAttribute('stroke-dasharray') || '';
-          document.getElementById('propLineStyle').value =
-            da.includes('8') ? 'dashed' : da.includes('3') ? 'dotted' : 'solid';
+          lineColor = el.getAttribute('stroke') || '#6b7280';
+          lineW = parseFloat(el.getAttribute('stroke-width')) || 1;
+          lineArrow = el.getAttribute('marker-end') ? 'end' : 'none';
+          lineDash = el.getAttribute('stroke-dasharray') || '';
         }
+        setColorPair('propLineColor', 'propLineColorText', lineColor);
+        document.getElementById('propArrowHead').value = lineArrow;
+        document.getElementById('propLineStyle').value =
+          lineDash.includes('8') ? 'dashed' : lineDash.includes('3') ? 'dotted' : 'solid';
+        // Set width via preset highlight
+        if (window._editorSetLineWidth) window._editorSetLineWidth(lineW);
       }
     }
 
@@ -1079,6 +1123,26 @@
         const hex = colorToHex(this.value);
         document.getElementById('propColor').value = hex;
         applyTextColor(this.value);
+      });
+
+      // ── Background color (for numbered badges, containers with BG) ──
+      function applyBgColor(color) {
+        if (!selectedElement) return;
+        pushUndo();
+        selectedElement.style.backgroundColor = color;
+        if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
+        else saveElementOverride(selectedElement);
+      }
+      ['change','input'].forEach(evt => {
+        document.getElementById('propBgColor').addEventListener(evt, function() {
+          document.getElementById('propBgColorText').value = this.value;
+          applyBgColor(this.value);
+        });
+      });
+      document.getElementById('propBgColorText').addEventListener('change', function() {
+        const hex = colorToHex(this.value);
+        document.getElementById('propBgColor').value = hex;
+        applyBgColor(this.value);
       });
 
       // ── Shape properties — work for both SVG shapes and added div shapes ──
@@ -1154,14 +1218,40 @@
       });
 
       // ── Connector properties ──
-      function applyConnectorProps() {
+      // Current selected line width (tracked via presets)
+      let currentLineWidth = 1.5;
+
+      // Build width preset buttons (visual line samples like PPT)
+      const widthPresets = [0.5, 1, 1.5, 2, 3, 4.5, 6];
+      const presetsContainer = document.getElementById('propLineWidthPresets');
+      widthPresets.forEach(w => {
+        const btn = document.createElement('button');
+        btn.className = 'line-width-btn';
+        btn.dataset.width = w;
+        btn.title = w + 'pt';
+        btn.innerHTML = `<svg viewBox="0 0 28 6" xmlns="http://www.w3.org/2000/svg"><line x1="2" y1="3" x2="26" y2="3" stroke="#374151" stroke-width="${Math.max(1, w * 0.8)}" stroke-linecap="round"/></svg>`;
+        btn.addEventListener('click', () => {
+          currentLineWidth = w;
+          highlightWidthPreset(w);
+          applyConnectorPropsNow();
+        });
+        presetsContainer.appendChild(btn);
+      });
+
+      function highlightWidthPreset(w) {
+        presetsContainer.querySelectorAll('.line-width-btn').forEach(b => {
+          b.classList.toggle('active', parseFloat(b.dataset.width) === w);
+        });
+      }
+
+      function applyConnectorPropsNow() {
         if (!selectedElement) return;
         const type = getElementType(selectedElement);
         if (type !== 'connector') return;
         pushUndo();
 
         const color = document.getElementById('propLineColor').value;
-        const width = document.getElementById('propLineWidth').value;
+        const width = currentLineWidth;
         const style = document.getElementById('propLineStyle').value;
         const arrow = document.getElementById('propArrowHead').value;
 
@@ -1171,6 +1261,7 @@
         const dashMap = { solid: '', dashed: '8,4', dotted: '3,3' };
         const dashArray = dashMap[style] || '';
 
+        // Apply directly to the SVG line element
         selectedElement.setAttribute('stroke', color);
         selectedElement.setAttribute('stroke-width', width);
         if (dashArray) selectedElement.setAttribute('stroke-dasharray', dashArray);
@@ -1181,6 +1272,7 @@
         if (arrow === 'start' || arrow === 'both') selectedElement.setAttribute('marker-start', 'url(#arrowHead)');
         else selectedElement.removeAttribute('marker-start');
 
+        // Save to data model
         const cn = findConnectorData(selectedElement);
         if (cn) {
           cn.stroke = color;
@@ -1193,25 +1285,28 @@
         }
       }
 
+      // Expose so populateProps can set width
+      window._editorSetLineWidth = (w) => {
+        currentLineWidth = w;
+        highlightWidthPreset(w);
+      };
+
       // Connector color — picker + text
       ['change','input'].forEach(evt => {
         document.getElementById('propLineColor').addEventListener(evt, function() {
           document.getElementById('propLineColorText').value = this.value;
-          applyConnectorProps();
+          applyConnectorPropsNow();
         });
       });
       document.getElementById('propLineColorText').addEventListener('change', function() {
         const hex = colorToHex(this.value);
         document.getElementById('propLineColor').value = hex;
-        applyConnectorProps();
+        applyConnectorPropsNow();
       });
 
-      // Connector width, style, arrow
-      ['change','input'].forEach(evt => {
-        document.getElementById('propLineWidth').addEventListener(evt, applyConnectorProps);
-      });
-      document.getElementById('propLineStyle').addEventListener('change', applyConnectorProps);
-      document.getElementById('propArrowHead').addEventListener('change', applyConnectorProps);
+      // Connector style, arrow
+      document.getElementById('propLineStyle').addEventListener('change', applyConnectorPropsNow);
+      document.getElementById('propArrowHead').addEventListener('change', applyConnectorPropsNow);
     }
 
     // ═══ DRAG TO MOVE ═══
@@ -1546,7 +1641,24 @@
         line.addEventListener('mousedown', (e) => {
           e.stopPropagation();
           selectElement(line, null);
-          startConnectorDrag(e, cn, line);
+          // Only start drag if mouse moves more than 4px (prevents accidental drag on click-to-select)
+          const startX = e.clientX, startY = e.clientY;
+          let moved = false;
+          const onCheckMove = (me) => {
+            if (Math.abs(me.clientX - startX) > 4 || Math.abs(me.clientY - startY) > 4) {
+              moved = true;
+              document.removeEventListener('mousemove', onCheckMove);
+              document.removeEventListener('mouseup', onCheckUp);
+              startConnectorDrag(e, cn, line);
+            }
+          };
+          const onCheckUp = () => {
+            document.removeEventListener('mousemove', onCheckMove);
+            document.removeEventListener('mouseup', onCheckUp);
+            // Just a click — selection already happened above
+          };
+          document.addEventListener('mousemove', onCheckMove);
+          document.addEventListener('mouseup', onCheckUp);
         });
         svg.appendChild(line);
       });
@@ -1597,7 +1709,7 @@
       const path = getElementPath(el);
       if (!path) return;
       const o = {};
-      ['left','top','width','height','fontSize','fontWeight','fontFamily','color','textAlign','maxWidth','position','display'].forEach(p => {
+      ['left','top','width','height','fontSize','fontWeight','fontFamily','color','backgroundColor','textAlign','maxWidth','position','display'].forEach(p => {
         if (el.style[p]) o[p] = el.style[p];
       });
       // Also save SVG attributes for shapes
