@@ -420,7 +420,7 @@
         <svg class="connector-svg" id="connectorSvg">
           <defs>
             <marker id="arrowHead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L8,3 L0,6 Z" fill="#6b7280"/>
+              <path d="M0,0 L8,3 L0,6 Z" fill="context-stroke"/>
             </marker>
           </defs>
         </svg>
@@ -497,7 +497,8 @@
           </div>
           <div class="prop-row">
             <span class="prop-label">Color</span>
-            <input class="prop-input" type="text" id="propColor" placeholder="#111827">
+            <input type="color" id="propColor" value="#111827" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
+            <input class="prop-input" type="text" id="propColorText" placeholder="#111827" style="flex:1;">
           </div>
           <div class="prop-row">
             <span class="prop-label">Align</span>
@@ -517,11 +518,13 @@
           <h3>Shape</h3>
           <div class="prop-row">
             <span class="prop-label">Fill</span>
-            <input class="prop-input" type="text" id="propFill" placeholder="var(--accent)">
+            <input type="color" id="propFill" value="#dbeafe" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
+            <input class="prop-input" type="text" id="propFillText" placeholder="var(--accent)" style="flex:1;">
           </div>
           <div class="prop-row">
             <span class="prop-label">Stroke</span>
-            <input class="prop-input" type="text" id="propStroke" placeholder="#6b7280">
+            <input type="color" id="propStroke" value="#6b7280" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
+            <input class="prop-input" type="text" id="propStrokeText" placeholder="#6b7280" style="flex:1;">
           </div>
           <div class="prop-row">
             <span class="prop-label">Stroke W</span>
@@ -550,11 +553,12 @@
           </div>
           <div class="prop-row">
             <span class="prop-label">Color</span>
-            <input class="prop-input" type="text" id="propLineColor" placeholder="#6b7280">
+            <input type="color" id="propLineColor" value="#6b7280" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
+            <input class="prop-input" type="text" id="propLineColorText" placeholder="#6b7280" style="flex:1;">
           </div>
           <div class="prop-row">
             <span class="prop-label">Width</span>
-            <input class="prop-input" type="number" id="propLineWidth" step="0.5" placeholder="1.5">
+            <input class="prop-input" type="number" id="propLineWidth" step="0.5" min="0.5" max="20" placeholder="1.5">
           </div>
         </div>
       </div>
@@ -745,6 +749,9 @@
     function isTextElement(el) {
       if (isSvgElement(el)) return false;
       if (el.tagName.toLowerCase() === 'img') return false;
+      // Added shapes and icons are not text
+      const cls = el.className || '';
+      if (cls.includes('added-shape') || cls.includes('added-icon')) return false;
       return true;
     }
     function getElementType(el) {
@@ -774,15 +781,23 @@
 
       // Selectable elements — including SVG lines
       const selectors = [
+        // Text elements
         '.igs-title', '.igs-body', '.igs-number', '.igs-label',
         '.igd-title', '.igd-body', '.igd-label', '.igd-number',
         '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
         '.igs-dotline-label', '.igs-dotline-val',
+        // Small numbered badges / circles with numbers
+        '.igs-num', '.igd-num', '.igs-step-num', '.igs-circle-num',
+        '[class*="num"]', '[class*="badge"]',
+        // Icons
         'img[data-icon]', '.igs-icon', '.igd-icon',
+        // SVG shapes (original template elements)
         'svg circle', 'svg ellipse', 'svg rect', 'svg polygon', 'svg path',
-        'svg line', 'svg polyline',
+        'svg line', 'svg polyline', 'svg text',
+        // Container elements
         '.igs-box', '.igs-dotgrid-card', '.igs-dotline-item',
         '.igd-node', '.igd-ring', '.igd-petal',
+        // Added elements
         '.added-textbox', '.added-icon', '.added-shape',
       ];
 
@@ -899,6 +914,34 @@
       populateProps(el);
     }
 
+    // ═══ COLOR HELPERS ═══
+    // Convert any CSS color string to hex (for color picker input)
+    function colorToHex(color) {
+      if (!color || color === 'none' || color === 'transparent') return '#000000';
+      if (color.startsWith('#') && (color.length === 7 || color.length === 4)) {
+        if (color.length === 4) return '#' + color[1]+color[1] + color[2]+color[2] + color[3]+color[3];
+        return color;
+      }
+      // Try rgb/rgba
+      const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+      if (m) return '#' + [m[1],m[2],m[3]].map(n => parseInt(n).toString(16).padStart(2,'0')).join('');
+      // var() or named color — return a fallback
+      if (color.startsWith('var(')) return '#2563eb';
+      // Try using canvas to resolve named colors
+      try {
+        const ctx = document.createElement('canvas').getContext('2d');
+        ctx.fillStyle = color;
+        return ctx.fillStyle; // returns hex
+      } catch(e) { return '#000000'; }
+    }
+
+    // Set both a color picker and its companion text input
+    function setColorPair(pickerId, textId, value) {
+      const hex = colorToHex(value);
+      document.getElementById(pickerId).value = hex;
+      document.getElementById(textId).value = value || hex;
+    }
+
     // ═══ PROPERTIES PANEL ═══
     function populateProps(el) {
       const type = getElementType(el);
@@ -915,18 +958,19 @@
       document.getElementById('propH').value = Math.round(rect.height);
 
       const isText = isTextElement(el);
+      const isAddedShape = el.classList?.contains('added-shape');
       const isShape = type === 'shape';
       const isConn = type === 'connector';
 
       document.getElementById('textSection').style.display = isText ? 'block' : 'none';
-      document.getElementById('shapeSection').style.display = isShape ? 'block' : 'none';
+      document.getElementById('shapeSection').style.display = (isShape || isAddedShape) ? 'block' : 'none';
       document.getElementById('connectorSection').style.display = isConn ? 'block' : 'none';
 
       if (isText) {
         const computed = window.getComputedStyle(el);
         document.getElementById('propFontSize').value = computed.fontSize;
         document.getElementById('propFontWeight').value = computed.fontWeight;
-        document.getElementById('propColor').value = computed.color;
+        setColorPair('propColor', 'propColorText', computed.color);
         document.getElementById('propTextAlign').value = computed.textAlign;
         document.getElementById('propMaxWidth').value = computed.maxWidth;
         const ff = computed.fontFamily;
@@ -934,24 +978,29 @@
           ff.includes('Space Grotesk') ? 'var(--font-heading)' :
           ff.includes('monospace') ? 'monospace' : 'var(--font-body)';
       }
-      if (isShape) {
-        document.getElementById('propFill').value = el.getAttribute('fill') || '';
-        document.getElementById('propStroke').value = el.getAttribute('stroke') || '';
-        document.getElementById('propStrokeWidth').value = el.getAttribute('stroke-width') || '';
+      if (isShape || isAddedShape) {
+        // For added shapes (div), read from style; for SVG shapes, read from attributes
+        if (isAddedShape) {
+          setColorPair('propFill', 'propFillText', el.style.background || el.style.backgroundColor || '');
+          setColorPair('propStroke', 'propStrokeText', el.style.borderColor || '');
+          document.getElementById('propStrokeWidth').value = parseFloat(el.style.borderWidth) || 1.5;
+        } else {
+          setColorPair('propFill', 'propFillText', el.getAttribute('fill') || '');
+          setColorPair('propStroke', 'propStrokeText', el.getAttribute('stroke') || '');
+          document.getElementById('propStrokeWidth').value = el.getAttribute('stroke-width') || '';
+        }
       }
       if (isConn) {
-        // Populate from connector data if it's an added connector
         const cn = findConnectorData(el);
         if (cn) {
-          document.getElementById('propLineColor').value = cn.stroke || '#6b7280';
+          setColorPair('propLineColor', 'propLineColorText', cn.stroke || '#6b7280');
           document.getElementById('propLineWidth').value = cn.strokeWidth || 1.5;
           document.getElementById('propArrowHead').value = cn.arrowHead || 'none';
           const da = cn.dashArray || '';
           document.getElementById('propLineStyle').value =
             da.includes('8') ? 'dashed' : da.includes('3') ? 'dotted' : 'solid';
         } else {
-          // Existing SVG line from the render
-          document.getElementById('propLineColor').value = el.getAttribute('stroke') || '#6b7280';
+          setColorPair('propLineColor', 'propLineColorText', el.getAttribute('stroke') || '#6b7280');
           document.getElementById('propLineWidth').value = el.getAttribute('stroke-width') || 1;
           document.getElementById('propArrowHead').value = el.getAttribute('marker-end') ? 'end' : 'none';
           const da = el.getAttribute('stroke-dasharray') || '';
@@ -970,99 +1019,199 @@
       return added.connectors.find(c => c.id === id) || null;
     }
 
+    // Find added shape/textbox/icon data by element
+    function findAddedData(el) {
+      const id = el.dataset?.addedId;
+      if (!id) return null;
+      const key = configKey();
+      const added = addedElements[key];
+      if (!added) return null;
+      for (const arr of ['textboxes','icons','shapes']) {
+        if (added[arr]) {
+          const found = added[arr].find(item => item.id === id);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
     // ═══ PROPERTY CHANGE LISTENERS ═══
     function setupPropListeners() {
-      // Text properties — apply immediately
-      const textProps = [
+      // ── Text properties ──
+      const textStyleProps = [
         { id:'propFontSize', style:'fontSize' },
         { id:'propFontWeight', style:'fontWeight' },
         { id:'propFontFamily', style:'fontFamily' },
-        { id:'propColor', style:'color' },
         { id:'propTextAlign', style:'textAlign' },
         { id:'propMaxWidth', style:'maxWidth' },
       ];
-      textProps.forEach(({ id, style }) => {
-        const el = document.getElementById(id);
-        // Use both input and change events for responsiveness
+      textStyleProps.forEach(({ id, style }) => {
+        const input = document.getElementById(id);
         ['change','input'].forEach(evt => {
-          el.addEventListener(evt, () => {
+          input.addEventListener(evt, () => {
             if (!selectedElement || !isTextElement(selectedElement)) return;
             pushUndo();
-            selectedElement.style[style] = el.value;
-            saveElementOverride(selectedElement);
+            selectedElement.style[style] = input.value;
+            if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
+            else saveElementOverride(selectedElement);
             requestAnimationFrame(() => buildOverlayHandles());
           });
         });
       });
 
-      // Shape properties — apply to SVG attributes
-      const shapeProps = [
-        { id:'propFill', attr:'fill' },
-        { id:'propStroke', attr:'stroke' },
-        { id:'propStrokeWidth', attr:'stroke-width' },
-      ];
-      shapeProps.forEach(({ id, attr }) => {
-        const el = document.getElementById(id);
-        ['change','input'].forEach(evt => {
-          el.addEventListener(evt, () => {
-            if (!selectedElement) return;
-            const type = getElementType(selectedElement);
-            if (type !== 'shape') return;
-            pushUndo();
-            selectedElement.setAttribute(attr, el.value);
+      // Text color — picker + text input synced
+      function applyTextColor(color) {
+        if (!selectedElement || !isTextElement(selectedElement)) return;
+        pushUndo();
+        selectedElement.style.color = color;
+        if (selectedElement.dataset?.addedId) {
+          const data = findAddedData(selectedElement);
+          if (data) { data.color = color; saveAddedElements(); }
+        } else { saveElementOverride(selectedElement); }
+      }
+      ['change','input'].forEach(evt => {
+        document.getElementById('propColor').addEventListener(evt, function() {
+          document.getElementById('propColorText').value = this.value;
+          applyTextColor(this.value);
+        });
+      });
+      document.getElementById('propColorText').addEventListener('change', function() {
+        const hex = colorToHex(this.value);
+        document.getElementById('propColor').value = hex;
+        applyTextColor(this.value);
+      });
+
+      // ── Shape properties — work for both SVG shapes and added div shapes ──
+      function applyShapeFill(color) {
+        if (!selectedElement) return;
+        pushUndo();
+        const isAdded = selectedElement.classList?.contains('added-shape');
+        if (isAdded) {
+          selectedElement.style.background = color;
+          const data = findAddedData(selectedElement);
+          if (data) { data.fill = color; saveAddedElements(); }
+        } else if (isSvgElement(selectedElement)) {
+          selectedElement.setAttribute('fill', color);
+          saveElementOverride(selectedElement);
+        }
+      }
+      function applyShapeStroke(color) {
+        if (!selectedElement) return;
+        pushUndo();
+        const isAdded = selectedElement.classList?.contains('added-shape');
+        if (isAdded) {
+          selectedElement.style.borderColor = color;
+          const data = findAddedData(selectedElement);
+          if (data) { data.stroke = color; saveAddedElements(); }
+        } else if (isSvgElement(selectedElement)) {
+          selectedElement.setAttribute('stroke', color);
+          saveElementOverride(selectedElement);
+        }
+      }
+
+      // Fill — picker + text
+      ['change','input'].forEach(evt => {
+        document.getElementById('propFill').addEventListener(evt, function() {
+          document.getElementById('propFillText').value = this.value;
+          applyShapeFill(this.value);
+        });
+      });
+      document.getElementById('propFillText').addEventListener('change', function() {
+        const hex = colorToHex(this.value);
+        document.getElementById('propFill').value = hex;
+        applyShapeFill(this.value);
+      });
+
+      // Stroke — picker + text
+      ['change','input'].forEach(evt => {
+        document.getElementById('propStroke').addEventListener(evt, function() {
+          document.getElementById('propStrokeText').value = this.value;
+          applyShapeStroke(this.value);
+        });
+      });
+      document.getElementById('propStrokeText').addEventListener('change', function() {
+        const hex = colorToHex(this.value);
+        document.getElementById('propStroke').value = hex;
+        applyShapeStroke(this.value);
+      });
+
+      // Stroke width
+      ['change','input'].forEach(evt => {
+        document.getElementById('propStrokeWidth').addEventListener(evt, function() {
+          if (!selectedElement) return;
+          pushUndo();
+          const w = this.value;
+          const isAdded = selectedElement.classList?.contains('added-shape');
+          if (isAdded) {
+            selectedElement.style.borderWidth = w + 'px';
+            const data = findAddedData(selectedElement);
+            if (data) { data.strokeWidth = parseFloat(w) || 1.5; saveAddedElements(); }
+          } else if (isSvgElement(selectedElement)) {
+            selectedElement.setAttribute('stroke-width', w);
             saveElementOverride(selectedElement);
-          });
+          }
         });
       });
 
-      // Connector properties — apply to SVG line AND update data
-      document.getElementById('propLineColor').addEventListener('change', applyConnectorProps);
-      document.getElementById('propLineColor').addEventListener('input', applyConnectorProps);
-      document.getElementById('propLineWidth').addEventListener('change', applyConnectorProps);
-      document.getElementById('propLineWidth').addEventListener('input', applyConnectorProps);
+      // ── Connector properties ──
+      function applyConnectorProps() {
+        if (!selectedElement) return;
+        const type = getElementType(selectedElement);
+        if (type !== 'connector') return;
+        pushUndo();
+
+        const color = document.getElementById('propLineColor').value;
+        const width = document.getElementById('propLineWidth').value;
+        const style = document.getElementById('propLineStyle').value;
+        const arrow = document.getElementById('propArrowHead').value;
+
+        // Sync text input
+        document.getElementById('propLineColorText').value = color;
+
+        const dashMap = { solid: '', dashed: '8,4', dotted: '3,3' };
+        const dashArray = dashMap[style] || '';
+
+        selectedElement.setAttribute('stroke', color);
+        selectedElement.setAttribute('stroke-width', width);
+        if (dashArray) selectedElement.setAttribute('stroke-dasharray', dashArray);
+        else selectedElement.removeAttribute('stroke-dasharray');
+
+        if (arrow === 'end' || arrow === 'both') selectedElement.setAttribute('marker-end', 'url(#arrowHead)');
+        else selectedElement.removeAttribute('marker-end');
+        if (arrow === 'start' || arrow === 'both') selectedElement.setAttribute('marker-start', 'url(#arrowHead)');
+        else selectedElement.removeAttribute('marker-start');
+
+        const cn = findConnectorData(selectedElement);
+        if (cn) {
+          cn.stroke = color;
+          cn.strokeWidth = parseFloat(width) || 1.5;
+          cn.dashArray = dashArray;
+          cn.arrowHead = arrow;
+          saveAddedElements();
+        } else {
+          saveElementOverride(selectedElement);
+        }
+      }
+
+      // Connector color — picker + text
+      ['change','input'].forEach(evt => {
+        document.getElementById('propLineColor').addEventListener(evt, function() {
+          document.getElementById('propLineColorText').value = this.value;
+          applyConnectorProps();
+        });
+      });
+      document.getElementById('propLineColorText').addEventListener('change', function() {
+        const hex = colorToHex(this.value);
+        document.getElementById('propLineColor').value = hex;
+        applyConnectorProps();
+      });
+
+      // Connector width, style, arrow
+      ['change','input'].forEach(evt => {
+        document.getElementById('propLineWidth').addEventListener(evt, applyConnectorProps);
+      });
       document.getElementById('propLineStyle').addEventListener('change', applyConnectorProps);
       document.getElementById('propArrowHead').addEventListener('change', applyConnectorProps);
-    }
-
-    function applyConnectorProps() {
-      if (!selectedElement) return;
-      const type = getElementType(selectedElement);
-      if (type !== 'connector') return;
-      pushUndo();
-
-      const color = document.getElementById('propLineColor').value;
-      const width = document.getElementById('propLineWidth').value;
-      const style = document.getElementById('propLineStyle').value;
-      const arrow = document.getElementById('propArrowHead').value;
-
-      // Compute dash array
-      const dashMap = { solid: '', dashed: '8,4', dotted: '3,3' };
-      const dashArray = dashMap[style] || '';
-
-      // Apply to the SVG element directly
-      selectedElement.setAttribute('stroke', color);
-      selectedElement.setAttribute('stroke-width', width);
-      if (dashArray) selectedElement.setAttribute('stroke-dasharray', dashArray);
-      else selectedElement.removeAttribute('stroke-dasharray');
-
-      // Arrow markers
-      if (arrow === 'end' || arrow === 'both') selectedElement.setAttribute('marker-end', 'url(#arrowHead)');
-      else selectedElement.removeAttribute('marker-end');
-      if (arrow === 'start' || arrow === 'both') selectedElement.setAttribute('marker-start', 'url(#arrowHead)');
-      else selectedElement.removeAttribute('marker-start');
-
-      // Update the connector data if it's an added connector
-      const cn = findConnectorData(selectedElement);
-      if (cn) {
-        cn.stroke = color;
-        cn.strokeWidth = parseFloat(width) || 1.5;
-        cn.dashArray = dashArray;
-        cn.arrowHead = arrow;
-        saveAddedElements();
-      } else {
-        // It's an existing SVG line — save as element override
-        saveElementOverride(selectedElement);
-      }
     }
 
     // ═══ DRAG TO MOVE ═══
@@ -1097,9 +1246,43 @@
       dragState.handle.style.top = (r.top - frameRect.top) + 'px';
     }
     function endDrag() {
-      if (dragState) { saveElementOverride(dragState.el); dragState = null; }
+      if (dragState) {
+        if (dragState.el.dataset?.addedId) {
+          saveAddedElementPosition(dragState.el);
+        } else {
+          saveElementOverride(dragState.el);
+        }
+        dragState = null;
+      }
       document.removeEventListener('mousemove', onDrag);
       document.removeEventListener('mouseup', endDrag);
+    }
+
+    // Save added element's current DOM position back to its data model
+    function saveAddedElementPosition(el) {
+      const id = el.dataset?.addedId;
+      if (!id) return;
+      const key = configKey();
+      const added = addedElements[key];
+      if (!added) return;
+
+      // Find the data object across all arrays
+      let data = null;
+      for (const arr of ['textboxes', 'icons', 'shapes']) {
+        if (added[arr]) {
+          data = added[arr].find(item => item.id === id);
+          if (data) break;
+        }
+      }
+      if (!data) return;
+
+      // Read current position from DOM
+      data.x = parseFloat(el.style.left) || 0;
+      data.y = parseFloat(el.style.top) || 0;
+      data.width = parseFloat(el.style.width) || data.width;
+      data.height = parseFloat(el.style.height) || parseFloat(el.style.minHeight) || data.height;
+
+      saveAddedElements();
     }
 
     // ═══ RESIZE ═══
@@ -1149,7 +1332,15 @@
       resizeState.handle.style.height = r.height + 'px';
     }
     function endResize() {
-      if (resizeState) { saveElementOverride(resizeState.el); populateProps(resizeState.el); resizeState = null; }
+      if (resizeState) {
+        if (resizeState.el.dataset?.addedId) {
+          saveAddedElementPosition(resizeState.el);
+        } else {
+          saveElementOverride(resizeState.el);
+        }
+        populateProps(resizeState.el);
+        resizeState = null;
+      }
       document.removeEventListener('mousemove', onResize);
       document.removeEventListener('mouseup', endResize);
     }
@@ -1274,7 +1465,8 @@
           if (e.key === 'ArrowDown') selectedElement.style.top = (top + step) + 'px';
           selectedElement.style.position = 'relative';
         }
-        saveElementOverride(selectedElement);
+        if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
+        else saveElementOverride(selectedElement);
         requestAnimationFrame(() => buildOverlayHandles());
       }
     });
@@ -1301,11 +1493,30 @@
         div.style.cssText = `position:absolute; left:${ic.x}px; top:${ic.y}px; width:${ic.width}px; height:${ic.height}px; border:1px dashed #d1d5db; border-radius:4px; cursor:move; background:rgba(255,255,255,0.8); display:flex; align-items:center; justify-content:center;`;
         renderTarget.appendChild(div);
       });
+      // Clip-path map for complex shapes
+      const CLIP_PATHS = {
+        'diamond': 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+        'triangle': 'polygon(50% 0%, 100% 100%, 0% 100%)',
+        'inv-triangle': 'polygon(0% 0%, 100% 0%, 50% 100%)',
+        'pentagon': 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
+        'hexagon': 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
+        'arrow-right': 'polygon(0% 20%, 65% 20%, 65% 0%, 100% 50%, 65% 100%, 65% 80%, 0% 80%)',
+        'arrow-left': 'polygon(35% 0%, 35% 20%, 100% 20%, 100% 80%, 35% 80%, 35% 100%, 0% 50%)',
+        'star': 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)',
+        'petal': 'ellipse(40% 50% at 50% 50%)',
+      };
+
       (added.shapes || []).forEach(sh => {
         const div = document.createElement('div');
         div.className = 'added-shape';
         div.dataset.addedId = sh.id;
-        div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; background:${sh.fill}; border:${sh.strokeWidth}px solid ${sh.stroke}; border-radius:${sh.borderRadius||0}px; cursor:move;`;
+        const clip = CLIP_PATHS[sh.type] || '';
+        let extraStyle = '';
+        if (clip) {
+          // For clipped shapes, use clip-path and a pseudo-border via box-shadow
+          extraStyle = `clip-path: ${clip};`;
+        }
+        div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; background:${sh.fill}; border:${sh.strokeWidth}px solid ${sh.stroke}; border-radius:${sh.borderRadius||0}px; cursor:move; ${extraStyle}`;
         renderTarget.appendChild(div);
       });
     }
@@ -1386,7 +1597,7 @@
       const path = getElementPath(el);
       if (!path) return;
       const o = {};
-      ['left','top','width','height','fontSize','fontWeight','fontFamily','color','textAlign','maxWidth','position'].forEach(p => {
+      ['left','top','width','height','fontSize','fontWeight','fontFamily','color','textAlign','maxWidth','position','display'].forEach(p => {
         if (el.style[p]) o[p] = el.style[p];
       });
       // Also save SVG attributes for shapes
