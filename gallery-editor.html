@@ -529,10 +529,11 @@
             <span class="prop-label">Max width</span>
             <input class="prop-input" type="text" id="propMaxWidth" placeholder="180px">
           </div>
-          <div class="prop-row" id="bgColorRow" style="display:none;">
+          <div class="prop-row" id="bgColorRow">
             <span class="prop-label">BG color</span>
             <input type="color" id="propBgColor" value="#2563eb" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
-            <input class="prop-input" type="text" id="propBgColorText" placeholder="#2563eb" style="flex:1;">
+            <input class="prop-input" type="text" id="propBgColorText" placeholder="transparent" style="flex:1;">
+            <button id="propBgNone" title="No fill" style="font-size:0.7em;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#6b7280;">No fill</button>
           </div>
         </div>
 
@@ -542,6 +543,7 @@
             <span class="prop-label">Fill</span>
             <input type="color" id="propFill" value="#dbeafe" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
             <input class="prop-input" type="text" id="propFillText" placeholder="var(--accent)" style="flex:1;">
+            <button id="propFillNone" title="No fill" style="font-size:0.7em;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#6b7280;">No fill</button>
           </div>
           <div class="prop-row">
             <span class="prop-label">Stroke</span>
@@ -825,6 +827,14 @@
       const key = configKey();
       const added = addedElements[key];
 
+      // Build a set of content-based IDs already saved, to match by content
+      const savedOverlays = new Map(); // content → savedData
+      if (added?.textboxes) {
+        added.textboxes.forEach(tb => {
+          if (tb.isSvgOverlay) savedOverlays.set(tb.svgTextContent || tb.text, tb);
+        });
+      }
+
       svgTexts.forEach((textEl, idx) => {
         // Skip if already hidden
         if (textEl.getAttribute('visibility') === 'hidden') return;
@@ -833,16 +843,23 @@
         const content = textEl.textContent.trim();
         if (!content) return;
 
-        const overlayId = `svgtxt_${currentVariant}_${currentItemCount}_${idx}`;
-
-        // Check if overlay data already exists (from a previous session/render)
-        let savedData = null;
-        if (added?.textboxes) {
-          savedData = added.textboxes.find(tb => tb.id === overlayId);
+        // Content-based ID: stable across re-renders regardless of SVG index order
+        // Use content + a counter for duplicate text (e.g. two "1"s in different circles)
+        const baseId = `svgtxt_${currentVariant}_${currentItemCount}_${content.replace(/[^a-zA-Z0-9]/g, '')}`;
+        // Find if saved data exists by matching content
+        let savedData = savedOverlays.get(content);
+        if (savedData) {
+          // Remove from map so duplicate text values get separate overlays
+          savedOverlays.delete(content);
+        }
+        // Also try exact ID match (backward compat with old index-based IDs)
+        if (!savedData && added?.textboxes) {
+          const oldId = `svgtxt_${currentVariant}_${currentItemCount}_${idx}`;
+          savedData = added.textboxes.find(tb => tb.id === oldId);
         }
 
         // If saved data exists, the overlay will be rendered by renderAddedElements().
-        // Just hide the SVG text and skip creating a duplicate DOM element.
+        // Just hide the SVG text and skip.
         if (savedData) {
           textEl.setAttribute('visibility', 'hidden');
           return;
@@ -864,12 +881,16 @@
         const alignMap = { start: 'left', middle: 'center', end: 'right' };
         const textAlign = alignMap[textAnchor] || 'center';
 
+        // Generate unique overlay ID using content + index for uniqueness
+        const overlayId = `${baseId}_${idx}`;
+
         // Hide original SVG text
         textEl.setAttribute('visibility', 'hidden');
 
         // Save overlay data — renderAddedElements() will create the DOM element
         ensureAdded().textboxes.push({
           id: overlayId, text: content,
+          svgTextContent: content, // for content-based matching
           x: x, y: y, width: w + 8, height: h + 4,
           fontSize, fontWeight, fontFamily,
           color: fill, textAlign,
@@ -1060,16 +1081,28 @@
 
       document.getElementById('propType').textContent = type;
       document.getElementById('propTag').textContent = `<${tag}> .${cls.split(' ').filter(c=>c).join('.')}`;
-      if (isSvgElement(el)) {
+      if (tag === 'line') {
+        // Lines: show x1/y1 as position, dx/dy as width/height
+        const x1 = parseFloat(el.getAttribute('x1')) || 0;
+        const y1 = parseFloat(el.getAttribute('y1')) || 0;
+        const x2 = parseFloat(el.getAttribute('x2')) || 0;
+        const y2 = parseFloat(el.getAttribute('y2')) || 0;
+        document.getElementById('propX').value = Math.round(x1);
+        document.getElementById('propY').value = Math.round(y1);
+        document.getElementById('propW').value = Math.round(x2 - x1);
+        document.getElementById('propH').value = Math.round(y2 - y1);
+      } else if (isSvgElement(el)) {
         const t = getSvgTranslate(el);
         document.getElementById('propX').value = Math.round(t.x);
         document.getElementById('propY').value = Math.round(t.y);
+        document.getElementById('propW').value = Math.round(rect.width);
+        document.getElementById('propH').value = Math.round(rect.height);
       } else {
         document.getElementById('propX').value = Math.round(rect.left - parentRect.left);
         document.getElementById('propY').value = Math.round(rect.top - parentRect.top);
+        document.getElementById('propW').value = Math.round(rect.width);
+        document.getElementById('propH').value = Math.round(rect.height);
       }
-      document.getElementById('propW').value = Math.round(rect.width);
-      document.getElementById('propH').value = Math.round(rect.height);
 
       const isText = isTextElement(el);
       const isAddedShape = el.classList?.contains('added-shape');
@@ -1092,13 +1125,15 @@
           ff.includes('Space Grotesk') ? 'var(--font-heading)' :
           ff.includes('monospace') ? 'monospace' : 'var(--font-body)';
 
-        // Show BG color row if element has a visible background
+        // Always show BG color row for text elements
         const bg = computed.backgroundColor;
         const hasBg = bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
         const bgRow = document.getElementById('bgColorRow');
-        bgRow.style.display = hasBg ? 'flex' : 'none';
+        bgRow.style.display = 'flex';
         if (hasBg) {
           setColorPair('propBgColor', 'propBgColorText', bg);
+        } else {
+          document.getElementById('propBgColorText').value = 'transparent';
         }
       }
       if (isShape || isAddedShape) {
@@ -1169,17 +1204,40 @@
         pushUndo();
         const x = parseFloat(document.getElementById('propX').value) || 0;
         const y = parseFloat(document.getElementById('propY').value) || 0;
-        if (isSvgElement(selectedElement)) {
+        const tag = selectedElement.tagName?.toLowerCase();
+
+        if (tag === 'line') {
+          // For lines: X/Y represent the start point (x1/y1)
+          // Shift both endpoints by the delta from current x1/y1
+          const oldX1 = parseFloat(selectedElement.getAttribute('x1')) || 0;
+          const oldY1 = parseFloat(selectedElement.getAttribute('y1')) || 0;
+          const dx = x - oldX1;
+          const dy = y - oldY1;
+          selectedElement.setAttribute('x1', x);
+          selectedElement.setAttribute('y1', y);
+          selectedElement.setAttribute('x2', (parseFloat(selectedElement.getAttribute('x2')) || 0) + dx);
+          selectedElement.setAttribute('y2', (parseFloat(selectedElement.getAttribute('y2')) || 0) + dy);
+          // Update connector data if it's an added connector
+          const cn = findConnectorData(selectedElement);
+          if (cn) {
+            cn.x1 = x; cn.y1 = y;
+            cn.x2 = (cn.x2 || 0) + dx; cn.y2 = (cn.y2 || 0) + dy;
+            saveAddedElements();
+          } else {
+            saveElementOverride(selectedElement);
+          }
+        } else if (isSvgElement(selectedElement)) {
           setSvgTranslate(selectedElement, x, y);
+          saveElementOverride(selectedElement);
         } else {
           if (selectedElement.style.position !== 'absolute') {
             selectedElement.style.position = 'relative';
           }
           selectedElement.style.left = x + 'px';
           selectedElement.style.top = y + 'px';
+          if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
+          else saveElementOverride(selectedElement);
         }
-        if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
-        else saveElementOverride(selectedElement);
         requestAnimationFrame(() => buildOverlayHandles());
       }
       function applySize() {
@@ -1187,8 +1245,23 @@
         pushUndo();
         const w = parseFloat(document.getElementById('propW').value) || 0;
         const h = parseFloat(document.getElementById('propH').value) || 0;
-        if (isSvgElement(selectedElement)) {
-          const tag = selectedElement.tagName.toLowerCase();
+        const tag = selectedElement.tagName?.toLowerCase();
+
+        if (tag === 'line') {
+          // For lines: W/H control the endpoint relative to start
+          // Keep x1/y1 fixed, set x2 = x1 + w, y2 = y1 + h
+          const x1 = parseFloat(selectedElement.getAttribute('x1')) || 0;
+          const y1 = parseFloat(selectedElement.getAttribute('y1')) || 0;
+          selectedElement.setAttribute('x2', x1 + w);
+          selectedElement.setAttribute('y2', y1 + h);
+          const cn = findConnectorData(selectedElement);
+          if (cn) {
+            cn.x2 = x1 + w; cn.y2 = y1 + h;
+            saveAddedElements();
+          } else {
+            saveElementOverride(selectedElement);
+          }
+        } else if (isSvgElement(selectedElement)) {
           if (tag === 'circle') {
             selectedElement.setAttribute('r', Math.min(w, h) / 2);
           } else if (tag === 'ellipse') {
@@ -1198,7 +1271,6 @@
             selectedElement.setAttribute('width', w);
             selectedElement.setAttribute('height', h);
           } else {
-            // For complex shapes (path, polygon, etc.), use scale transform
             const origRect = selectedElement.getBoundingClientRect();
             if (origRect.width > 0 && origRect.height > 0) {
               const scaleX = w / origRect.width;
@@ -1288,6 +1360,17 @@
         applyBgColor(this.value);
       });
 
+      // BG No Fill button
+      document.getElementById('propBgNone').addEventListener('click', () => {
+        if (!selectedElement) return;
+        pushUndo();
+        selectedElement.style.backgroundColor = 'transparent';
+        selectedElement.style.background = 'transparent';
+        document.getElementById('propBgColorText').value = 'transparent';
+        if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
+        else saveElementOverride(selectedElement);
+      });
+
       // ── Shape properties — work for both SVG shapes and added div shapes ──
       function applyShapeFill(color) {
         if (!selectedElement) return;
@@ -1329,6 +1412,12 @@
         const hex = colorToHex(this.value);
         document.getElementById('propFill').value = hex;
         applyShapeFill(this.value);
+      });
+
+      // Fill No Fill button
+      document.getElementById('propFillNone').addEventListener('click', () => {
+        applyShapeFill('none');
+        document.getElementById('propFillText').value = 'none';
       });
 
       // Stroke — picker + text
@@ -1779,6 +1868,53 @@
         popUndo();
         return;
       }
+      // Copy: Ctrl+C / Cmd+C
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        if (selectedElement && selectedElement.dataset?.addedId) {
+          e.preventDefault();
+          const addedId = selectedElement.dataset.addedId;
+          const key = configKey();
+          const added = addedElements[key];
+          if (!added) return;
+          // Find the data
+          let clipData = null;
+          let clipType = null;
+          for (const arr of ['textboxes', 'icons', 'shapes', 'connectors']) {
+            if (added[arr]) {
+              const found = added[arr].find(item => item.id === addedId);
+              if (found) { clipData = JSON.parse(JSON.stringify(found)); clipType = arr; break; }
+            }
+          }
+          if (clipData) {
+            window._editorClipboard = { data: clipData, type: clipType };
+          }
+        }
+        return;
+      }
+      // Paste: Ctrl+V / Cmd+V
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        if (window._editorClipboard) {
+          e.preventDefault();
+          pushUndo();
+          const clip = window._editorClipboard;
+          const newData = JSON.parse(JSON.stringify(clip.data));
+          // New unique ID
+          const prefix = clip.type === 'textboxes' ? 'tb_' : clip.type === 'icons' ? 'ic_' : clip.type === 'shapes' ? 'sh_' : 'cn_';
+          newData.id = prefix + Date.now();
+          // Offset position so it's visibly distinct
+          if (newData.x != null) newData.x += 20;
+          if (newData.y != null) newData.y += 20;
+          if (newData.x1 != null) { newData.x1 += 20; newData.y1 += 20; newData.x2 += 20; newData.y2 += 20; }
+          // Remove SVG overlay flag so it becomes a regular textbox
+          delete newData.isSvgOverlay;
+          delete newData.svgTextIdx;
+          delete newData.svgTextContent;
+          ensureAdded()[clip.type].push(newData);
+          saveAddedElements();
+          renderAll();
+        }
+        return;
+      }
       // ESC: cancel line drawing or deselect
       if (e.key === 'Escape') {
         drawingLine = false; lineStart = null;
@@ -1860,7 +1996,7 @@
         div.textContent = tb.text;
         const bgStyle = isSvgOverlay
           ? 'background:transparent; border:1px dashed transparent;'
-          : 'background:rgba(255,255,255,0.8); border:1px dashed #d1d5db;';
+          : 'background:transparent; border:1px dashed #d1d5db;';
         const justify = tb.textAlign === 'center' ? 'center' : tb.textAlign === 'right' ? 'flex-end' : 'flex-start';
         div.style.cssText = `position:absolute; left:${tb.x}px; top:${tb.y}px; width:${tb.width}px; min-height:${tb.height}px; font-size:${tb.fontSize}; font-weight:${tb.fontWeight}; font-family:${tb.fontFamily}; color:${tb.color}; text-align:${tb.textAlign}; padding:${isSvgOverlay ? '2px 4px' : '4px 6px'}; border-radius:${isSvgOverlay ? '2' : '4'}px; cursor:move; ${bgStyle} ${isSvgOverlay ? 'line-height:1.2; display:flex; align-items:center; justify-content:' + justify + ';' : ''}`;
         renderTarget.appendChild(div);
@@ -1873,30 +2009,46 @@
         div.style.cssText = `position:absolute; left:${ic.x}px; top:${ic.y}px; width:${ic.width}px; height:${ic.height}px; border:1px dashed #d1d5db; border-radius:4px; cursor:move; background:rgba(255,255,255,0.8); display:flex; align-items:center; justify-content:center;`;
         renderTarget.appendChild(div);
       });
-      // Clip-path map for complex shapes
-      const CLIP_PATHS = {
-        'diamond': 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-        'triangle': 'polygon(50% 0%, 100% 100%, 0% 100%)',
-        'inv-triangle': 'polygon(0% 0%, 100% 0%, 50% 100%)',
-        'pentagon': 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
-        'hexagon': 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
-        'arrow-right': 'polygon(0% 20%, 65% 20%, 65% 0%, 100% 50%, 65% 100%, 65% 80%, 0% 80%)',
-        'arrow-left': 'polygon(35% 0%, 35% 20%, 100% 20%, 100% 80%, 35% 80%, 35% 100%, 0% 50%)',
-        'star': 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)',
-        'petal': 'ellipse(40% 50% at 50% 50%)',
+      // SVG polygon points for complex shapes (normalized to 0-100 coordinate space)
+      const SVG_SHAPES = {
+        'diamond':       '50,0 100,50 50,100 0,50',
+        'triangle':      '50,0 100,100 0,100',
+        'inv-triangle':  '0,0 100,0 50,100',
+        'pentagon':      '50,0 100,38 82,100 18,100 0,38',
+        'hexagon':       '25,0 75,0 100,50 75,100 25,100 0,50',
+        'arrow-right':   '0,20 65,20 65,0 100,50 65,100 65,80 0,80',
+        'arrow-left':    '35,0 35,20 100,20 100,80 35,80 35,100 0,50',
+        'star':          '50,0 61,35 98,35 68,57 79,91 50,70 21,91 32,57 2,35 39,35',
       };
 
       (added.shapes || []).forEach(sh => {
         const div = document.createElement('div');
         div.className = 'added-shape';
         div.dataset.addedId = sh.id;
-        const clip = CLIP_PATHS[sh.type] || '';
-        let extraStyle = '';
-        if (clip) {
-          // For clipped shapes, use clip-path and a pseudo-border via box-shadow
-          extraStyle = `clip-path: ${clip};`;
+        const svgPoints = SVG_SHAPES[sh.type];
+
+        if (svgPoints) {
+          // Complex shapes: render as inline SVG with proper stroke on all edges
+          // Scale the 0-100 normalized points to the actual width/height
+          const w = sh.width;
+          const h = sh.height;
+          const scaledPoints = svgPoints.split(' ').map(pt => {
+            const [px, py] = pt.split(',').map(Number);
+            return `${(px / 100 * w).toFixed(1)},${(py / 100 * h).toFixed(1)}`;
+          }).join(' ');
+          const sw = sh.strokeWidth || 1.5;
+          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><polygon points="${scaledPoints}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}" stroke-linejoin="round"/></svg>`;
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; cursor:move; background:transparent; border:none;`;
+        } else if (sh.type === 'petal') {
+          // Petal: use SVG ellipse
+          const w = sh.width, h = sh.height;
+          const sw = sh.strokeWidth || 1.5;
+          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><ellipse cx="${w/2}" cy="${h/2}" rx="${w*0.4}" ry="${h*0.5}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}"/></svg>`;
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; cursor:move; background:transparent; border:none;`;
+        } else {
+          // Simple shapes: rect, rounded-rect, circle, oval, pill, ring — use CSS
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; background:${sh.fill}; border:${sh.strokeWidth}px solid ${sh.stroke}; border-radius:${sh.borderRadius||0}px; cursor:move;`;
         }
-        div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; background:${sh.fill}; border:${sh.strokeWidth}px solid ${sh.stroke}; border-radius:${sh.borderRadius||0}px; cursor:move; ${extraStyle}`;
         renderTarget.appendChild(div);
       });
     }
