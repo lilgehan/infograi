@@ -822,24 +822,39 @@
       if (svgTexts.length === 0) return;
 
       const containerRect = renderTarget.getBoundingClientRect();
+      const key = configKey();
+      const added = addedElements[key];
 
       svgTexts.forEach((textEl, idx) => {
-        // Skip if already hidden by a previous conversion or override
+        // Skip if already hidden
         if (textEl.getAttribute('visibility') === 'hidden') return;
         if (textEl.style.display === 'none') return;
 
-        // Read text content
         const content = textEl.textContent.trim();
         if (!content) return;
 
-        // Get position on screen relative to renderTarget
+        const overlayId = `svgtxt_${currentVariant}_${currentItemCount}_${idx}`;
+
+        // Check if overlay data already exists (from a previous session/render)
+        let savedData = null;
+        if (added?.textboxes) {
+          savedData = added.textboxes.find(tb => tb.id === overlayId);
+        }
+
+        // If saved data exists, the overlay will be rendered by renderAddedElements().
+        // Just hide the SVG text and skip creating a duplicate DOM element.
+        if (savedData) {
+          textEl.setAttribute('visibility', 'hidden');
+          return;
+        }
+
+        // First time: read position/style from SVG, create overlay, save data
         const textRect = textEl.getBoundingClientRect();
         const x = textRect.left - containerRect.left;
         const y = textRect.top - containerRect.top;
         const w = Math.max(textRect.width, 20);
         const h = Math.max(textRect.height, 16);
 
-        // Read styling from SVG text
         const computed = window.getComputedStyle(textEl);
         const fontSize = computed.fontSize || '14px';
         const fontWeight = computed.fontWeight || '600';
@@ -849,52 +864,18 @@
         const alignMap = { start: 'left', middle: 'center', end: 'right' };
         const textAlign = alignMap[textAnchor] || 'center';
 
-        // Generate a stable ID based on variant + item count + index
-        const overlayId = `svgtxt_${currentVariant}_${currentItemCount}_${idx}`;
-
-        // Check if there's already saved data for this overlay in addedElements
-        const key = configKey();
-        const added = addedElements[key];
-        let savedData = null;
-        if (added?.textboxes) {
-          savedData = added.textboxes.find(tb => tb.id === overlayId);
-        }
-
         // Hide original SVG text
         textEl.setAttribute('visibility', 'hidden');
 
-        // Create HTML overlay div
-        const div = document.createElement('div');
-        div.className = 'added-textbox svg-text-overlay';
-        div.dataset.addedId = overlayId;
-        div.dataset.svgTextIdx = idx;
-        div.textContent = savedData?.text || content;
-
-        const ox = savedData?.x ?? x;
-        const oy = savedData?.y ?? y;
-        const ow = savedData?.width ?? w + 8; // slight padding
-        const oh = savedData?.height ?? h + 4;
-        const oFontSize = savedData?.fontSize ?? fontSize;
-        const oFontWeight = savedData?.fontWeight ?? fontWeight;
-        const oFontFamily = savedData?.fontFamily ?? fontFamily;
-        const oColor = savedData?.color ?? fill;
-        const oTextAlign = savedData?.textAlign ?? textAlign;
-
-        div.style.cssText = `position:absolute; left:${ox}px; top:${oy}px; width:${ow}px; min-height:${oh}px; font-size:${oFontSize}; font-weight:${oFontWeight}; font-family:${oFontFamily}; color:${oColor}; text-align:${oTextAlign}; padding:2px 4px; cursor:move; background:transparent; border:1px dashed transparent; border-radius:2px; line-height:1.2; display:flex; align-items:center; justify-content:${oTextAlign === 'center' ? 'center' : oTextAlign === 'right' ? 'flex-end' : 'flex-start'};`;
-
-        renderTarget.appendChild(div);
-
-        // If no saved data yet, auto-save so it persists through re-renders
-        if (!savedData) {
-          ensureAdded().textboxes.push({
-            id: overlayId, text: content,
-            x: ox, y: oy, width: ow, height: oh,
-            fontSize: oFontSize, fontWeight: oFontWeight, fontFamily: oFontFamily,
-            color: oColor, textAlign: oTextAlign,
-            isSvgOverlay: true, svgTextIdx: idx,
-          });
-          saveAddedElements();
-        }
+        // Save overlay data — renderAddedElements() will create the DOM element
+        ensureAdded().textboxes.push({
+          id: overlayId, text: content,
+          x: x, y: y, width: w + 8, height: h + 4,
+          fontSize, fontWeight, fontFamily,
+          color: fill, textAlign,
+          isSvgOverlay: true, svgTextIdx: idx,
+        });
+        saveAddedElements();
       });
     }
 
@@ -1191,7 +1172,9 @@
         if (isSvgElement(selectedElement)) {
           setSvgTranslate(selectedElement, x, y);
         } else {
-          selectedElement.style.position = 'relative';
+          if (selectedElement.style.position !== 'absolute') {
+            selectedElement.style.position = 'relative';
+          }
           selectedElement.style.left = x + 'px';
           selectedElement.style.top = y + 'px';
         }
@@ -1484,12 +1467,40 @@
     function startDrag(e, el, handle) {
       e.preventDefault();
       const isSvg = isSvgElement(el);
-      const svgT = isSvg ? getSvgTranslate(el) : null;
+      const isAbsolute = el.style.position === 'absolute';
+      const isSvgLine = isSvg && el.tagName.toLowerCase() === 'line';
+
+      // For SVG lines, read actual x1/y1/x2/y2
+      let lineCoords = null;
+      if (isSvgLine) {
+        lineCoords = {
+          x1: parseFloat(el.getAttribute('x1')) || 0,
+          y1: parseFloat(el.getAttribute('y1')) || 0,
+          x2: parseFloat(el.getAttribute('x2')) || 0,
+          y2: parseFloat(el.getAttribute('y2')) || 0,
+        };
+      }
+
+      // Read starting style values for position
+      let origLeft, origTop;
+      if (isSvg && !isSvgLine) {
+        const svgT = getSvgTranslate(el);
+        origLeft = svgT.x;
+        origTop = svgT.y;
+      } else if (isAbsolute) {
+        // Already position:absolute (added elements, overlays) — read left/top directly
+        origLeft = parseFloat(el.style.left) || 0;
+        origTop = parseFloat(el.style.top) || 0;
+      } else {
+        // Template HTML elements — use relative positioning from current offset
+        origLeft = parseFloat(el.style.left) || 0;
+        origTop = parseFloat(el.style.top) || 0;
+      }
+
       dragState = {
-        el, handle, isSvg,
+        el, handle, isSvg, isAbsolute, isSvgLine, lineCoords,
         startX: e.clientX, startY: e.clientY,
-        origLeft: isSvg ? svgT.x : (parseFloat(el.style.left) || 0),
-        origTop: isSvg ? svgT.y : (parseFloat(el.style.top) || 0),
+        origLeft, origTop,
       };
       document.addEventListener('mousemove', onDrag);
       document.addEventListener('mouseup', endDrag);
@@ -1498,13 +1509,25 @@
       if (!dragState) return;
       const dx = e.clientX - dragState.startX;
       const dy = e.clientY - dragState.startY;
-      if (dragState.isSvg) {
+
+      if (dragState.isSvgLine && dragState.lineCoords) {
+        // SVG lines: move by updating x1/y1/x2/y2 directly
+        const lc = dragState.lineCoords;
+        dragState.el.setAttribute('x1', lc.x1 + dx);
+        dragState.el.setAttribute('y1', lc.y1 + dy);
+        dragState.el.setAttribute('x2', lc.x2 + dx);
+        dragState.el.setAttribute('y2', lc.y2 + dy);
+      } else if (dragState.isSvg) {
         setSvgTranslate(dragState.el, dragState.origLeft + dx, dragState.origTop + dy);
       } else {
-        dragState.el.style.position = 'relative';
+        // HTML elements: keep their existing position type
+        if (!dragState.isAbsolute) {
+          dragState.el.style.position = 'relative';
+        }
         dragState.el.style.left = (dragState.origLeft + dx) + 'px';
         dragState.el.style.top = (dragState.origTop + dy) + 'px';
       }
+      // Update handle overlay position
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const r = dragState.el.getBoundingClientRect();
       dragState.handle.style.left = (r.left - frameRect.left) + 'px';
@@ -1555,11 +1578,42 @@
     function startResize(e, el, handle, corner) {
       e.preventDefault(); e.stopPropagation();
       const isSvg = isSvgElement(el);
+      const tag = el.tagName.toLowerCase();
+      const rect = el.getBoundingClientRect();
+
+      // For SVG elements, read their native geometry attributes
+      let svgGeom = null;
+      if (isSvg) {
+        if (tag === 'circle') {
+          svgGeom = { type: 'circle',
+            cx: parseFloat(el.getAttribute('cx')) || 0,
+            cy: parseFloat(el.getAttribute('cy')) || 0,
+            r: parseFloat(el.getAttribute('r')) || 0,
+          };
+        } else if (tag === 'ellipse') {
+          svgGeom = { type: 'ellipse',
+            cx: parseFloat(el.getAttribute('cx')) || 0,
+            cy: parseFloat(el.getAttribute('cy')) || 0,
+            rx: parseFloat(el.getAttribute('rx')) || 0,
+            ry: parseFloat(el.getAttribute('ry')) || 0,
+          };
+        } else if (tag === 'rect') {
+          svgGeom = { type: 'rect',
+            x: parseFloat(el.getAttribute('x')) || 0,
+            y: parseFloat(el.getAttribute('y')) || 0,
+            w: parseFloat(el.getAttribute('width')) || 0,
+            h: parseFloat(el.getAttribute('height')) || 0,
+          };
+        }
+        // For path/polygon/etc, svgGeom stays null — we'll skip resize for those
+      }
+
       resizeState = {
-        el, handle, corner, isSvg,
+        el, handle, corner, isSvg, tag, svgGeom,
         startX: e.clientX, startY: e.clientY,
-        origW: el.getBoundingClientRect().width,
-        origH: el.getBoundingClientRect().height,
+        origW: rect.width, origH: rect.height,
+        origLeft: parseFloat(el.style.left) || 0,
+        origTop: parseFloat(el.style.top) || 0,
       };
       document.addEventListener('mousemove', onResize);
       document.addEventListener('mouseup', endResize);
@@ -1568,27 +1622,70 @@
       if (!resizeState) return;
       const dx = e.clientX - resizeState.startX;
       const dy = e.clientY - resizeState.startY;
-      let w = resizeState.origW, h = resizeState.origH;
-      if (resizeState.corner.includes('e')) w += dx;
-      if (resizeState.corner.includes('w')) w -= dx;
-      if (resizeState.corner.includes('s')) h += dy;
-      if (resizeState.corner.includes('n')) h -= dy;
-      w = Math.max(20, w);
-      h = Math.max(10, h);
-      if (resizeState.isSvg) {
-        // For SVG: scale relative to original size via transform
-        const scaleX = w / resizeState.origW;
-        const scaleY = h / resizeState.origH;
-        let tr = resizeState.el.getAttribute('transform') || '';
-        tr = tr.replace(/scale\([^)]*\)\s*/g, '').trim();
-        // Keep existing translate, add scale
-        const existing = tr || '';
-        resizeState.el.setAttribute('transform', existing + ` scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`);
+
+      // Calculate new width/height based on which corner is dragged
+      let dw = 0, dh = 0;
+      if (resizeState.corner.includes('e')) dw = dx;
+      if (resizeState.corner.includes('w')) dw = -dx;
+      if (resizeState.corner.includes('s')) dh = dy;
+      if (resizeState.corner.includes('n')) dh = -dy;
+
+      const newW = Math.max(20, resizeState.origW + dw);
+      const newH = Math.max(10, resizeState.origH + dh);
+
+      if (resizeState.isSvg && resizeState.svgGeom) {
+        const g = resizeState.svgGeom;
+        const el = resizeState.el;
+
+        if (g.type === 'circle') {
+          // Circle: resize by changing r, adjust cx/cy to anchor opposite corner
+          const newR = Math.max(5, Math.min(newW, newH) / 2);
+          const dr = newR - g.r;
+          let ncx = g.cx, ncy = g.cy;
+          // Anchor the opposite edge: if dragging east, west stays fixed, cx moves right
+          if (resizeState.corner.includes('e')) ncx = g.cx + dr;
+          if (resizeState.corner.includes('w')) ncx = g.cx - dr;
+          if (resizeState.corner.includes('s')) ncy = g.cy + dr;
+          if (resizeState.corner.includes('n')) ncy = g.cy - dr;
+          el.setAttribute('r', newR);
+          el.setAttribute('cx', ncx);
+          el.setAttribute('cy', ncy);
+        } else if (g.type === 'ellipse') {
+          const newRx = Math.max(5, newW / 2);
+          const newRy = Math.max(5, newH / 2);
+          const drx = newRx - g.rx;
+          const dry = newRy - g.ry;
+          let ncx = g.cx, ncy = g.cy;
+          if (resizeState.corner.includes('e')) ncx = g.cx + drx;
+          if (resizeState.corner.includes('w')) ncx = g.cx - drx;
+          if (resizeState.corner.includes('s')) ncy = g.cy + dry;
+          if (resizeState.corner.includes('n')) ncy = g.cy - dry;
+          el.setAttribute('rx', newRx);
+          el.setAttribute('ry', newRy);
+          el.setAttribute('cx', ncx);
+          el.setAttribute('cy', ncy);
+        } else if (g.type === 'rect') {
+          let nx = g.x, ny = g.y;
+          if (resizeState.corner.includes('w')) nx = g.x - (newW - g.w);
+          if (resizeState.corner.includes('n')) ny = g.y - (newH - g.h);
+          el.setAttribute('x', nx);
+          el.setAttribute('y', ny);
+          el.setAttribute('width', newW);
+          el.setAttribute('height', newH);
+        }
       } else {
-        resizeState.el.style.width = w + 'px';
-        resizeState.el.style.height = h + 'px';
-        resizeState.el.style.overflow = 'hidden';
+        // HTML elements
+        resizeState.el.style.width = newW + 'px';
+        resizeState.el.style.height = newH + 'px';
+        // For w/n corners, shift position to keep opposite edge fixed
+        if (resizeState.corner.includes('w')) {
+          resizeState.el.style.left = (resizeState.origLeft - (newW - resizeState.origW)) + 'px';
+        }
+        if (resizeState.corner.includes('n')) {
+          resizeState.el.style.top = (resizeState.origTop - (newH - resizeState.origH)) + 'px';
+        }
       }
+      // Update handle overlay
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const r = resizeState.el.getBoundingClientRect();
       resizeState.handle.style.left = (r.left - frameRect.left) + 'px';
@@ -1714,21 +1811,34 @@
         e.preventDefault();
         pushUndo();
         const step = e.shiftKey ? 10 : 1;
-        if (isSvgElement(selectedElement)) {
+        let ndx = 0, ndy = 0;
+        if (e.key === 'ArrowLeft') ndx = -step;
+        if (e.key === 'ArrowRight') ndx = step;
+        if (e.key === 'ArrowUp') ndy = -step;
+        if (e.key === 'ArrowDown') ndy = step;
+
+        const isSvgLine = isSvgElement(selectedElement) && selectedElement.tagName.toLowerCase() === 'line';
+        if (isSvgLine) {
+          // Move SVG line by updating x1/y1/x2/y2
+          const x1 = parseFloat(selectedElement.getAttribute('x1')) || 0;
+          const y1 = parseFloat(selectedElement.getAttribute('y1')) || 0;
+          const x2 = parseFloat(selectedElement.getAttribute('x2')) || 0;
+          const y2 = parseFloat(selectedElement.getAttribute('y2')) || 0;
+          selectedElement.setAttribute('x1', x1 + ndx);
+          selectedElement.setAttribute('y1', y1 + ndy);
+          selectedElement.setAttribute('x2', x2 + ndx);
+          selectedElement.setAttribute('y2', y2 + ndy);
+        } else if (isSvgElement(selectedElement)) {
           const t = getSvgTranslate(selectedElement);
-          if (e.key === 'ArrowLeft') t.x -= step;
-          if (e.key === 'ArrowRight') t.x += step;
-          if (e.key === 'ArrowUp') t.y -= step;
-          if (e.key === 'ArrowDown') t.y += step;
-          setSvgTranslate(selectedElement, t.x, t.y);
+          setSvgTranslate(selectedElement, t.x + ndx, t.y + ndy);
         } else {
           const left = parseFloat(selectedElement.style.left) || 0;
           const top = parseFloat(selectedElement.style.top) || 0;
-          if (e.key === 'ArrowLeft') selectedElement.style.left = (left - step) + 'px';
-          if (e.key === 'ArrowRight') selectedElement.style.left = (left + step) + 'px';
-          if (e.key === 'ArrowUp') selectedElement.style.top = (top - step) + 'px';
-          if (e.key === 'ArrowDown') selectedElement.style.top = (top + step) + 'px';
-          selectedElement.style.position = 'relative';
+          selectedElement.style.left = (left + ndx) + 'px';
+          selectedElement.style.top = (top + ndy) + 'px';
+          if (selectedElement.style.position !== 'absolute') {
+            selectedElement.style.position = 'relative';
+          }
         }
         if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
         else saveElementOverride(selectedElement);
@@ -1743,13 +1853,16 @@
       if (!added) return;
 
       (added.textboxes || []).forEach(tb => {
-        // Skip SVG text overlays — they're created by convertSvgTextToOverlays()
-        if (tb.isSvgOverlay) return;
         const div = document.createElement('div');
-        div.className = 'added-textbox';
+        const isSvgOverlay = tb.isSvgOverlay;
+        div.className = isSvgOverlay ? 'added-textbox svg-text-overlay' : 'added-textbox';
         div.dataset.addedId = tb.id;
         div.textContent = tb.text;
-        div.style.cssText = `position:absolute; left:${tb.x}px; top:${tb.y}px; width:${tb.width}px; min-height:${tb.height}px; font-size:${tb.fontSize}; font-weight:${tb.fontWeight}; font-family:${tb.fontFamily}; color:${tb.color}; text-align:${tb.textAlign}; padding:4px 6px; border:1px dashed #d1d5db; border-radius:4px; cursor:move; background:rgba(255,255,255,0.8);`;
+        const bgStyle = isSvgOverlay
+          ? 'background:transparent; border:1px dashed transparent;'
+          : 'background:rgba(255,255,255,0.8); border:1px dashed #d1d5db;';
+        const justify = tb.textAlign === 'center' ? 'center' : tb.textAlign === 'right' ? 'flex-end' : 'flex-start';
+        div.style.cssText = `position:absolute; left:${tb.x}px; top:${tb.y}px; width:${tb.width}px; min-height:${tb.height}px; font-size:${tb.fontSize}; font-weight:${tb.fontWeight}; font-family:${tb.fontFamily}; color:${tb.color}; text-align:${tb.textAlign}; padding:${isSvgOverlay ? '2px 4px' : '4px 6px'}; border-radius:${isSvgOverlay ? '2' : '4'}px; cursor:move; ${bgStyle} ${isSvgOverlay ? 'line-height:1.2; display:flex; align-items:center; justify-content:' + justify + ';' : ''}`;
         renderTarget.appendChild(div);
       });
       (added.icons || []).forEach(ic => {
@@ -1894,9 +2007,11 @@
       });
       // Also save SVG attributes for shapes
       if (isSvgElement(el)) {
-        ['fill','stroke','stroke-width','stroke-dasharray','visibility','transform'].forEach(a => {
+        ['fill','stroke','stroke-width','stroke-dasharray','visibility','transform',
+         'r','cx','cy','rx','ry','x','y','width','height',
+         'x1','y1','x2','y2'].forEach(a => {
           const v = el.getAttribute(a);
-          if (v) o['attr_' + a] = v;
+          if (v != null && v !== '') o['attr_' + a] = v;
         });
       }
       elementOverrides[key][path] = o;
