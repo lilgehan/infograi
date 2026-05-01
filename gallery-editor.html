@@ -537,6 +537,20 @@
           </div>
         </div>
 
+        <div class="sidebar-section" id="borderSection" style="display:none;">
+          <h3>Border</h3>
+          <div class="prop-row">
+            <span class="prop-label">Border</span>
+            <input type="color" id="propBorderColor" value="#d1d5db" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
+            <input class="prop-input" type="text" id="propBorderColorText" placeholder="#d1d5db" style="flex:1;">
+            <button id="propBorderNone" title="No border" style="font-size:0.7em;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#6b7280;">None</button>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Border W</span>
+            <input class="prop-input" type="number" id="propBorderWidth" step="0.5" placeholder="1" value="1">
+          </div>
+        </div>
+
         <div class="sidebar-section" id="shapeSection">
           <h3>Shape</h3>
           <div class="prop-row">
@@ -549,6 +563,7 @@
             <span class="prop-label">Stroke</span>
             <input type="color" id="propStroke" value="#6b7280" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:1px;">
             <input class="prop-input" type="text" id="propStrokeText" placeholder="#6b7280" style="flex:1;">
+            <button id="propStrokeNone" title="No stroke" style="font-size:0.7em;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#6b7280;">None</button>
           </div>
           <div class="prop-row">
             <span class="prop-label">Stroke W</span>
@@ -595,7 +610,7 @@
     <div class="shape-row" id="shapeRow"></div>
   </div>
 
-  <!-- ══ MAIN SCRIPT — UNIFIED OBJECT MODEL REFACTOR ══ -->
+  <!-- ══ MAIN SCRIPT — UNIFIED OBJECT MODEL ══ -->
   <script type="module">
     import { renderSection, BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS } from './v3/smart-layouts.js';
     import { renderDiagramSection, DIAGRAM_CSS } from './v3/smart-diagrams.js';
@@ -604,24 +619,19 @@
     styleEl.textContent = [BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS, DIAGRAM_CSS].join('\n');
     document.head.appendChild(styleEl);
 
-    // ══════════════════════════════════════════════════════════════════
-    // UNIFIED OBJECT MODEL ARCHITECTURE
+    // ═══════════════════════════════════════════════════════════════
+    // UNIFIED OBJECT MODEL
     //
-    // Every element on canvas (template or added) becomes one entry in
-    // the `objects` Map, keyed by a unique ID.  One selection system,
-    // one property binding, one update pipeline.
+    // Every selectable thing on the canvas is an EditorObject.
+    // One Map, one selection system, one drag/resize/copy/undo path.
     //
-    // Object schema:
-    // { id, source:'template'|'added', kind:'text'|'shape'|'connector'|'icon'|'container',
-    //   domRef, x, y, w, h,
-    //   fill, stroke, strokeWidth, color, bgColor, fontSize, fontWeight, fontFamily, textAlign,
-    //   dashArray, arrowHead, visible, ... }
+    // After each renderAll(), syncObjects() scans the DOM and:
+    //   - Creates/updates objects for template elements (source:'template')
+    //   - Creates/updates objects for added elements (source:'added')
+    //   - Refreshes domRef so it's never stale
     //
-    // - Template objects are discovered after render via DOM scan
-    // - Added objects are created by user actions
-    // - ALL property changes go through updateObject(id, props)
-    // - renderAll() re-renders template HTML then re-scans, preserving added objects
-    // ══════════════════════════════════════════════════════════════════
+    // Selection is by objectId, not DOM reference.
+    // ═══════════════════════════════════════════════════════════════
 
     // ═══ VARIANT REGISTRY ═══
     const FAMILIES = {
@@ -652,16 +662,31 @@
       }));
     }
 
+    // ═══ SVG SHAPES LOOKUP ═══
+    const SVG_SHAPES = {
+      'diamond': '50,0 100,50 50,100 0,50',
+      'triangle': '50,0 100,100 0,100',
+      'inv-triangle': '0,0 100,0 50,100',
+      'pentagon': '50,0 100,38 82,100 18,100 0,38',
+      'hexagon': '25,0 75,0 100,50 75,100 25,100 0,50',
+      'arrow-right': '0,20 65,20 65,0 100,50 65,100 65,80 0,80',
+      'arrow-left': '35,0 35,20 100,20 100,80 35,80 35,100 0,50',
+      'star': '50,0 61,35 98,35 68,57 79,91 50,70 21,91 32,57 2,35 39,35',
+    };
+
     // ═══ CORE STATE ═══
     let currentVariant = 'bullseye';
     let currentItemCount = 4;
     let currentTone = 'professional';
     let currentDensity = 'standard';
-    let selectedElement = null;
-    let selectedConnectorId = null; // tracks which added connector is selected
+    let selectedObjectId = null; // string ID, never a DOM ref
     let configs = JSON.parse(localStorage.getItem('igEditorConfigs') || '{}');
     let addedElements = JSON.parse(localStorage.getItem('igEditorAdded') || '{}');
     let elementOverrides = JSON.parse(localStorage.getItem('igEditorOverrides') || '{}');
+
+    // ═══ UNIFIED OBJECT MAP ═══
+    // Rebuilt each render cycle. Maps objectId -> { id, source, kind, domRef, addedId, templatePath }
+    const objects = new Map();
 
     // ═══ UNDO STACK ═══
     const undoStack = [];
@@ -755,8 +780,17 @@
       convertSvgTextToOverlays();
       renderAddedElements();
       renderConnectors();
+      syncObjects();
       requestAnimationFrame(() => buildOverlayHandles());
-      selectElement(null);
+      // Try to restore selection
+      if (selectedObjectId && objects.has(selectedObjectId)) {
+        const obj = objects.get(selectedObjectId);
+        document.getElementById('noSelectionMsg').style.display = 'none';
+        document.getElementById('propsContainer').style.display = 'block';
+        populateProps(obj.domRef);
+      } else {
+        selectObject(null);
+      }
     }
 
     // ═══ ELEMENT TYPE DETECTION ═══
@@ -787,7 +821,7 @@
         el.style.display = 'none';
       }
       saveElementOverride(el);
-      selectElement(null);
+      selectObject(null);
       requestAnimationFrame(() => buildOverlayHandles());
     }
     function isTextElement(el) {
@@ -901,60 +935,33 @@
     }
 
     // ═══ OVERLAY HANDLES ═══
-    let handles = [];
-
     function buildOverlayHandles() {
       editorOverlay.innerHTML = '';
-      handles = [];
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
-
-      // Selectable elements — including SVG lines
-      const selectors = [
-        // Text elements
-        '.igs-title', '.igs-body', '.igs-number', '.igs-label',
-        '.igd-title', '.igd-body', '.igd-label', '.igd-number',
-        '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
-        '.igs-dotline-label', '.igs-dotline-val',
-        // Small numbered badges / circles with numbers
-        '.igs-num', '.igd-num', '.igs-step-num', '.igs-circle-num',
-        '[class*="num"]', '[class*="badge"]',
-        // Icons
-        'img[data-icon]', '.igs-icon', '.igd-icon',
-        // SVG shapes (original template elements)
-        'svg circle', 'svg ellipse', 'svg rect', 'svg polygon', 'svg path',
-        'svg line', 'svg polyline', 'svg text',
-        // Container elements
-        '.igs-box', '.igs-dotgrid-card', '.igs-dotline-item',
-        '.igd-node', '.igd-ring', '.igd-petal',
-        // Added elements
-        '.added-textbox', '.added-icon', '.added-shape',
-      ];
-
-      const elements = renderTarget.querySelectorAll(selectors.join(','));
       const seen = new Set();
 
-      elements.forEach((el, idx) => {
-        // Skip hidden/deleted elements
-        if (el.style.display === 'none') return;
-        if (el.getAttribute('visibility') === 'hidden') return;
+      // Iterate through objects map and create handles for each
+      for (const [objectId, obj] of objects) {
+        const el = obj.domRef;
+        if (!el) continue;
 
         const r = el.getBoundingClientRect();
         // For lines, use a wider hit area
         const isLine = el.tagName.toLowerCase() === 'line';
-        if (!isLine && (r.width < 4 || r.height < 4)) return;
-        if (isLine && r.width < 2 && r.height < 2) return;
+        if (!isLine && (r.width < 4 || r.height < 4)) continue;
+        if (isLine && r.width < 2 && r.height < 2) continue;
 
         // Make thin lines clickable with padding
         const padX = isLine && r.width < 12 ? 6 : 0;
         const padY = isLine && r.height < 12 ? 6 : 0;
 
         const key = `${Math.round(r.left)}_${Math.round(r.top)}_${Math.round(r.width)}_${Math.round(r.height)}_${el.tagName}`;
-        if (seen.has(key)) return;
+        if (seen.has(key)) continue;
         seen.add(key);
 
         const handle = document.createElement('div');
         handle.className = 'editor-handle';
-        handle.dataset.idx = idx;
+        handle.dataset.objId = objectId;
         handle.style.left = (r.left - frameRect.left - padX) + 'px';
         handle.style.top = (r.top - frameRect.top - padY) + 'px';
         handle.style.width = (r.width + padX * 2) + 'px';
@@ -970,12 +977,11 @@
 
         handle.addEventListener('mousedown', (e) => {
           if (e.target.classList.contains('resize-dot')) {
-            pushUndo();
-            startResize(e, el, handle, e.target.dataset.corner);
+            selectObject(objectId);
+            startResize(e, el, e.target.dataset.corner);
           } else {
-            selectElement(el, handle);
-            pushUndo();
-            startDrag(e, el, handle);
+            selectObject(objectId);
+            startDrag(e, el, objectId);
           }
         });
 
@@ -984,8 +990,7 @@
         });
 
         editorOverlay.appendChild(handle);
-        handles.push({ handle, element: el });
-      });
+      }
     }
 
     // ═══ INLINE TEXT EDITING ═══
@@ -1010,7 +1015,6 @@
         el.style.outlineOffset = '';
         el.style.zIndex = '';
         editorOverlay.style.display = '';
-        pushUndo();
         saveTextOverride(el);
         requestAnimationFrame(() => buildOverlayHandles());
       };
@@ -1021,26 +1025,125 @@
       });
     }
 
-    // ═══ SELECTION ═══
-    function selectElement(el, handle) {
-      handles.forEach(h => h.handle.classList.remove('selected'));
-      selectedConnectorId = null;
+    // ═══ SELECTION BY OBJECT ID ═══
+    function selectObject(objectId) {
+      // Clear all handle selection highlights
+      document.querySelectorAll('.editor-handle').forEach(h => h.classList.remove('selected'));
+      selectedObjectId = objectId;
 
-      if (!el) {
-        selectedElement = null;
+      if (!objectId) {
         document.getElementById('propsContainer').style.display = 'none';
         document.getElementById('noSelectionMsg').style.display = 'block';
         return;
       }
-      selectedElement = el;
-      if (handle) handle.classList.add('selected');
 
-      // Track connector selection
-      if (el.dataset?.addedId?.startsWith('cn_')) selectedConnectorId = el.dataset.addedId;
+      const obj = objects.get(objectId);
+      if (!obj) return;
+
+      // Highlight the handle for this object
+      document.querySelectorAll('[data-obj-id]').forEach(h => {
+        if (h.dataset.objId === objectId) h.classList.add('selected');
+      });
 
       document.getElementById('noSelectionMsg').style.display = 'none';
       document.getElementById('propsContainer').style.display = 'block';
-      populateProps(el);
+      populateProps(obj.domRef);
+    }
+
+    function getSelectedObject() {
+      return objects.get(selectedObjectId) || null;
+    }
+
+    function getSelectedElement() {
+      const obj = getSelectedObject();
+      return obj?.domRef || null;
+    }
+
+    // ═══ SYNC OBJECTS MAP ═══
+    // Rebuilds the objects map after rendering, scanning DOM for both template and added elements
+    function syncObjects() {
+      objects.clear();
+
+      // Template elements from renderTarget
+      const renderTarget = document.getElementById('renderTarget');
+      const templateSelectors = [
+        '.igs-title', '.igs-body', '.igs-number', '.igs-label',
+        '.igd-title', '.igd-body', '.igd-label', '.igd-number',
+        '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
+        '.igs-dotline-label', '.igs-dotline-val',
+        '.igs-num', '.igd-num', '.igs-step-num', '.igs-circle-num',
+        '[class*="num"]', '[class*="badge"]',
+        'img[data-icon]', '.igs-icon', '.igd-icon',
+        'svg circle', 'svg ellipse', 'svg rect', 'svg polygon', 'svg path',
+        'svg line', 'svg polyline', 'svg text',
+        '.igs-box', '.igs-dotgrid-card', '.igs-dotline-item',
+        '.igd-node', '.igd-ring', '.igd-petal',
+      ];
+
+      renderTarget.querySelectorAll(templateSelectors.join(',')).forEach(el => {
+        if (el.style.display === 'none' || el.getAttribute('visibility') === 'hidden') return;
+
+        // Generate stable template ID from element path
+        const path = getElementPath(el);
+        const objectId = `tpl_${path}`;
+
+        // Determine element kind
+        let kind = 'text';
+        const tag = el.tagName.toLowerCase();
+        if (['circle','ellipse','rect','polygon','path'].includes(tag)) kind = 'shape';
+        else if (tag === 'line') kind = 'line';
+        else if (tag === 'img' || el.classList?.contains('icon')) kind = 'icon';
+        else if (el.classList?.contains('box') || el.classList?.contains('container')) kind = 'container';
+
+        objects.set(objectId, {
+          id: objectId,
+          source: 'template',
+          kind: kind,
+          domRef: el,
+          addedId: null,
+          templatePath: path,
+        });
+      });
+
+      // Added elements from addedElements data
+      const key = configKey();
+      const added = addedElements[key];
+      if (added) {
+        for (const type of ['textboxes', 'icons', 'shapes']) {
+          if (added[type]) {
+            added[type].forEach(data => {
+              const el = document.querySelector(`[data-added-id="${data.id}"]`);
+              if (el) {
+                objects.set(data.id, {
+                  id: data.id,
+                  source: 'added',
+                  kind: type === 'textboxes' ? 'text' : type === 'icons' ? 'icon' : 'shape',
+                  domRef: el,
+                  addedId: data.id,
+                  templatePath: null,
+                });
+              }
+            });
+          }
+        }
+
+        // Connectors
+        if (added.connectors) {
+          added.connectors.forEach(data => {
+            const el = document.querySelector(`[data-added-id="${data.id}"]`);
+            if (el) {
+              objects.set(data.id, {
+                id: data.id,
+                source: 'added',
+                kind: 'line',
+                domRef: el,
+                addedId: data.id,
+                templatePath: null,
+              });
+            }
+          });
+        }
+      }
     }
 
     // ═══ COLOR HELPERS ═══
@@ -1091,13 +1194,8 @@
         document.getElementById('propY').value = Math.round(y1);
         document.getElementById('propW').value = Math.round(x2 - x1);
         document.getElementById('propH').value = Math.round(y2 - y1);
-      } else if (isSvgElement(el)) {
-        const t = getSvgTranslate(el);
-        document.getElementById('propX').value = Math.round(t.x);
-        document.getElementById('propY').value = Math.round(t.y);
-        document.getElementById('propW').value = Math.round(rect.width);
-        document.getElementById('propH').value = Math.round(rect.height);
       } else {
+        // ALL elements (SVG and HTML): show canvas-relative visual position
         document.getElementById('propX').value = Math.round(rect.left - parentRect.left);
         document.getElementById('propY').value = Math.round(rect.top - parentRect.top);
         document.getElementById('propW').value = Math.round(rect.width);
@@ -1109,9 +1207,19 @@
       const isShape = type === 'shape';
       const isConn = type === 'connector';
 
+      const isAddedTextbox = cls.includes('added-textbox');
       document.getElementById('textSection').style.display = isText ? 'block' : 'none';
+      document.getElementById('borderSection').style.display = isAddedTextbox ? 'block' : 'none';
       document.getElementById('shapeSection').style.display = (isShape || isAddedShape) ? 'block' : 'none';
       document.getElementById('connectorSection').style.display = isConn ? 'block' : 'none';
+
+      if (isAddedTextbox) {
+        const computed = window.getComputedStyle(el);
+        const bc = computed.borderColor;
+        const bw = parseFloat(computed.borderWidth) || 1;
+        setColorPair('propBorderColor', 'propBorderColorText', bc && bc !== 'transparent' ? bc : '#d1d5db');
+        document.getElementById('propBorderWidth').value = bw;
+      }
 
       if (isText) {
         const computed = window.getComputedStyle(el);
@@ -1200,92 +1308,94 @@
     function setupPropListeners() {
       // ── Position & Size properties (work for SVG and HTML elements) ──
       function applyPosition() {
-        if (!selectedElement) return;
+        const el = getSelectedElement();
+        if (!el) return;
         pushUndo();
         const x = parseFloat(document.getElementById('propX').value) || 0;
         const y = parseFloat(document.getElementById('propY').value) || 0;
-        const tag = selectedElement.tagName?.toLowerCase();
+        const tag = el.tagName?.toLowerCase();
 
         if (tag === 'line') {
           // For lines: X/Y represent the start point (x1/y1)
           // Shift both endpoints by the delta from current x1/y1
-          const oldX1 = parseFloat(selectedElement.getAttribute('x1')) || 0;
-          const oldY1 = parseFloat(selectedElement.getAttribute('y1')) || 0;
+          const oldX1 = parseFloat(el.getAttribute('x1')) || 0;
+          const oldY1 = parseFloat(el.getAttribute('y1')) || 0;
           const dx = x - oldX1;
           const dy = y - oldY1;
-          selectedElement.setAttribute('x1', x);
-          selectedElement.setAttribute('y1', y);
-          selectedElement.setAttribute('x2', (parseFloat(selectedElement.getAttribute('x2')) || 0) + dx);
-          selectedElement.setAttribute('y2', (parseFloat(selectedElement.getAttribute('y2')) || 0) + dy);
+          el.setAttribute('x1', x);
+          el.setAttribute('y1', y);
+          el.setAttribute('x2', (parseFloat(el.getAttribute('x2')) || 0) + dx);
+          el.setAttribute('y2', (parseFloat(el.getAttribute('y2')) || 0) + dy);
           // Update connector data if it's an added connector
-          const cn = findConnectorData(selectedElement);
+          const cn = findConnectorData(el);
           if (cn) {
             cn.x1 = x; cn.y1 = y;
             cn.x2 = (cn.x2 || 0) + dx; cn.y2 = (cn.y2 || 0) + dy;
             saveAddedElements();
           } else {
-            saveElementOverride(selectedElement);
+            saveElementOverride(el);
           }
-        } else if (isSvgElement(selectedElement)) {
-          setSvgTranslate(selectedElement, x, y);
-          saveElementOverride(selectedElement);
+        } else if (isSvgElement(el)) {
+          setSvgTranslate(el, x, y);
+          saveElementOverride(el);
         } else {
-          if (selectedElement.style.position !== 'absolute') {
-            selectedElement.style.position = 'relative';
+          if (el.style.position !== 'absolute') {
+            el.style.position = 'relative';
           }
-          selectedElement.style.left = x + 'px';
-          selectedElement.style.top = y + 'px';
-          if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
-          else saveElementOverride(selectedElement);
+          el.style.left = x + 'px';
+          el.style.top = y + 'px';
+          if (el.dataset?.addedId) saveAddedElementPosition(el);
+          else saveElementOverride(el);
         }
         requestAnimationFrame(() => buildOverlayHandles());
       }
       function applySize() {
-        if (!selectedElement) return;
+        const el = getSelectedElement();
+        if (!el) return;
         pushUndo();
         const w = parseFloat(document.getElementById('propW').value) || 0;
         const h = parseFloat(document.getElementById('propH').value) || 0;
-        const tag = selectedElement.tagName?.toLowerCase();
+        const tag = el.tagName?.toLowerCase();
 
         if (tag === 'line') {
           // For lines: W/H control the endpoint relative to start
           // Keep x1/y1 fixed, set x2 = x1 + w, y2 = y1 + h
-          const x1 = parseFloat(selectedElement.getAttribute('x1')) || 0;
-          const y1 = parseFloat(selectedElement.getAttribute('y1')) || 0;
-          selectedElement.setAttribute('x2', x1 + w);
-          selectedElement.setAttribute('y2', y1 + h);
-          const cn = findConnectorData(selectedElement);
+          const x1 = parseFloat(el.getAttribute('x1')) || 0;
+          const y1 = parseFloat(el.getAttribute('y1')) || 0;
+          el.setAttribute('x2', x1 + w);
+          el.setAttribute('y2', y1 + h);
+          const cn = findConnectorData(el);
           if (cn) {
             cn.x2 = x1 + w; cn.y2 = y1 + h;
             saveAddedElements();
           } else {
-            saveElementOverride(selectedElement);
+            saveElementOverride(el);
           }
-        } else if (isSvgElement(selectedElement)) {
+        } else if (isSvgElement(el)) {
           if (tag === 'circle') {
-            selectedElement.setAttribute('r', Math.min(w, h) / 2);
+            el.setAttribute('r', Math.min(w, h) / 2);
           } else if (tag === 'ellipse') {
-            selectedElement.setAttribute('rx', w / 2);
-            selectedElement.setAttribute('ry', h / 2);
+            el.setAttribute('rx', w / 2);
+            el.setAttribute('ry', h / 2);
           } else if (tag === 'rect' || tag === 'image') {
-            selectedElement.setAttribute('width', w);
-            selectedElement.setAttribute('height', h);
+            el.setAttribute('width', w);
+            el.setAttribute('height', h);
           } else {
-            const origRect = selectedElement.getBoundingClientRect();
+            const origRect = el.getBoundingClientRect();
             if (origRect.width > 0 && origRect.height > 0) {
               const scaleX = w / origRect.width;
               const scaleY = h / origRect.height;
-              let tr = selectedElement.getAttribute('transform') || '';
+              let tr = el.getAttribute('transform') || '';
               tr = tr.replace(/scale\([^)]*\)\s*/g, '').trim();
-              selectedElement.setAttribute('transform', tr + ` scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`);
+              el.setAttribute('transform', tr + ` scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`);
             }
           }
-          saveElementOverride(selectedElement);
+          saveElementOverride(el);
         } else {
-          selectedElement.style.width = w + 'px';
-          selectedElement.style.height = h + 'px';
-          if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
-          else saveElementOverride(selectedElement);
+          el.style.width = w + 'px';
+          el.style.height = h + 'px';
+          if (el.dataset?.addedId) saveAddedElementPosition(el);
+          else saveElementOverride(el);
         }
         requestAnimationFrame(() => buildOverlayHandles());
       }
@@ -1308,11 +1418,12 @@
         const input = document.getElementById(id);
         ['change','input'].forEach(evt => {
           input.addEventListener(evt, () => {
-            if (!selectedElement || !isTextElement(selectedElement)) return;
+            const el = getSelectedElement();
+            if (!el || !isTextElement(el)) return;
             pushUndo();
-            selectedElement.style[style] = input.value;
-            if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
-            else saveElementOverride(selectedElement);
+            el.style[style] = input.value;
+            if (el.dataset?.addedId) saveAddedElementPosition(el);
+            else saveElementOverride(el);
             requestAnimationFrame(() => buildOverlayHandles());
           });
         });
@@ -1320,13 +1431,14 @@
 
       // Text color — picker + text input synced
       function applyTextColor(color) {
-        if (!selectedElement || !isTextElement(selectedElement)) return;
+        const el = getSelectedElement();
+        if (!el || !isTextElement(el)) return;
         pushUndo();
-        selectedElement.style.color = color;
-        if (selectedElement.dataset?.addedId) {
-          const data = findAddedData(selectedElement);
+        el.style.color = color;
+        if (el.dataset?.addedId) {
+          const data = findAddedData(el);
           if (data) { data.color = color; saveAddedElements(); }
-        } else { saveElementOverride(selectedElement); }
+        } else { saveElementOverride(el); }
       }
       ['change','input'].forEach(evt => {
         document.getElementById('propColor').addEventListener(evt, function() {
@@ -1342,11 +1454,12 @@
 
       // ── Background color (for numbered badges, containers with BG) ──
       function applyBgColor(color) {
-        if (!selectedElement) return;
+        const el = getSelectedElement();
+        if (!el) return;
         pushUndo();
-        selectedElement.style.backgroundColor = color;
-        if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
-        else saveElementOverride(selectedElement);
+        el.style.backgroundColor = color;
+        if (el.dataset?.addedId) saveAddedElementPosition(el);
+        else saveElementOverride(el);
       }
       ['change','input'].forEach(evt => {
         document.getElementById('propBgColor').addEventListener(evt, function() {
@@ -1362,42 +1475,45 @@
 
       // BG No Fill button
       document.getElementById('propBgNone').addEventListener('click', () => {
-        if (!selectedElement) return;
+        const el = getSelectedElement();
+        if (!el) return;
         pushUndo();
-        selectedElement.style.backgroundColor = 'transparent';
-        selectedElement.style.background = 'transparent';
+        el.style.backgroundColor = 'transparent';
+        el.style.background = 'transparent';
         document.getElementById('propBgColorText').value = 'transparent';
-        if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
-        else saveElementOverride(selectedElement);
+        if (el.dataset?.addedId) saveAddedElementPosition(el);
+        else saveElementOverride(el);
       });
 
       // ── Shape properties — work for both SVG shapes and added div shapes ──
       function applyShapeFill(color) {
-        if (!selectedElement) return;
+        const el = getSelectedElement();
+        if (!el) return;
         pushUndo();
-        const isAdded = selectedElement.classList?.contains('added-shape');
+        const isAdded = el.classList?.contains('added-shape');
         if (isAdded) {
-          selectedElement.style.background = color;
-          const data = findAddedData(selectedElement);
+          el.style.background = color;
+          const data = findAddedData(el);
           if (data) { data.fill = color; saveAddedElements(); }
-        } else if (isSvgElement(selectedElement)) {
-          selectedElement.setAttribute('fill', color);
-          selectedElement.style.fill = color;
-          saveElementOverride(selectedElement);
+        } else if (isSvgElement(el)) {
+          el.setAttribute('fill', color);
+          el.style.fill = color;
+          saveElementOverride(el);
         }
       }
       function applyShapeStroke(color) {
-        if (!selectedElement) return;
+        const el = getSelectedElement();
+        if (!el) return;
         pushUndo();
-        const isAdded = selectedElement.classList?.contains('added-shape');
+        const isAdded = el.classList?.contains('added-shape');
         if (isAdded) {
-          selectedElement.style.borderColor = color;
-          const data = findAddedData(selectedElement);
+          el.style.borderColor = color;
+          const data = findAddedData(el);
           if (data) { data.stroke = color; saveAddedElements(); }
-        } else if (isSvgElement(selectedElement)) {
-          selectedElement.setAttribute('stroke', color);
-          selectedElement.style.stroke = color;
-          saveElementOverride(selectedElement);
+        } else if (isSvgElement(el)) {
+          el.setAttribute('stroke', color);
+          el.style.stroke = color;
+          saveElementOverride(el);
         }
       }
 
@@ -1436,19 +1552,74 @@
       // Stroke width
       ['change','input'].forEach(evt => {
         document.getElementById('propStrokeWidth').addEventListener(evt, function() {
-          if (!selectedElement) return;
+          const el = getSelectedElement();
+          if (!el) return;
           pushUndo();
           const w = this.value;
-          const isAdded = selectedElement.classList?.contains('added-shape');
+          const isAdded = el.classList?.contains('added-shape');
           if (isAdded) {
-            selectedElement.style.borderWidth = w + 'px';
-            const data = findAddedData(selectedElement);
+            el.style.borderWidth = w + 'px';
+            const data = findAddedData(el);
             if (data) { data.strokeWidth = parseFloat(w) || 1.5; saveAddedElements(); }
-          } else if (isSvgElement(selectedElement)) {
-            selectedElement.setAttribute('stroke-width', w);
-            selectedElement.style.strokeWidth = w;
-            saveElementOverride(selectedElement);
+          } else if (isSvgElement(el)) {
+            el.setAttribute('stroke-width', w);
+            el.style.strokeWidth = w;
+            saveElementOverride(el);
           }
+        });
+      });
+
+      // Stroke No Stroke button
+      document.getElementById('propStrokeNone').addEventListener('click', () => {
+        const el = getSelectedElement();
+        if (!el) return;
+        pushUndo();
+        const isAdded = el.classList?.contains('added-shape');
+        if (isAdded) {
+          el.style.borderColor = 'transparent';
+          const data = findAddedData(el);
+          if (data) { data.stroke = 'transparent'; saveAddedElements(); }
+        } else if (isSvgElement(el)) {
+          el.setAttribute('stroke', 'none');
+          el.style.stroke = 'none';
+          saveElementOverride(el);
+        }
+        document.getElementById('propStrokeText').value = 'none';
+      });
+
+      // ── Border controls (for text boxes) ──
+      function applyBorderColor(color) {
+        const el = getSelectedElement();
+        if (!el) return;
+        pushUndo();
+        el.style.borderColor = color;
+        el.style.borderStyle = color === 'transparent' ? 'dashed' : 'solid';
+        if (el.dataset?.addedId) saveAddedElementPosition(el);
+        else saveElementOverride(el);
+      }
+      ['change','input'].forEach(evt => {
+        document.getElementById('propBorderColor').addEventListener(evt, function() {
+          document.getElementById('propBorderColorText').value = this.value;
+          applyBorderColor(this.value);
+        });
+      });
+      document.getElementById('propBorderColorText').addEventListener('change', function() {
+        const hex = colorToHex(this.value);
+        document.getElementById('propBorderColor').value = hex;
+        applyBorderColor(this.value);
+      });
+      document.getElementById('propBorderNone').addEventListener('click', () => {
+        applyBorderColor('transparent');
+        document.getElementById('propBorderColorText').value = 'transparent';
+      });
+      ['change','input'].forEach(evt => {
+        document.getElementById('propBorderWidth').addEventListener(evt, function() {
+          const el = getSelectedElement();
+          if (!el) return;
+          pushUndo();
+          el.style.borderWidth = this.value + 'px';
+          if (el.dataset?.addedId) saveAddedElementPosition(el);
+          else saveElementOverride(el);
         });
       });
 
@@ -1480,8 +1651,9 @@
       }
 
       function applyConnectorPropsNow() {
-        if (!selectedElement) return;
-        const type = getElementType(selectedElement);
+        const el = getSelectedElement();
+        if (!el) return;
+        const type = getElementType(el);
         if (type !== 'connector') return;
         pushUndo();
 
@@ -1497,25 +1669,25 @@
         const dashArray = dashMap[style] || '';
 
         // Apply via BOTH attribute AND inline style (inline style wins over CSS classes)
-        selectedElement.setAttribute('stroke', color);
-        selectedElement.style.stroke = color;
-        selectedElement.setAttribute('stroke-width', width);
-        selectedElement.style.strokeWidth = width;
+        el.setAttribute('stroke', color);
+        el.style.stroke = color;
+        el.setAttribute('stroke-width', width);
+        el.style.strokeWidth = width;
         if (dashArray) {
-          selectedElement.setAttribute('stroke-dasharray', dashArray);
-          selectedElement.style.strokeDasharray = dashArray;
+          el.setAttribute('stroke-dasharray', dashArray);
+          el.style.strokeDasharray = dashArray;
         } else {
-          selectedElement.removeAttribute('stroke-dasharray');
-          selectedElement.style.strokeDasharray = '';
+          el.removeAttribute('stroke-dasharray');
+          el.style.strokeDasharray = '';
         }
 
-        if (arrow === 'end' || arrow === 'both') selectedElement.setAttribute('marker-end', 'url(#arrowHead)');
-        else selectedElement.removeAttribute('marker-end');
-        if (arrow === 'start' || arrow === 'both') selectedElement.setAttribute('marker-start', 'url(#arrowHead)');
-        else selectedElement.removeAttribute('marker-start');
+        if (arrow === 'end' || arrow === 'both') el.setAttribute('marker-end', 'url(#arrowHead)');
+        else el.removeAttribute('marker-end');
+        if (arrow === 'start' || arrow === 'both') el.setAttribute('marker-start', 'url(#arrowHead)');
+        else el.removeAttribute('marker-start');
 
         // Save to data model
-        const cn = findConnectorData(selectedElement);
+        const cn = findConnectorData(el);
         if (cn) {
           cn.stroke = color;
           cn.strokeWidth = parseFloat(width) || 1.5;
@@ -1523,7 +1695,7 @@
           cn.arrowHead = arrow;
           saveAddedElements();
         } else {
-          saveElementOverride(selectedElement);
+          saveElementOverride(el);
         }
       }
 
@@ -1553,11 +1725,54 @@
 
     // ═══ DRAG TO MOVE ═══
     let dragState = null;
-    function startDrag(e, el, handle) {
+    function startDrag(e, el, objectId) {
       e.preventDefault();
       const isSvg = isSvgElement(el);
       const isAbsolute = el.style.position === 'absolute';
       const isSvgLine = isSvg && el.tagName.toLowerCase() === 'line';
+      const isConnector = objectId.startsWith('cn_');
+
+      // For SVG lines / connectors, check if mouse is near an endpoint for endpoint-only drag
+      let dragMode = 'whole'; // 'whole' or 'endpoint'
+      let endpointIdx = null; // 0 for start, 1 for end
+      if (isSvgLine) {
+        const x1 = parseFloat(el.getAttribute('x1')) || 0;
+        const y1 = parseFloat(el.getAttribute('y1')) || 0;
+        const x2 = parseFloat(el.getAttribute('x2')) || 0;
+        const y2 = parseFloat(el.getAttribute('y2')) || 0;
+        const svgRect = el.ownerSVGElement.getBoundingClientRect();
+        const canvasRect = document.getElementById('canvasFrame').getBoundingClientRect();
+
+        // Convert SVG coords to screen coords
+        const screenX1 = svgRect.left - canvasRect.left + x1;
+        const screenY1 = svgRect.top - canvasRect.top + y1;
+        const screenX2 = svgRect.left - canvasRect.left + x2;
+        const screenY2 = svgRect.top - canvasRect.top + y2;
+        const dist1 = Math.sqrt((e.clientX - screenX1 - canvasRect.left) ** 2 + (e.clientY - screenY1 - canvasRect.top) ** 2);
+        const dist2 = Math.sqrt((e.clientX - screenX2 - canvasRect.left) ** 2 + (e.clientY - screenY2 - canvasRect.top) ** 2);
+
+        if (dist1 < 20) {
+          dragMode = 'endpoint';
+          endpointIdx = 0;
+        } else if (dist2 < 20) {
+          dragMode = 'endpoint';
+          endpointIdx = 1;
+        }
+      }
+
+      // Read starting position values
+      let origLeft, origTop;
+      if (isSvg && !isSvgLine) {
+        const svgT = getSvgTranslate(el);
+        origLeft = svgT.x;
+        origTop = svgT.y;
+      } else if (isAbsolute) {
+        origLeft = parseFloat(el.style.left) || 0;
+        origTop = parseFloat(el.style.top) || 0;
+      } else {
+        origLeft = parseFloat(el.style.left) || 0;
+        origTop = parseFloat(el.style.top) || 0;
+      }
 
       // For SVG lines, read actual x1/y1/x2/y2
       let lineCoords = null;
@@ -1570,42 +1785,46 @@
         };
       }
 
-      // Read starting style values for position
-      let origLeft, origTop;
-      if (isSvg && !isSvgLine) {
-        const svgT = getSvgTranslate(el);
-        origLeft = svgT.x;
-        origTop = svgT.y;
-      } else if (isAbsolute) {
-        // Already position:absolute (added elements, overlays) — read left/top directly
-        origLeft = parseFloat(el.style.left) || 0;
-        origTop = parseFloat(el.style.top) || 0;
-      } else {
-        // Template HTML elements — use relative positioning from current offset
-        origLeft = parseFloat(el.style.left) || 0;
-        origTop = parseFloat(el.style.top) || 0;
-      }
-
       dragState = {
-        el, handle, isSvg, isAbsolute, isSvgLine, lineCoords,
+        el, objectId, isSvg, isAbsolute, isSvgLine, lineCoords,
+        dragMode, endpointIdx,
         startX: e.clientX, startY: e.clientY,
         origLeft, origTop,
+        moved: false,
       };
       document.addEventListener('mousemove', onDrag);
       document.addEventListener('mouseup', endDrag);
     }
+
     function onDrag(e) {
       if (!dragState) return;
       const dx = e.clientX - dragState.startX;
       const dy = e.clientY - dragState.startY;
 
+      // Mark as moved only if delta > 2px — push undo on first move
+      if (!dragState.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+        dragState.moved = true;
+        pushUndo();
+      }
+
       if (dragState.isSvgLine && dragState.lineCoords) {
-        // SVG lines: move by updating x1/y1/x2/y2 directly
         const lc = dragState.lineCoords;
-        dragState.el.setAttribute('x1', lc.x1 + dx);
-        dragState.el.setAttribute('y1', lc.y1 + dy);
-        dragState.el.setAttribute('x2', lc.x2 + dx);
-        dragState.el.setAttribute('y2', lc.y2 + dy);
+        if (dragState.dragMode === 'endpoint' && dragState.endpointIdx !== null) {
+          // Endpoint-only drag: move only that endpoint
+          if (dragState.endpointIdx === 0) {
+            dragState.el.setAttribute('x1', lc.x1 + dx);
+            dragState.el.setAttribute('y1', lc.y1 + dy);
+          } else {
+            dragState.el.setAttribute('x2', lc.x2 + dx);
+            dragState.el.setAttribute('y2', lc.y2 + dy);
+          }
+        } else {
+          // Whole-line drag: move both endpoints
+          dragState.el.setAttribute('x1', lc.x1 + dx);
+          dragState.el.setAttribute('y1', lc.y1 + dy);
+          dragState.el.setAttribute('x2', lc.x2 + dx);
+          dragState.el.setAttribute('y2', lc.y2 + dy);
+        }
       } else if (dragState.isSvg) {
         setSvgTranslate(dragState.el, dragState.origLeft + dx, dragState.origTop + dy);
       } else {
@@ -1619,20 +1838,175 @@
       // Update handle overlay position
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const r = dragState.el.getBoundingClientRect();
-      dragState.handle.style.left = (r.left - frameRect.left) + 'px';
-      dragState.handle.style.top = (r.top - frameRect.top) + 'px';
+      const handle = document.querySelector(`[data-obj-id="${dragState.objectId}"]`);
+      if (handle) {
+        handle.style.left = (r.left - frameRect.left) + 'px';
+        handle.style.top = (r.top - frameRect.top) + 'px';
+      }
     }
+
     function endDrag() {
       if (dragState) {
-        if (dragState.el.dataset?.addedId) {
-          saveAddedElementPosition(dragState.el);
-        } else {
-          saveElementOverride(dragState.el);
+        // Only push undo if actually moved
+        if (dragState.moved) {
+          if (dragState.el.dataset?.addedId) {
+            saveAddedElementPosition(dragState.el);
+          } else {
+            saveElementOverride(dragState.el);
+          }
         }
         dragState = null;
       }
       document.removeEventListener('mousemove', onDrag);
       document.removeEventListener('mouseup', endDrag);
+    }
+
+    // ═══ RESIZE ═══
+    let resizeState = null;
+    function startResize(e, el, corner) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const isSvg = isSvgElement(el);
+      const tag = el.tagName.toLowerCase();
+
+      // Read starting attribute/style values based on element type
+      let startAttrs = {};
+      if (isSvg) {
+        if (tag === 'circle') {
+          startAttrs.r = parseFloat(el.getAttribute('r')) || 0;
+        } else if (tag === 'ellipse') {
+          startAttrs.rx = parseFloat(el.getAttribute('rx')) || 0;
+          startAttrs.ry = parseFloat(el.getAttribute('ry')) || 0;
+        } else if (tag === 'rect') {
+          startAttrs.x = parseFloat(el.getAttribute('x')) || 0;
+          startAttrs.y = parseFloat(el.getAttribute('y')) || 0;
+          startAttrs.width = parseFloat(el.getAttribute('width')) || 0;
+          startAttrs.height = parseFloat(el.getAttribute('height')) || 0;
+        } else if (tag === 'polygon' || tag === 'path') {
+          // For complex shapes, use scale transforms
+          startAttrs.transform = el.getAttribute('transform') || '';
+        }
+        if (tag !== 'circle' && tag !== 'ellipse' && tag !== 'polygon' && tag !== 'path') {
+          // Get translate if present
+          const tr = getSvgTranslate(el);
+          startAttrs.tx = tr.x;
+          startAttrs.ty = tr.y;
+        }
+      } else {
+        // HTML element
+        startAttrs.width = parseFloat(el.style.width) || el.getBoundingClientRect().width;
+        startAttrs.height = parseFloat(el.style.height) || el.getBoundingClientRect().height;
+        startAttrs.left = parseFloat(el.style.left) || 0;
+        startAttrs.top = parseFloat(el.style.top) || 0;
+      }
+
+      resizeState = {
+        el, corner, isSvg, tag,
+        startAttrs,
+        startX: e.clientX,
+        startY: e.clientY,
+        startRect: el.getBoundingClientRect(),
+        changed: false,
+      };
+      document.addEventListener('mousemove', onResize);
+      document.addEventListener('mouseup', endResize);
+    }
+
+    function onResize(e) {
+      if (!resizeState) return;
+      const dx = e.clientX - resizeState.startX;
+      const dy = e.clientY - resizeState.startY;
+      if (!resizeState.changed && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+        resizeState.changed = true;
+        pushUndo();
+      }
+
+      const corner = resizeState.corner;
+      const el = resizeState.el;
+      const tag = resizeState.tag;
+
+      // For now, use a simple resize-from-corner approach
+      // Corner mapping: nw, ne, sw, se
+      const cornerMap = {
+        'nw': { left: 1, top: 1, width: -1, height: -1 },
+        'ne': { left: 0, top: 1, width: 1, height: -1 },
+        'sw': { left: 1, top: 0, width: -1, height: 1 },
+        'se': { left: 0, top: 0, width: 1, height: 1 },
+      };
+      const cm = cornerMap[corner] || cornerMap['se'];
+
+      if (resizeState.isSvg) {
+        if (tag === 'circle') {
+          const oldR = resizeState.startAttrs.r;
+          const newR = Math.max(2, oldR + (dx + dy) * cm.width / 2);
+          el.setAttribute('r', newR);
+        } else if (tag === 'ellipse') {
+          const oldRx = resizeState.startAttrs.rx;
+          const oldRy = resizeState.startAttrs.ry;
+          const newRx = Math.max(2, oldRx + dx * cm.width);
+          const newRy = Math.max(2, oldRy + dy * cm.height);
+          el.setAttribute('rx', newRx);
+          el.setAttribute('ry', newRy);
+        } else if (tag === 'rect') {
+          let newW = Math.max(2, resizeState.startAttrs.width + dx * cm.width);
+          let newH = Math.max(2, resizeState.startAttrs.height + dy * cm.height);
+          el.setAttribute('width', newW);
+          el.setAttribute('height', newH);
+          // Adjust position if resizing from left/top
+          if (cm.left === 1) {
+            const newX = resizeState.startAttrs.x - dx;
+            el.setAttribute('x', newX);
+          }
+          if (cm.top === 1) {
+            const newY = resizeState.startAttrs.y - dy;
+            el.setAttribute('y', newY);
+          }
+        }
+      } else {
+        // HTML element resize
+        let newW = Math.max(20, resizeState.startAttrs.width + dx * cm.width);
+        let newH = Math.max(20, resizeState.startAttrs.height + dy * cm.height);
+        el.style.width = newW + 'px';
+        el.style.height = newH + 'px';
+        // Adjust position if resizing from left/top
+        if (cm.left === 1) {
+          el.style.left = (resizeState.startAttrs.left - dx) + 'px';
+        }
+        if (cm.top === 1) {
+          el.style.top = (resizeState.startAttrs.top - dy) + 'px';
+        }
+      }
+
+      // Update handle position
+      const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      const objId = selectedObjectId;
+      if (objId) {
+        const handle = document.querySelector(`[data-obj-id="${objId}"]`);
+        if (handle) {
+          handle.style.left = (r.left - frameRect.left) + 'px';
+          handle.style.top = (r.top - frameRect.top) + 'px';
+          handle.style.width = r.width + 'px';
+          handle.style.height = r.height + 'px';
+        }
+      }
+    }
+
+    function endResize() {
+      if (resizeState) {
+        if (resizeState.changed) {
+          const el = resizeState.el;
+          if (el.dataset?.addedId) {
+            saveAddedElementPosition(el);
+          } else {
+            saveElementOverride(el);
+          }
+        }
+        resizeState = null;
+      }
+      document.removeEventListener('mousemove', onResize);
+      document.removeEventListener('mouseup', endResize);
     }
 
     // Save added element's current DOM position back to its data model
@@ -1642,6 +2016,19 @@
       const key = configKey();
       const added = addedElements[key];
       if (!added) return;
+
+      // Check if it's a connector (SVG line)
+      if (id.startsWith('cn_') && added.connectors) {
+        const cn = added.connectors.find(c => c.id === id);
+        if (cn) {
+          cn.x1 = parseFloat(el.getAttribute('x1')) || 0;
+          cn.y1 = parseFloat(el.getAttribute('y1')) || 0;
+          cn.x2 = parseFloat(el.getAttribute('x2')) || 0;
+          cn.y2 = parseFloat(el.getAttribute('y2')) || 0;
+          saveAddedElements();
+        }
+        return;
+      }
 
       // Find the data object across all arrays
       let data = null;
@@ -1660,140 +2047,6 @@
       data.height = parseFloat(el.style.height) || parseFloat(el.style.minHeight) || data.height;
 
       saveAddedElements();
-    }
-
-    // ═══ RESIZE ═══
-    let resizeState = null;
-    function startResize(e, el, handle, corner) {
-      e.preventDefault(); e.stopPropagation();
-      const isSvg = isSvgElement(el);
-      const tag = el.tagName.toLowerCase();
-      const rect = el.getBoundingClientRect();
-
-      // For SVG elements, read their native geometry attributes
-      let svgGeom = null;
-      if (isSvg) {
-        if (tag === 'circle') {
-          svgGeom = { type: 'circle',
-            cx: parseFloat(el.getAttribute('cx')) || 0,
-            cy: parseFloat(el.getAttribute('cy')) || 0,
-            r: parseFloat(el.getAttribute('r')) || 0,
-          };
-        } else if (tag === 'ellipse') {
-          svgGeom = { type: 'ellipse',
-            cx: parseFloat(el.getAttribute('cx')) || 0,
-            cy: parseFloat(el.getAttribute('cy')) || 0,
-            rx: parseFloat(el.getAttribute('rx')) || 0,
-            ry: parseFloat(el.getAttribute('ry')) || 0,
-          };
-        } else if (tag === 'rect') {
-          svgGeom = { type: 'rect',
-            x: parseFloat(el.getAttribute('x')) || 0,
-            y: parseFloat(el.getAttribute('y')) || 0,
-            w: parseFloat(el.getAttribute('width')) || 0,
-            h: parseFloat(el.getAttribute('height')) || 0,
-          };
-        }
-        // For path/polygon/etc, svgGeom stays null — we'll skip resize for those
-      }
-
-      resizeState = {
-        el, handle, corner, isSvg, tag, svgGeom,
-        startX: e.clientX, startY: e.clientY,
-        origW: rect.width, origH: rect.height,
-        origLeft: parseFloat(el.style.left) || 0,
-        origTop: parseFloat(el.style.top) || 0,
-      };
-      document.addEventListener('mousemove', onResize);
-      document.addEventListener('mouseup', endResize);
-    }
-    function onResize(e) {
-      if (!resizeState) return;
-      const dx = e.clientX - resizeState.startX;
-      const dy = e.clientY - resizeState.startY;
-
-      // Calculate new width/height based on which corner is dragged
-      let dw = 0, dh = 0;
-      if (resizeState.corner.includes('e')) dw = dx;
-      if (resizeState.corner.includes('w')) dw = -dx;
-      if (resizeState.corner.includes('s')) dh = dy;
-      if (resizeState.corner.includes('n')) dh = -dy;
-
-      const newW = Math.max(20, resizeState.origW + dw);
-      const newH = Math.max(10, resizeState.origH + dh);
-
-      if (resizeState.isSvg && resizeState.svgGeom) {
-        const g = resizeState.svgGeom;
-        const el = resizeState.el;
-
-        if (g.type === 'circle') {
-          // Circle: resize by changing r, adjust cx/cy to anchor opposite corner
-          const newR = Math.max(5, Math.min(newW, newH) / 2);
-          const dr = newR - g.r;
-          let ncx = g.cx, ncy = g.cy;
-          // Anchor the opposite edge: if dragging east, west stays fixed, cx moves right
-          if (resizeState.corner.includes('e')) ncx = g.cx + dr;
-          if (resizeState.corner.includes('w')) ncx = g.cx - dr;
-          if (resizeState.corner.includes('s')) ncy = g.cy + dr;
-          if (resizeState.corner.includes('n')) ncy = g.cy - dr;
-          el.setAttribute('r', newR);
-          el.setAttribute('cx', ncx);
-          el.setAttribute('cy', ncy);
-        } else if (g.type === 'ellipse') {
-          const newRx = Math.max(5, newW / 2);
-          const newRy = Math.max(5, newH / 2);
-          const drx = newRx - g.rx;
-          const dry = newRy - g.ry;
-          let ncx = g.cx, ncy = g.cy;
-          if (resizeState.corner.includes('e')) ncx = g.cx + drx;
-          if (resizeState.corner.includes('w')) ncx = g.cx - drx;
-          if (resizeState.corner.includes('s')) ncy = g.cy + dry;
-          if (resizeState.corner.includes('n')) ncy = g.cy - dry;
-          el.setAttribute('rx', newRx);
-          el.setAttribute('ry', newRy);
-          el.setAttribute('cx', ncx);
-          el.setAttribute('cy', ncy);
-        } else if (g.type === 'rect') {
-          let nx = g.x, ny = g.y;
-          if (resizeState.corner.includes('w')) nx = g.x - (newW - g.w);
-          if (resizeState.corner.includes('n')) ny = g.y - (newH - g.h);
-          el.setAttribute('x', nx);
-          el.setAttribute('y', ny);
-          el.setAttribute('width', newW);
-          el.setAttribute('height', newH);
-        }
-      } else {
-        // HTML elements
-        resizeState.el.style.width = newW + 'px';
-        resizeState.el.style.height = newH + 'px';
-        // For w/n corners, shift position to keep opposite edge fixed
-        if (resizeState.corner.includes('w')) {
-          resizeState.el.style.left = (resizeState.origLeft - (newW - resizeState.origW)) + 'px';
-        }
-        if (resizeState.corner.includes('n')) {
-          resizeState.el.style.top = (resizeState.origTop - (newH - resizeState.origH)) + 'px';
-        }
-      }
-      // Update handle overlay
-      const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
-      const r = resizeState.el.getBoundingClientRect();
-      resizeState.handle.style.left = (r.left - frameRect.left) + 'px';
-      resizeState.handle.style.top = (r.top - frameRect.top) + 'px';
-      resizeState.handle.style.width = r.width + 'px';
-      resizeState.handle.style.height = r.height + 'px';
-    }
-    function endResize() {
-      if (resizeState) {
-        if (resizeState.el.dataset?.addedId) {
-          saveAddedElementPosition(resizeState.el);
-        } else {
-          saveElementOverride(resizeState.el);
-        }
-        populateProps(resizeState.el);
-        resizeState = null;
-      }
-      document.removeEventListener('mousemove', onResize);
-      document.removeEventListener('mouseup', endResize);
     }
 
     // ═══ ADD ELEMENTS ═══
@@ -1868,25 +2121,60 @@
         popUndo();
         return;
       }
-      // Copy: Ctrl+C / Cmd+C
+      // Copy: Ctrl+C / Cmd+C — works for ALL elements (added and template)
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-        if (selectedElement && selectedElement.dataset?.addedId) {
-          e.preventDefault();
-          const addedId = selectedElement.dataset.addedId;
+        const obj = getSelectedObject();
+        if (!obj) return;
+        e.preventDefault();
+
+        if (obj.source === 'added') {
+          // Added element: find and clone its data
           const key = configKey();
           const added = addedElements[key];
           if (!added) return;
-          // Find the data
           let clipData = null;
           let clipType = null;
           for (const arr of ['textboxes', 'icons', 'shapes', 'connectors']) {
             if (added[arr]) {
-              const found = added[arr].find(item => item.id === addedId);
+              const found = added[arr].find(item => item.id === obj.addedId);
               if (found) { clipData = JSON.parse(JSON.stringify(found)); clipType = arr; break; }
             }
           }
           if (clipData) {
             window._editorClipboard = { data: clipData, type: clipType };
+          }
+        } else if (obj.source === 'template') {
+          // Template element: read visual properties from DOM, create as added element clone
+          const el = obj.domRef;
+          const rect = el.getBoundingClientRect();
+          const parentRect = renderTarget.getBoundingClientRect();
+          const x = rect.left - parentRect.left;
+          const y = rect.top - parentRect.top;
+
+          if (obj.kind === 'text') {
+            const computed = window.getComputedStyle(el);
+            window._editorClipboard = {
+              data: {
+                id: 'tb_copy', text: el.textContent || 'Text',
+                x, y, width: rect.width + 8, height: rect.height + 4,
+                fontSize: computed.fontSize, fontWeight: computed.fontWeight,
+                fontFamily: computed.fontFamily, color: computed.color,
+                textAlign: computed.textAlign || 'left',
+              },
+              type: 'textboxes',
+            };
+          } else if (obj.kind === 'shape') {
+            const fill = el.getAttribute('fill') || 'rgba(37,99,235,0.1)';
+            const stroke = el.getAttribute('stroke') || '#6b7280';
+            const sw = parseFloat(el.getAttribute('stroke-width')) || 1.5;
+            window._editorClipboard = {
+              data: {
+                id: 'sh_copy', type: 'rectangle',
+                x, y, width: rect.width, height: rect.height,
+                fill, stroke, strokeWidth: sw, borderRadius: 4,
+              },
+              type: 'shapes',
+            };
           }
         }
         return;
@@ -1912,15 +2200,18 @@
           ensureAdded()[clip.type].push(newData);
           saveAddedElements();
           renderAll();
+          selectObject(newData.id);
         }
         return;
       }
       // ESC: cancel line drawing or deselect
       if (e.key === 'Escape') {
-        drawingLine = false; lineStart = null;
-        document.getElementById('editorCanvas').style.cursor = '';
-        document.getElementById('addLineBtn').textContent = '+ Line';
-        selectElement(null);
+        if (drawingLine) {
+          drawingLine = false; lineStart = null;
+          document.getElementById('editorCanvas').style.cursor = '';
+          document.getElementById('addLineBtn').textContent = '+ Line';
+        }
+        selectObject(null);
         return;
       }
       // Don't handle keys if we're editing text
@@ -1929,61 +2220,69 @@
 
       // Delete: remove selected added element, OR hide original template element
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedElement) {
+        const el = getSelectedElement();
+        if (el) {
           e.preventDefault();
           pushUndo();
-          const addedId = selectedElement.dataset?.addedId;
+          const addedId = el.dataset?.addedId;
           if (addedId) {
             removeAddedElement(addedId);
+            renderAll();
           } else {
             // Original template element — hide it (saved as override)
-            hideOriginalElement(selectedElement);
+            hideOriginalElement(el);
           }
           return;
         }
       }
       // Arrow keys: nudge selected element
-      if (selectedElement && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
-        e.preventDefault();
-        pushUndo();
-        const step = e.shiftKey ? 10 : 1;
-        let ndx = 0, ndy = 0;
-        if (e.key === 'ArrowLeft') ndx = -step;
-        if (e.key === 'ArrowRight') ndx = step;
-        if (e.key === 'ArrowUp') ndy = -step;
-        if (e.key === 'ArrowDown') ndy = step;
+      if (selectedObjectId && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+        const el = getSelectedElement();
+        if (el) {
+          e.preventDefault();
+          pushUndo();
+          const step = e.shiftKey ? 10 : 1;
+          let ndx = 0, ndy = 0;
+          if (e.key === 'ArrowLeft') ndx = -step;
+          if (e.key === 'ArrowRight') ndx = step;
+          if (e.key === 'ArrowUp') ndy = -step;
+          if (e.key === 'ArrowDown') ndy = step;
 
-        const isSvgLine = isSvgElement(selectedElement) && selectedElement.tagName.toLowerCase() === 'line';
-        if (isSvgLine) {
-          // Move SVG line by updating x1/y1/x2/y2
-          const x1 = parseFloat(selectedElement.getAttribute('x1')) || 0;
-          const y1 = parseFloat(selectedElement.getAttribute('y1')) || 0;
-          const x2 = parseFloat(selectedElement.getAttribute('x2')) || 0;
-          const y2 = parseFloat(selectedElement.getAttribute('y2')) || 0;
-          selectedElement.setAttribute('x1', x1 + ndx);
-          selectedElement.setAttribute('y1', y1 + ndy);
-          selectedElement.setAttribute('x2', x2 + ndx);
-          selectedElement.setAttribute('y2', y2 + ndy);
-        } else if (isSvgElement(selectedElement)) {
-          const t = getSvgTranslate(selectedElement);
-          setSvgTranslate(selectedElement, t.x + ndx, t.y + ndy);
-        } else {
-          const left = parseFloat(selectedElement.style.left) || 0;
-          const top = parseFloat(selectedElement.style.top) || 0;
-          selectedElement.style.left = (left + ndx) + 'px';
-          selectedElement.style.top = (top + ndy) + 'px';
-          if (selectedElement.style.position !== 'absolute') {
-            selectedElement.style.position = 'relative';
+          const isSvgLine = isSvgElement(el) && el.tagName.toLowerCase() === 'line';
+          if (isSvgLine) {
+            // Move SVG line by updating x1/y1/x2/y2
+            const x1 = parseFloat(el.getAttribute('x1')) || 0;
+            const y1 = parseFloat(el.getAttribute('y1')) || 0;
+            const x2 = parseFloat(el.getAttribute('x2')) || 0;
+            const y2 = parseFloat(el.getAttribute('y2')) || 0;
+            el.setAttribute('x1', x1 + ndx);
+            el.setAttribute('y1', y1 + ndy);
+            el.setAttribute('x2', x2 + ndx);
+            el.setAttribute('y2', y2 + ndy);
+          } else if (isSvgElement(el)) {
+            const t = getSvgTranslate(el);
+            setSvgTranslate(el, t.x + ndx, t.y + ndy);
+          } else {
+            const left = parseFloat(el.style.left) || 0;
+            const top = parseFloat(el.style.top) || 0;
+            el.style.left = (left + ndx) + 'px';
+            el.style.top = (top + ndy) + 'px';
+            if (el.style.position !== 'absolute') {
+              el.style.position = 'relative';
+            }
           }
+          if (el.dataset?.addedId) saveAddedElementPosition(el);
+          else saveElementOverride(el);
+          requestAnimationFrame(() => buildOverlayHandles());
         }
-        if (selectedElement.dataset?.addedId) saveAddedElementPosition(selectedElement);
-        else saveElementOverride(selectedElement);
-        requestAnimationFrame(() => buildOverlayHandles());
       }
     });
 
     // ═══ RENDER ADDED ELEMENTS ═══
     function renderAddedElements() {
+      // Clear existing added elements first
+      document.querySelectorAll('.added-textbox, .added-icon, .added-shape').forEach(el => el.remove());
+
       const key = configKey();
       const added = addedElements[key];
       if (!added) return;
@@ -2006,20 +2305,9 @@
         div.className = 'added-icon';
         div.dataset.addedId = ic.id;
         div.innerHTML = `<img src="" alt="" style="width:100%;height:100%;object-fit:contain;" data-icon="true">`;
-        div.style.cssText = `position:absolute; left:${ic.x}px; top:${ic.y}px; width:${ic.width}px; height:${ic.height}px; border:1px dashed #d1d5db; border-radius:4px; cursor:move; background:rgba(255,255,255,0.8); display:flex; align-items:center; justify-content:center;`;
+        div.style.cssText = `position:absolute; left:${ic.x}px; top:${ic.y}px; width:${ic.width}px; height:${ic.height}px; border:1px dashed transparent; border-radius:4px; cursor:move; background:transparent; display:flex; align-items:center; justify-content:center;`;
         renderTarget.appendChild(div);
       });
-      // SVG polygon points for complex shapes (normalized to 0-100 coordinate space)
-      const SVG_SHAPES = {
-        'diamond':       '50,0 100,50 50,100 0,50',
-        'triangle':      '50,0 100,100 0,100',
-        'inv-triangle':  '0,0 100,0 50,100',
-        'pentagon':      '50,0 100,38 82,100 18,100 0,38',
-        'hexagon':       '25,0 75,0 100,50 75,100 25,100 0,50',
-        'arrow-right':   '0,20 65,20 65,0 100,50 65,100 65,80 0,80',
-        'arrow-left':    '35,0 35,20 100,20 100,80 35,80 35,100 0,50',
-        'star':          '50,0 61,35 98,35 68,57 79,91 50,70 21,91 32,57 2,35 39,35',
-      };
 
       (added.shapes || []).forEach(sh => {
         const div = document.createElement('div');
@@ -2082,55 +2370,9 @@
         if (cn.arrowHead === 'start' || cn.arrowHead === 'both') line.setAttribute('marker-start', 'url(#arrowHead)');
         line.classList.add('connector-line');
         line.dataset.addedId = cn.id;
-
-        line.addEventListener('mousedown', (e) => {
-          e.stopPropagation();
-          selectElement(line, null);
-          // Only start drag if mouse moves more than 4px (prevents accidental drag on click-to-select)
-          const startX = e.clientX, startY = e.clientY;
-          let moved = false;
-          const onCheckMove = (me) => {
-            if (Math.abs(me.clientX - startX) > 4 || Math.abs(me.clientY - startY) > 4) {
-              moved = true;
-              document.removeEventListener('mousemove', onCheckMove);
-              document.removeEventListener('mouseup', onCheckUp);
-              startConnectorDrag(e, cn, line);
-            }
-          };
-          const onCheckUp = () => {
-            document.removeEventListener('mousemove', onCheckMove);
-            document.removeEventListener('mouseup', onCheckUp);
-            // Just a click — selection already happened above
-          };
-          document.addEventListener('mousemove', onCheckMove);
-          document.addEventListener('mouseup', onCheckUp);
-        });
+        // NO mousedown here — handles are managed by buildOverlayHandles
         svg.appendChild(line);
       });
-    }
-
-    function startConnectorDrag(e, cn, lineEl) {
-      pushUndo();
-      const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
-      const mx = e.clientX - frameRect.left;
-      const my = e.clientY - frameRect.top;
-      const d1 = Math.hypot(mx - cn.x1, my - cn.y1);
-      const d2 = Math.hypot(mx - cn.x2, my - cn.y2);
-      const endpoint = d1 < d2 ? 'start' : 'end';
-
-      const onMove = (me) => {
-        const x = me.clientX - frameRect.left;
-        const y = me.clientY - frameRect.top;
-        if (endpoint === 'start') { cn.x1 = x; cn.y1 = y; lineEl.setAttribute('x1', x); lineEl.setAttribute('y1', y); }
-        else { cn.x2 = x; cn.y2 = y; lineEl.setAttribute('x2', x); lineEl.setAttribute('y2', y); }
-      };
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        saveAddedElements();
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
     }
 
     // ═══ SAVE / LOAD ═══
@@ -2209,7 +2451,7 @@
         if (added[arr]) added[arr] = added[arr].filter(el => el.id !== id);
       });
       saveAddedElements();
-      selectElement(null);
+      selectObject(null);
       renderAll();
     }
 
@@ -2466,7 +2708,7 @@ export function applyLayoutConfig(container, variant, itemCount) {
     // ═══ DESELECT ON CANVAS CLICK ═══
     document.getElementById('editorCanvas').addEventListener('mousedown', (e) => {
       if (e.target === document.getElementById('editorCanvas') || e.target === document.getElementById('canvasFrame')) {
-        if (!drawingLine) selectElement(null);
+        if (!drawingLine) selectObject(null);
       }
     });
 
