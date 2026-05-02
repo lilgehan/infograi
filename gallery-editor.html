@@ -707,6 +707,25 @@
     let addedElements = JSON.parse(localStorage.getItem('igEditorAdded') || '{}');
     let elementOverrides = JSON.parse(localStorage.getItem('igEditorOverrides') || '{}');
 
+    // Remove any position/left/top entries saved by the old buggy drag system.
+    // Old code set position:relative + left/top which corrupted template layouts on re-render.
+    (function cleanLegacyOverrides() {
+      let dirty = false;
+      Object.values(elementOverrides).forEach(store => {
+        if (!store || typeof store !== 'object') return;
+        Object.values(store).forEach(entry => {
+          if (!entry || typeof entry !== 'object') return;
+          if ('position' in entry || 'left' in entry || 'top' in entry) {
+            delete entry.position;
+            delete entry.left;
+            delete entry.top;
+            dirty = true;
+          }
+        });
+      });
+      if (dirty) localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
+    })();
+
     // ═══ UNIFIED OBJECT MAP ═══
     // Rebuilt each render cycle. Maps objectId -> { id, source, kind, domRef, addedId, templatePath }
     const objects = new Map();
@@ -856,6 +875,18 @@
       tr = tr.replace(/translate\([^)]*\)\s*/g, '').trim();
       tr = `translate(${x}, ${y})` + (tr ? ' ' + tr : '');
       el.setAttribute('transform', tr);
+    }
+    // Read/write CSS transform: translate(x, y) on HTML elements
+    function getCssTranslate(el) {
+      const tr = el.style.transform || '';
+      const m = tr.match(/translate\(\s*([-\d.]+)px[,\s]+([-\d.]+)px\s*\)/);
+      return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+    }
+    function setCssTranslate(el, x, y) {
+      // Preserve any non-translate transforms (e.g. rotate, scale) already on the element
+      let tr = el.style.transform || '';
+      tr = tr.replace(/translate\([^)]*\)\s*/g, '').trim();
+      el.style.transform = `translate(${x}px, ${y}px)` + (tr ? ' ' + tr : '');
     }
     // Hide an original template element by saving display:none override
     function hideOriginalElement(el) {
@@ -1535,14 +1566,14 @@
         } else if (isSvgElement(el)) {
           setSvgTranslate(el, x, y);
           saveElementOverride(el);
+        } else if (!el.dataset?.addedId) {
+          // Template HTML element: use transform so layout role is never mutated
+          setCssTranslate(el, x, y);
+          saveElementOverride(el);
         } else {
-          if (el.style.position !== 'absolute') {
-            el.style.position = 'relative';
-          }
           el.style.left = x + 'px';
           el.style.top = y + 'px';
-          if (el.dataset?.addedId) saveAddedElementPosition(el);
-          else saveElementOverride(el);
+          saveAddedElementPosition(el);
         }
         requestAnimationFrame(() => buildOverlayHandles());
       }
@@ -2003,11 +2034,17 @@
           const obj = objects.get(id);
           if (!obj?.domRef) return null;
           const el = obj.domRef;
-          return {
-            id, el,
-            startLeft: parseFloat(el.style.left) || 0,
-            startTop: parseFloat(el.style.top) || 0,
-          };
+          const isTemplate = !isSvgElement(el) && obj.source === 'template';
+          let startLeft, startTop;
+          if (isTemplate) {
+            const t = getCssTranslate(el);
+            startLeft = t.x;
+            startTop = t.y;
+          } else {
+            startLeft = parseFloat(el.style.left) || 0;
+            startTop = parseFloat(el.style.top) || 0;
+          }
+          return { id, el, isTemplate, startLeft, startTop };
         }).filter(Boolean),
       };
 
@@ -2020,9 +2057,13 @@
           pushUndo();
         }
         if (!multiDragState.moved) return;
-        multiDragState.elements.forEach(({ el, startLeft, startTop }) => {
-          el.style.left = (startLeft + dx) + 'px';
-          el.style.top = (startTop + dy) + 'px';
+        multiDragState.elements.forEach(({ el, isTemplate, startLeft, startTop }) => {
+          if (isTemplate) {
+            setCssTranslate(el, startLeft + dx, startTop + dy);
+          } else {
+            el.style.left = (startLeft + dx) + 'px';
+            el.style.top = (startTop + dy) + 'px';
+          }
         });
         requestAnimationFrame(() => buildOverlayHandles());
       }
@@ -2049,6 +2090,9 @@
       const isAbsolute = el.style.position === 'absolute';
       const isSvgLine = isSvg && el.tagName.toLowerCase() === 'line';
       const isConnector = objectId.startsWith('cn_');
+      // Template HTML elements must be moved via transform:translate to avoid mutating their
+      // CSS position type (absolute/flex-child/etc.) which would collapse the layout.
+      const isTemplate = !isSvg && (objects.get(objectId)?.source === 'template');
 
       // For SVG lines / connectors, check if mouse is near an endpoint for endpoint-only drag
       let dragMode = 'whole'; // 'whole' or 'endpoint'
@@ -2084,9 +2128,12 @@
         const svgT = getSvgTranslate(el);
         origLeft = svgT.x;
         origTop = svgT.y;
-      } else if (isAbsolute) {
-        origLeft = parseFloat(el.style.left) || 0;
-        origTop = parseFloat(el.style.top) || 0;
+      } else if (isTemplate) {
+        // Template HTML elements: read existing CSS translate offset (default 0,0).
+        // Never read style.left/style.top — those are set by the template CSS, not inline.
+        const t = getCssTranslate(el);
+        origLeft = t.x;
+        origTop = t.y;
       } else {
         origLeft = parseFloat(el.style.left) || 0;
         origTop = parseFloat(el.style.top) || 0;
@@ -2104,7 +2151,7 @@
       }
 
       dragState = {
-        el, objectId, isSvg, isAbsolute, isSvgLine, lineCoords,
+        el, objectId, isSvg, isAbsolute, isSvgLine, isTemplate, lineCoords,
         dragMode, endpointIdx,
         startX: e.clientX, startY: e.clientY,
         origLeft, origTop,
@@ -2145,11 +2192,12 @@
         }
       } else if (dragState.isSvg) {
         setSvgTranslate(dragState.el, dragState.origLeft + dx, dragState.origTop + dy);
+      } else if (dragState.isTemplate) {
+        // Template HTML elements: use transform:translate so the element's layout role
+        // (absolute, flex-child, etc.) is never changed. This prevents jumps and overflow clipping.
+        setCssTranslate(dragState.el, dragState.origLeft + dx, dragState.origTop + dy);
       } else {
-        // HTML elements: keep their existing position type
-        if (!dragState.isAbsolute) {
-          dragState.el.style.position = 'relative';
-        }
+        // User-added HTML elements: already absolutely positioned, left/top is correct.
         dragState.el.style.left = (dragState.origLeft + dx) + 'px';
         dragState.el.style.top = (dragState.origTop + dy) + 'px';
       }
@@ -2215,12 +2263,20 @@
         // HTML element
         startAttrs.width = parseFloat(el.style.width) || el.getBoundingClientRect().width;
         startAttrs.height = parseFloat(el.style.height) || el.getBoundingClientRect().height;
-        startAttrs.left = parseFloat(el.style.left) || 0;
-        startAttrs.top = parseFloat(el.style.top) || 0;
+        // Template elements use transform for position offsets, added elements use left/top
+        if (!el.dataset?.addedId) {
+          const t = getCssTranslate(el);
+          startAttrs.tx = t.x;
+          startAttrs.ty = t.y;
+        } else {
+          startAttrs.left = parseFloat(el.style.left) || 0;
+          startAttrs.top = parseFloat(el.style.top) || 0;
+        }
       }
 
+      const resizeIsTemplate = !isSvg && !el.dataset?.addedId;
       resizeState = {
-        el, corner, isSvg, tag,
+        el, corner, isSvg, tag, isTemplate: resizeIsTemplate,
         startAttrs,
         startX: e.clientX,
         startY: e.clientY,
@@ -2287,12 +2343,20 @@
         let newH = Math.max(20, resizeState.startAttrs.height + dy * cm.height);
         el.style.width = newW + 'px';
         el.style.height = newH + 'px';
-        // Adjust position if resizing from left/top
-        if (cm.left === 1) {
-          el.style.left = (resizeState.startAttrs.left - dx) + 'px';
-        }
-        if (cm.top === 1) {
-          el.style.top = (resizeState.startAttrs.top - dy) + 'px';
+        // Adjust position offset if resizing from left/top edge
+        if (resizeState.isTemplate) {
+          // Template elements: use transform so layout role is never changed
+          const newTx = cm.left === 1 ? resizeState.startAttrs.tx - dx : resizeState.startAttrs.tx;
+          const newTy = cm.top  === 1 ? resizeState.startAttrs.ty - dy : resizeState.startAttrs.ty;
+          setCssTranslate(el, newTx, newTy);
+        } else {
+          // Added elements: adjust left/top directly
+          if (cm.left === 1) {
+            el.style.left = (resizeState.startAttrs.left - dx) + 'px';
+          }
+          if (cm.top === 1) {
+            el.style.top = (resizeState.startAttrs.top - dy) + 'px';
+          }
         }
       }
 
@@ -2681,12 +2745,16 @@
             const t = getSvgTranslate(el);
             setSvgTranslate(el, t.x + ndx, t.y + ndy);
           } else {
-            const left = parseFloat(el.style.left) || 0;
-            const top = parseFloat(el.style.top) || 0;
-            el.style.left = (left + ndx) + 'px';
-            el.style.top = (top + ndy) + 'px';
-            if (el.style.position !== 'absolute') {
-              el.style.position = 'relative';
+            const nudgeObj = objects.get(selectedObjectId);
+            const nudgeIsTemplate = nudgeObj?.source === 'template';
+            if (nudgeIsTemplate) {
+              const t = getCssTranslate(el);
+              setCssTranslate(el, t.x + ndx, t.y + ndy);
+            } else {
+              const left = parseFloat(el.style.left) || 0;
+              const top = parseFloat(el.style.top) || 0;
+              el.style.left = (left + ndx) + 'px';
+              el.style.top = (top + ndy) + 'px';
             }
           }
           if (el.dataset?.addedId) saveAddedElementPosition(el);
@@ -2839,7 +2907,9 @@
       const path = getElementPath(el);
       if (!path) return;
       const o = {};
-      ['left','top','width','height','fontSize','fontWeight','fontFamily','color','backgroundColor','textAlign','maxWidth','position','display'].forEach(p => {
+      // Save transform (not position/left/top) for template elements so re-applying the override
+      // on re-render never changes the element's layout role (absolute, flex-child, etc.).
+      ['transform','width','height','fontSize','fontWeight','fontFamily','color','backgroundColor','textAlign','maxWidth','display'].forEach(p => {
         if (el.style[p]) o[p] = el.style[p];
       });
       // Also save SVG attributes for shapes
@@ -3225,9 +3295,15 @@ export function applyLayoutConfig(container, variant, itemCount) {
           const isCircular = ['circle','oval','ring'].includes(sh.name.toLowerCase());
           const w = isCircular ? 70 : 80;
           const h = isCircular ? 70 : 60;
+          // Place at canvas centre so the new shape is always visible
+          const frame = document.getElementById('canvasFrame');
+          const frameW = frame ? frame.clientWidth  : 480;
+          const frameH = frame ? frame.clientHeight : 360;
+          const cx = Math.round((frameW  - w) / 2);
+          const cy = Math.round((frameH - h) / 2);
           ensureAdded().shapes.push({
             id:'sh_' + Date.now(), type: sh.name.toLowerCase().replace(/\s+/g,'-'),
-            x:120, y:120, width:w, height:h,
+            x: cx, y: cy, width:w, height:h,
             fill:'rgba(37,99,235,0.1)', stroke:'#6b7280', strokeWidth:1.5, borderRadius: sh.br || 0,
             text: '', textColor: '#111827', fontSize: '0.85em', fontWeight: '500', fontFamily: 'var(--font-body)', textAlign: 'center',
           });
