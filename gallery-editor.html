@@ -36,13 +36,20 @@
     .editor-topbar {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 8px 16px;
+      gap: 6px;
+      padding: 6px 10px;
       background: #1f2937;
       color: white;
       flex-shrink: 0;
       z-index: 100;
+      overflow-x: auto;
+      scrollbar-width: none; /* Firefox */
     }
+    .editor-topbar::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+    /* Every direct child must not shrink — keeps right-side buttons always visible */
+    .editor-topbar > * { flex-shrink: 0; }
+    /* Spacer gives up space gracefully instead of forcing overflow */
+    .editor-topbar .spacer { flex: 1 1 4px; min-width: 4px; }
     .editor-topbar h1 {
       font-family: 'Space Grotesk', sans-serif;
       font-size: 1em;
@@ -411,14 +418,6 @@
       <option value="standard" selected>Standard</option>
       <option value="detailed">Detailed</option>
     </select>
-
-    <div class="sep"></div>
-    <div class="add-toolbar">
-      <button class="add-btn" id="addTextBtn" title="Add text box">+ Text</button>
-      <button class="add-btn" id="addIconBtn" title="Add icon box">+ Icon</button>
-      <button class="add-btn" id="addLineBtn" title="Draw connector line">+ Line</button>
-      <button class="add-btn" id="addShapeBtn" title="Add shape">+ Shape</button>
-    </div>
 
     <div class="spacer"></div>
 
@@ -2300,10 +2299,9 @@
       saveAddedElements();
     }
 
-    // ═══ ADD ELEMENTS ═══
-    document.getElementById('addTextBtn').addEventListener('click', () => {
+    // ═══ ADD ELEMENTS — named functions called from shape library ═══
+    function doAddText() {
       pushUndo();
-      // Textbox is now a rect shape with text — unified model
       ensureAdded().shapes.push({
         id: 'sh_' + Date.now(), type: 'rect',
         x: 50, y: 50, width: 160, height: 40,
@@ -2312,38 +2310,29 @@
         fontWeight: '500', fontFamily: 'var(--font-body)', textAlign: 'left',
       });
       saveAddedElements(); renderAll();
-    });
-    document.getElementById('addIconBtn').addEventListener('click', () => {
+    }
+    function doAddIcon() {
       pushUndo();
       ensureAdded().icons.push({
         id: 'ic_' + Date.now(), icon: 'star',
-        x: 80, y: 80, width: 36, height: 36,
+        x: 80, y: 80, width: 48, height: 48,
       });
       saveAddedElements(); renderAll();
-    });
-    document.getElementById('addShapeBtn').addEventListener('click', () => {
-      pushUndo();
-      ensureAdded().shapes.push({
-        id: 'sh_' + Date.now(), type: 'rect',
-        x: 100, y: 100, width: 80, height: 60,
-        fill: 'rgba(37,99,235,0.1)', stroke: 'var(--accent)', strokeWidth: 1.5, borderRadius: 8,
-        text: '', textColor: '#111827', fontSize: '0.85em', fontWeight: '500', fontFamily: 'var(--font-body)', textAlign: 'center',
-      });
-      saveAddedElements(); renderAll();
-    });
+    }
+    function doStartLineMode(isArrow = false) {
+      lineType = isArrow ? 'arrow' : 'line';
+      drawingLine = true;
+      document.getElementById('editorCanvas').style.cursor = 'crosshair';
+      // Highlight the library button so user knows draw-mode is active
+      const btn = document.getElementById('libLineBtn');
+      if (btn) { btn.style.borderColor = 'var(--accent)'; btn.style.background = 'var(--accent-soft)'; }
+    }
 
     // ═══ DRAW CONNECTOR — now supports line (no arrow) by default ═══
     let drawingLine = false;
     let lineStart = null;
     let lineType = 'line'; // 'line' or 'arrow'
-
-    document.getElementById('addLineBtn').addEventListener('click', (e) => {
-      // Toggle between line and arrow mode with Shift key
-      lineType = e.shiftKey ? 'arrow' : 'line';
-      drawingLine = true;
-      document.getElementById('editorCanvas').style.cursor = 'crosshair';
-      document.getElementById('addLineBtn').textContent = lineType === 'arrow' ? '+ Arrow (click 2 pts)' : '+ Line (click 2 pts)';
-    });
+    // doStartLineMode() (defined above in ADD ELEMENTS section) activates line draw mode.
 
     document.getElementById('canvasFrame').addEventListener('click', (e) => {
       if (!drawingLine) return;
@@ -2362,13 +2351,32 @@
         });
         lineStart = null; drawingLine = false;
         document.getElementById('editorCanvas').style.cursor = '';
-        document.getElementById('addLineBtn').textContent = '+ Line';
+        const libLineBtn = document.getElementById('libLineBtn');
+        if (libLineBtn) { libLineBtn.style.borderColor = ''; libLineBtn.style.background = ''; }
         saveAddedElements(); renderAll();
       }
     });
 
     // ═══ KEYBOARD SHORTCUTS ═══
+    // Reliable check for "user is typing in an editable field".
+    // document.activeElement is unreliable inside SVG foreignObject in some browsers,
+    // so we also walk up the event target chain.
+    function isEditingText() {
+      const active = document.activeElement;
+      if (!active) return false;
+      const tag = active.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return true;
+      if (active.contentEditable === 'true') return true;
+      if (active.closest?.('[contenteditable="true"]')) return true;
+      return false;
+    }
+
     document.addEventListener('keydown', (e) => {
+      // Guard: while any text field or contenteditable is focused (including
+      // .shape-text inside SVG foreignObject), let the browser handle every
+      // keystroke normally — Enter, Backspace, arrows, even Ctrl+Z for char undo.
+      if (isEditingText()) return;
+
       // Undo: Ctrl+Z / Cmd+Z
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
@@ -2538,15 +2546,12 @@
         if (drawingLine) {
           drawingLine = false; lineStart = null;
           document.getElementById('editorCanvas').style.cursor = '';
-          document.getElementById('addLineBtn').textContent = '+ Line';
+          const libLineBtn = document.getElementById('libLineBtn');
+          if (libLineBtn) { libLineBtn.style.borderColor = ''; libLineBtn.style.background = ''; }
         }
         selectObject(null);
         return;
       }
-      // Don't handle keys if we're editing text
-      if (document.activeElement?.contentEditable === 'true') return;
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'SELECT') return;
-
       // Delete: remove selected element(s)
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedObjectIds.size > 0) {
@@ -2741,7 +2746,12 @@
     }
 
     // ═══ SAVE / LOAD ═══
+    // Phase-2 stable IDs: prefer the rendered data-role attribute (set by
+    // smart-layouts.js / smart-diagrams.js). Fall back to the legacy DOM
+    // selector path for any element without a data-role (back-compat during
+    // the family-by-family rollout).
     function getElementPath(el) {
+      if (el?.dataset?.role) return el.dataset.role;
       const parts = [];
       let node = el;
       while (node && node !== renderTarget) {
@@ -2823,7 +2833,12 @@
       if (!overrides) return;
       for (const [path, props] of Object.entries(overrides)) {
         try {
-          const el = renderTarget.querySelector(path);
+          // Phase-2: try the stable data-role lookup first.
+          let el = renderTarget.querySelector(`[data-role="${CSS.escape(path)}"]`);
+          // Legacy fallback: path looks like a DOM selector path (contains '>').
+          if (!el && path.includes('>')) {
+            el = renderTarget.querySelector(path);
+          }
           if (!el) continue;
           for (const [prop, val] of Object.entries(props)) {
             if (prop === 'textContent') el.textContent = val;
@@ -2917,11 +2932,26 @@
  * Structure:
  * {
  *   "variant__itemCount": {
- *     overrides: { "css-selector-path": { left, top, width, fontSize, ... } },
+ *     overrides: { "<role-or-selector>": { left, top, width, fontSize, ... } },
  *     added: { textboxes: [...], icons: [...], connectors: [...], shapes: [...] },
  *     savedAt: ISO string,
  *   }
  * }
+ *
+ * Override-key format (Phase 2 — stable IDs):
+ *   Preferred: a data-role attribute value rendered by smart-layouts.js /
+ *   smart-diagrams.js. Format is "{variant}_{role}_{n}" for per-item
+ *   elements (n = 1-based item index) or "{variant}_{role}" for structural
+ *   singletons. Examples: "solid-boxes_card_2", "solid-boxes_title_2",
+ *   "bullseye_ring_1", "org-chart_root", "top-circle_circle-num_3".
+ *
+ *   Legacy: a DOM CSS-selector path like
+ *     "div:nth-child(1) > p:nth-child(2)"
+ *   Still supported as a fallback so configs saved before Phase 2 keep
+ *   applying. Paths containing ">" are routed to the legacy lookup.
+ *
+ * applyLayoutConfig() below tries the data-role lookup first, then falls
+ * back to the legacy CSS-selector path.
  */
 
 export const LAYOUT_CONFIGS = ${configsJson};
@@ -2941,9 +2971,14 @@ export function applyLayoutConfig(container, variant, itemCount) {
 
   // Apply element overrides (position, font, size adjustments)
   if (cfg.overrides) {
-    for (const [selector, props] of Object.entries(cfg.overrides)) {
+    for (const [path, props] of Object.entries(cfg.overrides)) {
       try {
-        const el = container.querySelector(selector);
+        // Prefer the Phase-2 stable data-role lookup.
+        let el = container.querySelector(\`[data-role="\${CSS.escape(path)}"]\`);
+        // Fall back to legacy CSS-selector path when the key looks like one.
+        if (!el && path.includes('>')) {
+          el = container.querySelector(path);
+        }
         if (!el) continue;
         for (const [prop, val] of Object.entries(props)) {
           if (prop === 'textContent') {
@@ -3132,6 +3167,47 @@ export function applyLayoutConfig(container, variant, itemCount) {
         });
         shapeRow.appendChild(thumb);
       });
+
+      // ── Separator ──
+      const libSep = document.createElement('div');
+      libSep.style.cssText = 'width:1px;height:40px;background:#e5e7eb;margin:0 6px;flex-shrink:0;align-self:center;';
+      shapeRow.appendChild(libSep);
+
+      // ── Text Box ──
+      const textThumb = document.createElement('div');
+      textThumb.className = 'shape-thumb';
+      textThumb.title = 'Text Box — transparent rect with editable text';
+      textThumb.innerHTML = `<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="8" width="22" height="13" rx="2" fill="none" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="3,2"/>
+        <text x="14" y="18" text-anchor="middle" font-family="sans-serif" font-size="9" font-weight="600" fill="#6b7280">T</text>
+      </svg>`;
+      textThumb.addEventListener('click', () => doAddText());
+      shapeRow.appendChild(textThumb);
+
+      // ── Line / Connector ──
+      const lineThumb = document.createElement('div');
+      lineThumb.className = 'shape-thumb';
+      lineThumb.id = 'libLineBtn';
+      lineThumb.title = 'Line — click this, then click two points on canvas';
+      lineThumb.innerHTML = `<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+        <line x1="5" y1="23" x2="23" y2="5" stroke="#6b7280" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="5" cy="23" r="2.5" fill="#6b7280"/>
+        <circle cx="23" cy="5" r="2.5" fill="#6b7280"/>
+      </svg>`;
+      lineThumb.addEventListener('click', () => doStartLineMode(false));
+      shapeRow.appendChild(lineThumb);
+
+      // ── Icon Placeholder ──
+      const iconThumb = document.createElement('div');
+      iconThumb.className = 'shape-thumb';
+      iconThumb.title = 'Icon Placeholder — select it, then set the icon in the properties panel';
+      iconThumb.innerHTML = `<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="20" height="20" rx="3" fill="none" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="3,2"/>
+        <circle cx="11" cy="12" r="2.5" fill="none" stroke="#6b7280" stroke-width="1.2"/>
+        <polyline points="4,22 9,16 13,19 18,12 24,22" fill="none" stroke="#6b7280" stroke-width="1.2" stroke-linejoin="round"/>
+      </svg>`;
+      iconThumb.addEventListener('click', () => doAddIcon());
+      shapeRow.appendChild(iconThumb);
     }
 
     // ═══ MARQUEE SELECTION & DESELECT ═══

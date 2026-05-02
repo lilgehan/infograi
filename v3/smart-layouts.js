@@ -64,11 +64,14 @@ function resolveIconSrc(name) {
   return `${SL_PROXY_BASE}${encodeURIComponent(raw)}`;
 }
 
-/** Build an <img> tag for an icon with proper src, fallback, and data-icon attribute. */
-function iconImg(name, cssClass) {
+/** Build an <img> tag for an icon with proper src, fallback, and data-icon attribute.
+ *  Optional dataRole is rendered as data-role="..." so the editor can target it
+ *  via the Phase-2 stable-ID system. Safe to omit (back-compat for older callers). */
+function iconImg(name, cssClass, dataRole) {
   const src = resolveIconSrc(name || 'star');
   const cls = cssClass ? ` class="${cssClass}"` : '';
-  return `<img${cls} src="${src}" alt="" loading="lazy" data-icon="true" onerror="this.onerror=null;this.src='${SL_FALLBACK}'">`;
+  const role = dataRole ? ` data-role="${dataRole}"` : '';
+  return `<img${cls}${role} src="${src}" alt="" loading="lazy" data-icon="true" onerror="this.onerror=null;this.src='${SL_FALLBACK}'">`;
 }
 
 /* ─────────────────────────────────────────
@@ -443,84 +446,102 @@ export const BOXES_CSS = `
    Each returns an HTML string for one item.
 ───────────────────────────────────────── */
 
+/* ─────────────────────────────────────────
+   BOXES FAMILY — per-item helpers
+   Each accepts a `variant` argument (string) so data-role attributes are
+   namespaced by the actual variant the user picked. Format:
+     {variant}_{role}_{n}   where n = idx+1 (1-based item index)
+   Stable across re-renders and across item-count changes (an item retains
+   its role regardless of how many siblings are rendered).
+───────────────────────────────────────── */
+
 /** solid-boxes / solid-boxes-icons */
-function renderSolidItem(item, idx, withIcons, density) {
+function renderSolidItem(item, idx, withIcons, density, variant) {
+  const n = idx + 1;
   const title = esc(truncateTitle(item.title, density));
   const body  = esc(truncateBody(item.body, density));
-  const iconHtml = withIcons && item.icon ? iconImg(item.icon, 'igs-icon') : '';
-  return `<div class="igs-solid">${iconHtml}<p class="igs-title">${title}</p>${body ? `<p class="igs-body">${body}</p>` : ''}</div>`;
+  const iconHtml = withIcons && item.icon ? iconImg(item.icon, 'igs-icon', `${variant}_icon_${n}`) : '';
+  return `<div class="igs-solid" data-role="${variant}_card_${n}">${iconHtml}<p class="igs-title" data-role="${variant}_title_${n}">${title}</p>${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}</div>`;
 }
 
 /** outline-boxes */
-function renderOutlineItem(item, idx, density) {
+function renderOutlineItem(item, idx, density, variant) {
+  const n = idx + 1;
   const title = esc(truncateTitle(item.title, density));
   const body  = esc(truncateBody(item.body, density));
-  const iconHtml = item.icon ? iconImg(item.icon, 'igs-icon') : '';
-  return `<div class="igs-outline">${iconHtml}<p class="igs-title">${title}</p>${body ? `<p class="igs-body">${body}</p>` : ''}</div>`;
+  const iconHtml = item.icon ? iconImg(item.icon, 'igs-icon', `${variant}_icon_${n}`) : '';
+  return `<div class="igs-outline" data-role="${variant}_card_${n}">${iconHtml}<p class="igs-title" data-role="${variant}_title_${n}">${title}</p>${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}</div>`;
 }
 
 /** side-line */
-function renderSidelineItem(item, idx, density) {
+function renderSidelineItem(item, idx, density, variant) {
+  const n = idx + 1;
   const title = esc(truncateTitle(item.title, density));
   const body  = esc(truncateBody(item.body, density));
-  return `<div class="igs-sideline"><p class="igs-title">${title}</p>${body ? `<p class="igs-body">${body}</p>` : ''}</div>`;
+  return `<div class="igs-sideline" data-role="${variant}_card_${n}"><p class="igs-title" data-role="${variant}_title_${n}">${title}</p>${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}</div>`;
 }
 
 /** side-line-text */
-function renderSidelineTextItem(item, idx, density) {
+function renderSidelineTextItem(item, idx, density, variant) {
+  const n = idx + 1;
   const title = esc(truncateTitle(item.title, density));
   const body  = esc(truncateBody(item.body, density));
-  return `<div class="igs-sidelinetext"><p class="igs-title">${title}</p>${body ? `<p class="igs-body">${body}</p>` : ''}</div>`;
+  return `<div class="igs-sidelinetext" data-role="${variant}_card_${n}"><p class="igs-title" data-role="${variant}_title_${n}">${title}</p>${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}</div>`;
 }
 
 /** top-line-text */
-function renderToplineItem(item, idx, density) {
+function renderToplineItem(item, idx, density, variant) {
+  const n = idx + 1;
   const title = esc(truncateTitle(item.title, density));
   const body  = esc(truncateBody(item.body, density));
-  return `<div class="igs-topline"><p class="igs-title">${title}</p>${body ? `<p class="igs-body">${body}</p>` : ''}</div>`;
+  return `<div class="igs-topline" data-role="${variant}_card_${n}"><p class="igs-title" data-role="${variant}_title_${n}">${title}</p>${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}</div>`;
 }
 
 /** top-circle */
-function renderTopCircleItem(item, idx, density) {
+function renderTopCircleItem(item, idx, density, variant) {
+  const n = idx + 1;
   const title = esc(truncateTitle(item.title, density));
   const body  = esc(truncateBody(item.body, density));
   const circleContent = item.icon
-    ? iconImg(item.icon, '')
-    : `<span class="igs-circle-num">${idx + 1}</span>`;
-  return `<div class="igs-topcircle">
-  <div class="igs-circle">${circleContent}</div>
-  <p class="igs-title">${title}</p>
-  ${body ? `<p class="igs-body">${body}</p>` : ''}
+    ? iconImg(item.icon, '', `${variant}_icon_${n}`)
+    : `<span class="igs-circle-num" data-role="${variant}_circle-num_${n}">${idx + 1}</span>`;
+  return `<div class="igs-topcircle" data-role="${variant}_card_${n}">
+  <div class="igs-circle" data-role="${variant}_circle_${n}">${circleContent}</div>
+  <p class="igs-title" data-role="${variant}_title_${n}">${title}</p>
+  ${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}
 </div>`;
 }
 
 /** leaf-boxes */
-function renderLeafItem(item, idx, density) {
+function renderLeafItem(item, idx, density, variant) {
+  const n = idx + 1;
   const title = esc(truncateTitle(item.title, density));
   const body  = esc(truncateBody(item.body, density));
-  return `<div class="igs-leaf"><p class="igs-title">${title}</p>${body ? `<p class="igs-body">${body}</p>` : ''}</div>`;
+  return `<div class="igs-leaf" data-role="${variant}_card_${n}"><p class="igs-title" data-role="${variant}_title_${n}">${title}</p>${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}</div>`;
 }
 
 /** labeled-boxes */
-function renderLabeledItem(item, idx, density) {
+function renderLabeledItem(item, idx, density, variant) {
+  const n = idx + 1;
   const title = esc(truncateTitle(item.title, density));
   const body  = esc(truncateBody(item.body, density));
   const tag   = esc(`0${idx + 1}`.slice(-2)); // "01", "02" etc.
-  return `<div class="igs-labeled-wrap">
-  <span class="igs-labeled-tag">${tag}</span>
-  <div class="igs-labeled">
-    <p class="igs-title">${title}</p>
-    ${body ? `<p class="igs-body">${body}</p>` : ''}
+  return `<div class="igs-labeled-wrap" data-role="${variant}_wrap_${n}">
+  <span class="igs-labeled-tag" data-role="${variant}_tag_${n}">${tag}</span>
+  <div class="igs-labeled" data-role="${variant}_card_${n}">
+    <p class="igs-title" data-role="${variant}_title_${n}">${title}</p>
+    ${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}
   </div>
 </div>`;
 }
 
 /** alternating-boxes */
-function renderAltItem(item, idx, density) {
+function renderAltItem(item, idx, density, variant) {
+  const n = idx + 1;
   const title     = esc(truncateTitle(item.title, density));
   const body      = esc(truncateBody(item.body, density));
   const altClass  = idx % 2 === 0 ? 'igs-alt--primary' : 'igs-alt--secondary';
-  return `<div class="igs-alt ${altClass}"><p class="igs-title">${title}</p>${body ? `<p class="igs-body">${body}</p>` : ''}</div>`;
+  return `<div class="igs-alt ${altClass}" data-role="${variant}_card_${n}"><p class="igs-title" data-role="${variant}_title_${n}">${title}</p>${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}</div>`;
 }
 
 /* ─────────────────────────────────────────
@@ -529,17 +550,23 @@ function renderAltItem(item, idx, density) {
    strips of N items per row with no gaps between siblings.
 ───────────────────────────────────────── */
 
-function renderJoinedBoxes(items, withIcons, columns, density) {
+function renderJoinedBoxes(items, withIcons, columns, density, variant) {
   const rows = chunk(items, columns);
-  const rowsHtml = rows.map(rowItems => {
+  // Item index is FLAT across all rows: cell 1 in row 1 = item 1,
+  // first cell in row 2 = item (columns+1), etc. This keeps each item's role
+  // stable when the column count changes.
+  let itemIdx = 0;
+  const rowsHtml = rows.map((rowItems, rowIdx) => {
     const cells = rowItems.map(item => {
+      itemIdx++;
+      const n = itemIdx;
       const title = esc(truncateTitle(item.title, density));
       const body  = esc(truncateBody(item.body, density));
-      const iconHtml = withIcons && item.icon ? iconImg(item.icon, 'igs-icon') : '';
-      return `<div class="igs-joined">${iconHtml}<p class="igs-title">${title}</p>${body ? `<p class="igs-body">${body}</p>` : ''}</div>`;
+      const iconHtml = withIcons && item.icon ? iconImg(item.icon, 'igs-icon', `${variant}_icon_${n}`) : '';
+      return `<div class="igs-joined" data-role="${variant}_card_${n}">${iconHtml}<p class="igs-title" data-role="${variant}_title_${n}">${title}</p>${body ? `<p class="igs-body" data-role="${variant}_body_${n}">${body}</p>` : ''}</div>`;
     }).join('');
     const hasIconsClass = withIcons ? ' igs-has-icons' : '';
-    return `<div class="igs-joined-row${hasIconsClass}">${cells}</div>`;
+    return `<div class="igs-joined-row${hasIconsClass}" data-role="${variant}_row_${rowIdx + 1}">${cells}</div>`;
   }).join('');
   return rowsHtml;
 }
@@ -549,11 +576,13 @@ function renderJoinedBoxes(items, withIcons, columns, density) {
    Used by all non-joined variants.
 ───────────────────────────────────────── */
 
-function wrapGrid(itemsHtml, columns, gridArrangement) {
+function wrapGrid(itemsHtml, columns, gridArrangement, variant) {
   const colClass = gridArrangement
     ? `igs-grid--${gridArrangement}`
     : `igs-grid--${Math.min(Math.max(columns, 1), 4)}`;
-  return `<div class="igs-grid ${colClass}">${itemsHtml}</div>`;
+  // Grid wrapper itself is a structural singleton — no item index in role.
+  const role = variant ? ` data-role="${variant}_grid"` : '';
+  return `<div class="igs-grid ${colClass}"${role}>${itemsHtml}</div>`;
 }
 
 /* ─────────────────────────────────────────
@@ -582,69 +611,69 @@ export function renderBoxes(items, variant = 'solid-boxes', tone = 'professional
   switch (variant) {
 
     case 'solid-boxes': {
-      const html = items.map((item, i) => renderSolidItem(item, i, false, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderSolidItem(item, i, false, density, 'solid-boxes')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'solid-boxes');
     }
 
     case 'solid-boxes-icons': {
-      const html = items.map((item, i) => renderSolidItem(item, i, true, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderSolidItem(item, i, true, density, 'solid-boxes-icons')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'solid-boxes-icons');
     }
 
     case 'outline-boxes': {
-      const html = items.map((item, i) => renderOutlineItem(item, i, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderOutlineItem(item, i, density, 'outline-boxes')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'outline-boxes');
     }
 
     case 'side-line': {
-      const html = items.map((item, i) => renderSidelineItem(item, i, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderSidelineItem(item, i, density, 'side-line')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'side-line');
     }
 
     case 'side-line-text': {
-      const html = items.map((item, i) => renderSidelineTextItem(item, i, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderSidelineTextItem(item, i, density, 'side-line-text')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'side-line-text');
     }
 
     case 'top-line-text': {
-      const html = items.map((item, i) => renderToplineItem(item, i, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderToplineItem(item, i, density, 'top-line-text')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'top-line-text');
     }
 
     case 'top-circle': {
-      const html = items.map((item, i) => renderTopCircleItem(item, i, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderTopCircleItem(item, i, density, 'top-circle')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'top-circle');
     }
 
     case 'joined-boxes': {
       // Joined boxes form rows; column count = items per row
-      return renderJoinedBoxes(items, false, cols, density);
+      return renderJoinedBoxes(items, false, cols, density, 'joined-boxes');
     }
 
     case 'joined-boxes-icons': {
-      return renderJoinedBoxes(items, true, cols, density);
+      return renderJoinedBoxes(items, true, cols, density, 'joined-boxes-icons');
     }
 
     case 'leaf-boxes': {
-      const html = items.map((item, i) => renderLeafItem(item, i, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderLeafItem(item, i, density, 'leaf-boxes')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'leaf-boxes');
     }
 
     case 'labeled-boxes': {
-      const html = items.map((item, i) => renderLabeledItem(item, i, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderLabeledItem(item, i, density, 'labeled-boxes')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'labeled-boxes');
     }
 
     case 'alternating-boxes': {
-      const html = items.map((item, i) => renderAltItem(item, i, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderAltItem(item, i, density, 'alternating-boxes')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'alternating-boxes');
     }
 
     default: {
-      // Unknown variant — fall back to solid-boxes
+      // Unknown variant — fall back to solid-boxes (no data-role; this is an error path).
       console.warn(`[smart-layouts] Unknown variant "${variant}" — falling back to solid-boxes`);
-      const html = items.map((item, i) => renderSolidItem(item, i, false, density)).join('');
-      return wrapGrid(html, cols, gridArrangement);
+      const html = items.map((item, i) => renderSolidItem(item, i, false, density, 'solid-boxes')).join('');
+      return wrapGrid(html, cols, gridArrangement, 'solid-boxes');
     }
   }
 }
