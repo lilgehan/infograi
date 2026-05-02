@@ -1179,16 +1179,50 @@
       // Template elements from renderTarget
       const renderTarget = document.getElementById('renderTarget');
       const templateSelectors = [
+        // ── Text content nodes (all families) ──
         '.igs-title', '.igs-body', '.igs-number', '.igs-label',
         '.igd-title', '.igd-body', '.igd-label', '.igd-number',
         '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
         '.igs-dotline-label', '.igs-dotline-val',
         '.igs-num', '.igd-num', '.igs-step-num', '.igs-circle-num',
         '[class*="num"]', '[class*="badge"]',
+        // ── Icons / images ──
         'img[data-icon]', '.igs-icon', '.igd-icon',
+        // ── SVG primitives ──
         'svg circle', 'svg ellipse', 'svg rect', 'svg polygon', 'svg path',
         'svg line', 'svg polyline', 'svg text',
+        // ── Boxes family — card wrappers ──
+        '.igs-solid', '.igs-outline', '.igs-sideline', '.igs-sidelinetext',
+        '.igs-topline', '.igs-topcircle', '.igs-leaf',
+        '.igs-labeled', '.igs-labeled-wrap', '.igs-labeled-tag',
+        '.igs-alt', '.igs-joined',
         '.igs-box', '.igs-dotgrid-card', '.igs-dotline-item',
+        // ── Bullets family — list items ──
+        '.igs-bl-large', '.igs-bl-small', '.igs-bl-arrow',
+        '.igs-bl-process', '.igs-bl-boxsmall',
+        '.igs-bl-title', '.igs-bl-body',
+        // ── Sequence / Timeline family ──
+        '.igs-tl-item', '.igs-tl-content', '.igs-tl-title', '.igs-tl-label', '.igs-tl-body',
+        '.igs-mtl-item', '.igs-mtlb-item',
+        '.igs-arrow-item', '.igs-arrow-block', '.igs-arrow-title', '.igs-arrow-body',
+        '.igs-pill',
+        '.igs-slant-item', '.igs-slant-label', '.igs-slant-body',
+        // ── Numbers / Stats family ──
+        '.igs-stat-col', '.igs-circstat-col', '.igs-barstat-item', '.igs-starrating-item',
+        // ── Circles family ──
+        '.igs-circ-textbox', '.igs-semi-textbox',
+        // ── Quotes family ──
+        '.igs-qbox-item',
+        // ── Diagrams — card/node wrappers ──
+        '.igd-road-h-card', '.igd-road-v-card',
+        '.igd-journey-stage',
+        '.igd-expmap-cell',
+        '.igd-bull-text-item',
+        '.igd-radial-item',
+        '.igd-orbit-item',
+        '.igd-org-node',
+        '.igd-pyrd-text-item',
+        '.igd-ndiam-text-item',
         '.igd-node', '.igd-ring', '.igd-petal',
       ];
 
