@@ -176,6 +176,9 @@
     .resize-dot.ne { top: -4px; right: -4px; cursor: ne-resize; }
     .resize-dot.sw { bottom: -4px; left: -4px; cursor: sw-resize; }
     .resize-dot.se { bottom: -4px; right: -4px; cursor: se-resize; }
+    /* Shape text inside foreignObject */
+    .shape-text { pointer-events: none; user-select: none; box-sizing: border-box; }
+    .shape-text[contenteditable="true"] { pointer-events: all; user-select: text; cursor: text; outline: none; }
 
     /* ── Right sidebar (properties) ── */
     .editor-sidebar {
@@ -488,6 +491,16 @@
           </div>
         </div>
 
+        <div class="sidebar-section" id="layerSection">
+          <h3>Layer Order</h3>
+          <div class="prop-row" style="gap:4px;">
+            <button class="prop-input" id="bringToFrontBtn" style="cursor:pointer;text-align:center;flex:1;font-size:0.75em;padding:3px 6px;" title="Bring to Front (])">Front</button>
+            <button class="prop-input" id="bringForwardBtn" style="cursor:pointer;text-align:center;flex:1;font-size:0.75em;padding:3px 6px;" title="Bring Forward">Fwd</button>
+            <button class="prop-input" id="sendBackwardBtn" style="cursor:pointer;text-align:center;flex:1;font-size:0.75em;padding:3px 6px;" title="Send Backward">Back</button>
+            <button class="prop-input" id="sendToBackBtn" style="cursor:pointer;text-align:center;flex:1;font-size:0.75em;padding:3px 6px;" title="Send to Back ([)">Bottom</button>
+          </div>
+        </div>
+
         <div class="sidebar-section" id="textSection">
           <h3>Text</h3>
           <div class="prop-row">
@@ -679,7 +692,8 @@
     let currentItemCount = 4;
     let currentTone = 'professional';
     let currentDensity = 'standard';
-    let selectedObjectId = null; // string ID, never a DOM ref
+    let selectedObjectId = null; // string ID, never a DOM ref (primary selection)
+    const selectedObjectIds = new Set(); // multi-select support
     let configs = JSON.parse(localStorage.getItem('igEditorConfigs') || '{}');
     let addedElements = JSON.parse(localStorage.getItem('igEditorAdded') || '{}');
     let elementOverrides = JSON.parse(localStorage.getItem('igEditorOverrides') || '{}');
@@ -782,8 +796,29 @@
       renderConnectors();
       syncObjects();
       requestAnimationFrame(() => buildOverlayHandles());
-      // Try to restore selection
-      if (selectedObjectId && objects.has(selectedObjectId)) {
+      // Try to restore selection (single or multi)
+      if (selectedObjectIds.size > 0) {
+        // Re-highlight all selected handles after rebuild
+        const validIds = [...selectedObjectIds].filter(id => objects.has(id));
+        if (validIds.length > 0) {
+          selectedObjectIds.clear();
+          validIds.forEach(id => selectedObjectIds.add(id));
+          selectedObjectId = validIds[validIds.length - 1];
+          requestAnimationFrame(() => {
+            validIds.forEach(id => {
+              document.querySelectorAll(`[data-obj-id="${id}"]`).forEach(h => h.classList.add('selected'));
+            });
+          });
+          const primaryObj = objects.get(selectedObjectId);
+          if (primaryObj) {
+            document.getElementById('noSelectionMsg').style.display = 'none';
+            document.getElementById('propsContainer').style.display = 'block';
+            populateProps(primaryObj.domRef);
+          }
+        } else {
+          selectObject(null);
+        }
+      } else if (selectedObjectId && objects.has(selectedObjectId)) {
         const obj = objects.get(selectedObjectId);
         document.getElementById('noSelectionMsg').style.display = 'none';
         document.getElementById('propsContainer').style.display = 'block';
@@ -827,9 +862,12 @@
     function isTextElement(el) {
       if (isSvgElement(el)) return false;
       if (el.tagName.toLowerCase() === 'img') return false;
-      // Added shapes and icons are not text
       const cls = el.className || '';
-      if (cls.includes('added-shape') || cls.includes('added-icon')) return false;
+      if (cls.includes('added-icon')) return false;
+      // Added shapes with text are text-editable
+      if (cls.includes('added-shape')) {
+        return !!el.querySelector('.shape-text');
+      }
       return true;
     }
     function getElementType(el) {
@@ -976,12 +1014,18 @@
         });
 
         handle.addEventListener('mousedown', (e) => {
+          const isMultiKey = e.metaKey || e.ctrlKey;
           if (e.target.classList.contains('resize-dot')) {
             selectObject(objectId);
             startResize(e, el, e.target.dataset.corner);
           } else {
-            selectObject(objectId);
-            startDrag(e, el, objectId);
+            selectObject(objectId, isMultiKey);
+            // Start drag — if multiple selected, drag all
+            if (selectedObjectIds.size > 1) {
+              startMultiDrag(e);
+            } else {
+              startDrag(e, el, objectId);
+            }
           }
         });
 
@@ -997,41 +1041,69 @@
     function startInlineEdit(el) {
       // Temporarily hide overlay so user can type
       editorOverlay.style.display = 'none';
-      el.contentEditable = 'true';
-      el.focus();
+
+      // Determine the actual editable target:
+      // For shapes with text, edit the .shape-text div inside foreignObject
+      const shapeTextDiv = el.querySelector('.shape-text');
+      const editTarget = shapeTextDiv || el;
+
+      editTarget.contentEditable = 'true';
+      editTarget.focus();
       el.style.outline = '2px solid var(--accent)';
       el.style.outlineOffset = '2px';
       el.style.zIndex = '20';
       // Select all text
       const range = document.createRange();
-      range.selectNodeContents(el);
+      range.selectNodeContents(editTarget);
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
 
       const finish = () => {
-        el.contentEditable = 'false';
+        editTarget.contentEditable = 'false';
         el.style.outline = '';
         el.style.outlineOffset = '';
         el.style.zIndex = '';
         editorOverlay.style.display = '';
-        saveTextOverride(el);
+        // Save text back
+        if (shapeTextDiv && el.dataset?.addedId) {
+          // Shape with text: save to shape data
+          const key = configKey();
+          const added = addedElements[key];
+          if (added?.shapes) {
+            const sh = added.shapes.find(s => s.id === el.dataset.addedId);
+            if (sh) {
+              sh.text = getPlainTextWithNewlines(editTarget);
+              saveAddedElements();
+            }
+          }
+        } else {
+          saveTextOverride(el);
+        }
         requestAnimationFrame(() => buildOverlayHandles());
       };
-      el.addEventListener('blur', finish, { once: true });
-      el.addEventListener('keydown', (ke) => {
-        if (ke.key === 'Escape') { ke.preventDefault(); el.blur(); }
-        if (ke.key === 'Enter' && !ke.shiftKey) { ke.preventDefault(); el.blur(); }
+      editTarget.addEventListener('blur', finish, { once: true });
+      editTarget.addEventListener('keydown', (ke) => {
+        if (ke.key === 'Escape') { ke.preventDefault(); editTarget.blur(); }
+        // Shift+Enter commits editing; plain Enter inserts newline naturally
+        if (ke.key === 'Enter' && ke.shiftKey) { ke.preventDefault(); editTarget.blur(); }
+        // Stop propagation so global keydown doesn't intercept
+        ke.stopPropagation();
       });
     }
 
     // ═══ SELECTION BY OBJECT ID ═══
-    function selectObject(objectId) {
-      // Clear all handle selection highlights
-      document.querySelectorAll('.editor-handle').forEach(h => h.classList.remove('selected'));
-      selectedObjectId = objectId;
+    function selectObject(objectId, addToSelection = false) {
+      if (!addToSelection) {
+        // Clear all selections
+        document.querySelectorAll('.editor-handle').forEach(h => h.classList.remove('selected'));
+        selectedObjectIds.clear();
+      }
 
       if (!objectId) {
+        selectedObjectId = null;
+        selectedObjectIds.clear();
+        document.querySelectorAll('.editor-handle').forEach(h => h.classList.remove('selected'));
         document.getElementById('propsContainer').style.display = 'none';
         document.getElementById('noSelectionMsg').style.display = 'block';
         return;
@@ -1040,18 +1112,59 @@
       const obj = objects.get(objectId);
       if (!obj) return;
 
-      // Highlight the handle for this object
-      document.querySelectorAll('[data-obj-id]').forEach(h => {
-        if (h.dataset.objId === objectId) h.classList.add('selected');
-      });
+      if (addToSelection && selectedObjectIds.has(objectId)) {
+        // Toggle off: remove from multi-selection
+        selectedObjectIds.delete(objectId);
+        document.querySelectorAll(`[data-obj-id="${objectId}"]`).forEach(h => h.classList.remove('selected'));
+        // Update primary to first remaining or null
+        selectedObjectId = selectedObjectIds.size > 0 ? [...selectedObjectIds][selectedObjectIds.size - 1] : null;
+      } else {
+        // Add to selection
+        selectedObjectIds.add(objectId);
+        selectedObjectId = objectId; // primary = last clicked
+        document.querySelectorAll(`[data-obj-id="${objectId}"]`).forEach(h => h.classList.add('selected'));
+      }
 
-      document.getElementById('noSelectionMsg').style.display = 'none';
-      document.getElementById('propsContainer').style.display = 'block';
-      populateProps(obj.domRef);
+      if (selectedObjectIds.size === 0) {
+        document.getElementById('propsContainer').style.display = 'none';
+        document.getElementById('noSelectionMsg').style.display = 'block';
+      } else {
+        document.getElementById('noSelectionMsg').style.display = 'none';
+        document.getElementById('propsContainer').style.display = 'block';
+        const primaryObj = objects.get(selectedObjectId);
+        if (primaryObj) populateProps(primaryObj.domRef);
+      }
+    }
+
+    function selectMultiple(objectIds) {
+      // Select multiple objects at once (e.g., from marquee)
+      document.querySelectorAll('.editor-handle').forEach(h => h.classList.remove('selected'));
+      selectedObjectIds.clear();
+      selectedObjectId = null;
+      objectIds.forEach(id => {
+        if (objects.has(id)) {
+          selectedObjectIds.add(id);
+          selectedObjectId = id;
+          document.querySelectorAll(`[data-obj-id="${id}"]`).forEach(h => h.classList.add('selected'));
+        }
+      });
+      if (selectedObjectIds.size > 0) {
+        document.getElementById('noSelectionMsg').style.display = 'none';
+        document.getElementById('propsContainer').style.display = 'block';
+        const primaryObj = objects.get(selectedObjectId);
+        if (primaryObj) populateProps(primaryObj.domRef);
+      } else {
+        document.getElementById('propsContainer').style.display = 'none';
+        document.getElementById('noSelectionMsg').style.display = 'block';
+      }
     }
 
     function getSelectedObject() {
       return objects.get(selectedObjectId) || null;
+    }
+
+    function getAllSelectedElements() {
+      return [...selectedObjectIds].map(id => objects.get(id)?.domRef).filter(Boolean);
     }
 
     function getSelectedElement() {
@@ -1202,12 +1315,15 @@
         document.getElementById('propH').value = Math.round(rect.height);
       }
 
-      const isText = isTextElement(el);
       const isAddedShape = el.classList?.contains('added-shape');
       const isShape = type === 'shape';
       const isConn = type === 'connector';
-
       const isAddedTextbox = cls.includes('added-textbox');
+      const shapeTextDiv = el.querySelector?.('.shape-text');
+      const hasShapeText = !!shapeTextDiv;
+      // Show text controls for: plain text elements, old textboxes, AND shapes with text
+      const isText = isTextElement(el);
+
       document.getElementById('textSection').style.display = isText ? 'block' : 'none';
       document.getElementById('borderSection').style.display = isAddedTextbox ? 'block' : 'none';
       document.getElementById('shapeSection').style.display = (isShape || isAddedShape) ? 'block' : 'none';
@@ -1222,7 +1338,9 @@
       }
 
       if (isText) {
-        const computed = window.getComputedStyle(el);
+        // For shapes with text, read from the .shape-text div
+        const textEl = shapeTextDiv || el;
+        const computed = window.getComputedStyle(textEl);
         document.getElementById('propFontSize').value = computed.fontSize;
         document.getElementById('propFontWeight').value = computed.fontWeight;
         setColorPair('propColor', 'propColorText', computed.color);
@@ -1233,23 +1351,35 @@
           ff.includes('Space Grotesk') ? 'var(--font-heading)' :
           ff.includes('monospace') ? 'monospace' : 'var(--font-body)';
 
-        // Always show BG color row for text elements
-        const bg = computed.backgroundColor;
-        const hasBg = bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+        // BG color row for text elements (not shape-text, shapes have fill instead)
         const bgRow = document.getElementById('bgColorRow');
-        bgRow.style.display = 'flex';
-        if (hasBg) {
-          setColorPair('propBgColor', 'propBgColorText', bg);
+        if (hasShapeText) {
+          bgRow.style.display = 'none';
         } else {
-          document.getElementById('propBgColorText').value = 'transparent';
+          const bg = computed.backgroundColor;
+          const hasBg = bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+          bgRow.style.display = 'flex';
+          if (hasBg) {
+            setColorPair('propBgColor', 'propBgColorText', bg);
+          } else {
+            document.getElementById('propBgColorText').value = 'transparent';
+          }
         }
       }
       if (isShape || isAddedShape) {
-        // For added shapes (div), read from style; for SVG shapes, read from attributes
+        // All added shapes are now SVG-based — read fill/stroke from SVG child
         if (isAddedShape) {
-          setColorPair('propFill', 'propFillText', el.style.background || el.style.backgroundColor || '');
-          setColorPair('propStroke', 'propStrokeText', el.style.borderColor || '');
-          document.getElementById('propStrokeWidth').value = parseFloat(el.style.borderWidth) || 1.5;
+          const svgShape = el.querySelector('polygon, circle, ellipse, rect:not(foreignObject rect)');
+          if (svgShape) {
+            setColorPair('propFill', 'propFillText', svgShape.getAttribute('fill') || '');
+            setColorPair('propStroke', 'propStrokeText', svgShape.getAttribute('stroke') || '');
+            document.getElementById('propStrokeWidth').value = parseFloat(svgShape.getAttribute('stroke-width')) || 1.5;
+          } else {
+            // Fallback for old CSS-based shapes
+            setColorPair('propFill', 'propFillText', el.style.background || el.style.backgroundColor || '');
+            setColorPair('propStroke', 'propStrokeText', el.style.borderColor || '');
+            document.getElementById('propStrokeWidth').value = parseFloat(el.style.borderWidth) || 1.5;
+          }
         } else {
           setColorPair('propFill', 'propFillText', el.getAttribute('fill') || '');
           setColorPair('propStroke', 'propStrokeText', el.getAttribute('stroke') || '');
@@ -1407,6 +1537,8 @@
       });
 
       // ── Text properties ──
+      // Map of text style prop names → shape data field names
+      const TEXT_DATA_MAP = { fontSize:'fontSize', fontWeight:'fontWeight', fontFamily:'fontFamily', textAlign:'textAlign' };
       const textStyleProps = [
         { id:'propFontSize', style:'fontSize' },
         { id:'propFontWeight', style:'fontWeight' },
@@ -1421,9 +1553,17 @@
             const el = getSelectedElement();
             if (!el || !isTextElement(el)) return;
             pushUndo();
-            el.style[style] = input.value;
-            if (el.dataset?.addedId) saveAddedElementPosition(el);
-            else saveElementOverride(el);
+            // For shapes with text, apply to the .shape-text div + save to shape data
+            const shapeTextDiv = el.querySelector?.('.shape-text');
+            if (shapeTextDiv) {
+              shapeTextDiv.style[style] = input.value;
+              const data = findAddedData(el);
+              if (data && TEXT_DATA_MAP[style]) { data[TEXT_DATA_MAP[style]] = input.value; saveAddedElements(); }
+            } else {
+              el.style[style] = input.value;
+              if (el.dataset?.addedId) saveAddedElementPosition(el);
+              else saveElementOverride(el);
+            }
             requestAnimationFrame(() => buildOverlayHandles());
           });
         });
@@ -1434,11 +1574,19 @@
         const el = getSelectedElement();
         if (!el || !isTextElement(el)) return;
         pushUndo();
-        el.style.color = color;
-        if (el.dataset?.addedId) {
+        // For shapes with text, apply to .shape-text div
+        const shapeTextDiv = el.querySelector?.('.shape-text');
+        if (shapeTextDiv) {
+          shapeTextDiv.style.color = color;
           const data = findAddedData(el);
-          if (data) { data.color = color; saveAddedElements(); }
-        } else { saveElementOverride(el); }
+          if (data) { data.textColor = color; saveAddedElements(); }
+        } else {
+          el.style.color = color;
+          if (el.dataset?.addedId) {
+            const data = findAddedData(el);
+            if (data) { data.color = color; saveAddedElements(); }
+          } else { saveElementOverride(el); }
+        }
       }
       ['change','input'].forEach(evt => {
         document.getElementById('propColor').addEventListener(evt, function() {
@@ -1492,7 +1640,9 @@
         pushUndo();
         const isAdded = el.classList?.contains('added-shape');
         if (isAdded) {
-          el.style.background = color;
+          // All added shapes are now SVG-based — update SVG child + data
+          const svgShape = el.querySelector('polygon, circle, ellipse, rect:not(foreignObject rect)');
+          if (svgShape) { svgShape.setAttribute('fill', color); }
           const data = findAddedData(el);
           if (data) { data.fill = color; saveAddedElements(); }
         } else if (isSvgElement(el)) {
@@ -1507,7 +1657,8 @@
         pushUndo();
         const isAdded = el.classList?.contains('added-shape');
         if (isAdded) {
-          el.style.borderColor = color;
+          const svgShape = el.querySelector('polygon, circle, ellipse, rect:not(foreignObject rect)');
+          if (svgShape) { svgShape.setAttribute('stroke', color); }
           const data = findAddedData(el);
           if (data) { data.stroke = color; saveAddedElements(); }
         } else if (isSvgElement(el)) {
@@ -1558,7 +1709,8 @@
           const w = this.value;
           const isAdded = el.classList?.contains('added-shape');
           if (isAdded) {
-            el.style.borderWidth = w + 'px';
+            const svgShape = el.querySelector('polygon, circle, ellipse, rect:not(foreignObject rect)');
+            if (svgShape) { svgShape.setAttribute('stroke-width', w); }
             const data = findAddedData(el);
             if (data) { data.strokeWidth = parseFloat(w) || 1.5; saveAddedElements(); }
           } else if (isSvgElement(el)) {
@@ -1576,9 +1728,10 @@
         pushUndo();
         const isAdded = el.classList?.contains('added-shape');
         if (isAdded) {
-          el.style.borderColor = 'transparent';
+          const svgShape = el.querySelector('polygon, circle, ellipse, rect:not(foreignObject rect)');
+          if (svgShape) { svgShape.setAttribute('stroke', 'none'); }
           const data = findAddedData(el);
-          if (data) { data.stroke = 'transparent'; saveAddedElements(); }
+          if (data) { data.stroke = 'none'; saveAddedElements(); }
         } else if (isSvgElement(el)) {
           el.setAttribute('stroke', 'none');
           el.style.stroke = 'none';
@@ -1721,6 +1874,104 @@
       // Connector style, arrow
       document.getElementById('propLineStyle').addEventListener('change', applyConnectorPropsNow);
       document.getElementById('propArrowHead').addEventListener('change', applyConnectorPropsNow);
+
+      // ── Layer order (z-index) controls ──
+      function changeZIndex(mode) {
+        const el = getSelectedElement();
+        if (!el || !el.dataset?.addedId) return; // only for added elements
+        pushUndo();
+        const id = el.dataset.addedId;
+        const key = configKey();
+        const added = addedElements[key];
+        if (!added) return;
+
+        // Find which array and index this element is in
+        for (const arrName of ['textboxes', 'icons', 'shapes', 'connectors']) {
+          const arr = added[arrName];
+          if (!arr) continue;
+          const idx = arr.findIndex(item => item.id === id);
+          if (idx === -1) continue;
+
+          if (mode === 'front') {
+            // Move to end of array (renders last = on top)
+            const item = arr.splice(idx, 1)[0];
+            arr.push(item);
+          } else if (mode === 'back') {
+            // Move to start of array (renders first = on bottom)
+            const item = arr.splice(idx, 1)[0];
+            arr.unshift(item);
+          } else if (mode === 'forward' && idx < arr.length - 1) {
+            // Swap with next
+            [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+          } else if (mode === 'backward' && idx > 0) {
+            // Swap with previous
+            [arr[idx], arr[idx - 1]] = [arr[idx - 1], arr[idx]];
+          }
+          break;
+        }
+
+        saveAddedElements();
+        renderAll();
+        selectObject(id);
+      }
+
+      document.getElementById('bringToFrontBtn').addEventListener('click', () => changeZIndex('front'));
+      document.getElementById('bringForwardBtn').addEventListener('click', () => changeZIndex('forward'));
+      document.getElementById('sendBackwardBtn').addEventListener('click', () => changeZIndex('backward'));
+      document.getElementById('sendToBackBtn').addEventListener('click', () => changeZIndex('back'));
+
+      // Expose for keyboard shortcuts
+      window._changeZIndex = changeZIndex;
+    }
+
+    // ═══ MULTI-DRAG (move all selected at once) ═══
+    let multiDragState = null;
+    function startMultiDrag(e) {
+      e.preventDefault();
+      multiDragState = {
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+        elements: [...selectedObjectIds].map(id => {
+          const obj = objects.get(id);
+          if (!obj?.domRef) return null;
+          const el = obj.domRef;
+          return {
+            id, el,
+            startLeft: parseFloat(el.style.left) || 0,
+            startTop: parseFloat(el.style.top) || 0,
+          };
+        }).filter(Boolean),
+      };
+
+      function onMultiDragMove(ev) {
+        if (!multiDragState) return;
+        const dx = ev.clientX - multiDragState.startX;
+        const dy = ev.clientY - multiDragState.startY;
+        if (!multiDragState.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+          multiDragState.moved = true;
+          pushUndo();
+        }
+        if (!multiDragState.moved) return;
+        multiDragState.elements.forEach(({ el, startLeft, startTop }) => {
+          el.style.left = (startLeft + dx) + 'px';
+          el.style.top = (startTop + dy) + 'px';
+        });
+        requestAnimationFrame(() => buildOverlayHandles());
+      }
+      function onMultiDragEnd() {
+        document.removeEventListener('mousemove', onMultiDragMove);
+        document.removeEventListener('mouseup', onMultiDragEnd);
+        if (multiDragState?.moved) {
+          multiDragState.elements.forEach(({ el }) => {
+            if (el.dataset?.addedId) saveAddedElementPosition(el);
+            else saveElementOverride(el);
+          });
+        }
+        multiDragState = null;
+      }
+      document.addEventListener('mousemove', onMultiDragMove);
+      document.addEventListener('mouseup', onMultiDragEnd);
     }
 
     // ═══ DRAG TO MOVE ═══
@@ -2052,11 +2303,13 @@
     // ═══ ADD ELEMENTS ═══
     document.getElementById('addTextBtn').addEventListener('click', () => {
       pushUndo();
-      ensureAdded().textboxes.push({
-        id: 'tb_' + Date.now(), text: 'New text box',
-        x: 50, y: 50, width: 140, height: 32,
-        fontSize: '0.85em', fontWeight: '500', fontFamily: 'var(--font-body)',
-        color: '#111827', textAlign: 'left',
+      // Textbox is now a rect shape with text — unified model
+      ensureAdded().shapes.push({
+        id: 'sh_' + Date.now(), type: 'rect',
+        x: 50, y: 50, width: 160, height: 40,
+        fill: 'transparent', stroke: 'none', strokeWidth: 0, borderRadius: 4,
+        text: 'New text box', textColor: '#111827', fontSize: '0.85em',
+        fontWeight: '500', fontFamily: 'var(--font-body)', textAlign: 'left',
       });
       saveAddedElements(); renderAll();
     });
@@ -2074,6 +2327,7 @@
         id: 'sh_' + Date.now(), type: 'rect',
         x: 100, y: 100, width: 80, height: 60,
         fill: 'rgba(37,99,235,0.1)', stroke: 'var(--accent)', strokeWidth: 1.5, borderRadius: 8,
+        text: '', textColor: '#111827', fontSize: '0.85em', fontWeight: '500', fontFamily: 'var(--font-body)', textAlign: 'center',
       });
       saveAddedElements(); renderAll();
     });
@@ -2153,29 +2407,104 @@
 
           if (obj.kind === 'text') {
             const computed = window.getComputedStyle(el);
+            // Copy template text as a shape-with-text (unified model)
             window._editorClipboard = {
               data: {
-                id: 'tb_copy', text: el.textContent || 'Text',
+                id: 'sh_copy', type: 'rect',
                 x, y, width: rect.width + 8, height: rect.height + 4,
+                fill: 'transparent', stroke: 'none', strokeWidth: 0, borderRadius: 4,
+                text: el.textContent || 'Text', textColor: computed.color,
                 fontSize: computed.fontSize, fontWeight: computed.fontWeight,
-                fontFamily: computed.fontFamily, color: computed.color,
-                textAlign: computed.textAlign || 'left',
+                fontFamily: computed.fontFamily, textAlign: computed.textAlign || 'left',
               },
-              type: 'textboxes',
+              type: 'shapes',
             };
           } else if (obj.kind === 'shape') {
             const fill = el.getAttribute('fill') || 'rgba(37,99,235,0.1)';
             const stroke = el.getAttribute('stroke') || '#6b7280';
             const sw = parseFloat(el.getAttribute('stroke-width')) || 1.5;
+            // Detect actual shape type from SVG tag
+            const tag = el.tagName.toLowerCase();
+            let shapeType = 'rect';
+            if (tag === 'circle') shapeType = 'circle';
+            else if (tag === 'ellipse') shapeType = 'oval';
+            else if (tag === 'polygon') {
+              // Try to match polygon points to known SVG_SHAPES
+              const pts = el.getAttribute('points') || '';
+              // Normalize and try to find matching shape
+              shapeType = 'rect'; // default fallback
+              for (const [name, shapePts] of Object.entries(SVG_SHAPES)) {
+                // Quick check: same number of points
+                if (shapePts.split(' ').length === pts.trim().split(/\s+/).length) {
+                  shapeType = name; break;
+                }
+              }
+            }
+            const br = tag === 'rect' ? (parseFloat(el.getAttribute('rx')) || 0) : (shapeType === 'circle' || shapeType === 'oval' ? 999 : 0);
             window._editorClipboard = {
               data: {
-                id: 'sh_copy', type: 'rectangle',
+                id: 'sh_copy', type: shapeType,
                 x, y, width: rect.width, height: rect.height,
-                fill, stroke, strokeWidth: sw, borderRadius: 4,
+                fill, stroke, strokeWidth: sw, borderRadius: br,
+                text: '', textColor: '#111827', fontSize: '0.85em', fontWeight: '500', fontFamily: 'var(--font-body)', textAlign: 'center',
               },
               type: 'shapes',
             };
           }
+        }
+        return;
+      }
+      // Cut: Ctrl+X / Cmd+X — copy then delete
+      if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
+        const obj = getSelectedObject();
+        if (!obj) return;
+        e.preventDefault();
+        // First copy (reuse copy logic above)
+        if (obj.source === 'added') {
+          const key = configKey();
+          const added = addedElements[key];
+          if (added) {
+            for (const arr of ['textboxes', 'icons', 'shapes', 'connectors']) {
+              if (added[arr]) {
+                const found = added[arr].find(item => item.id === obj.addedId);
+                if (found) { window._editorClipboard = { data: JSON.parse(JSON.stringify(found)), type: arr }; break; }
+              }
+            }
+          }
+        } else if (obj.source === 'template') {
+          // Reuse Ctrl+C logic for template elements
+          const el = obj.domRef;
+          const rect = el.getBoundingClientRect();
+          const parentRect = renderTarget.getBoundingClientRect();
+          const x = rect.left - parentRect.left;
+          const y = rect.top - parentRect.top;
+          if (obj.kind === 'text') {
+            const computed = window.getComputedStyle(el);
+            window._editorClipboard = {
+              data: { id: 'sh_copy', type: 'rect', x, y, width: rect.width + 8, height: rect.height + 4, fill: 'transparent', stroke: 'none', strokeWidth: 0, borderRadius: 4, text: el.textContent || 'Text', textColor: computed.color, fontSize: computed.fontSize, fontWeight: computed.fontWeight, fontFamily: computed.fontFamily, textAlign: computed.textAlign || 'left' },
+              type: 'shapes',
+            };
+          } else if (obj.kind === 'shape') {
+            const fill = el.getAttribute('fill') || 'rgba(37,99,235,0.1)';
+            const stroke = el.getAttribute('stroke') || '#6b7280';
+            const sw = parseFloat(el.getAttribute('stroke-width')) || 1.5;
+            const tag = el.tagName.toLowerCase();
+            let shapeType = 'rect';
+            if (tag === 'circle') shapeType = 'circle';
+            else if (tag === 'ellipse') shapeType = 'oval';
+            else if (tag === 'polygon') { for (const [name] of Object.entries(SVG_SHAPES)) { shapeType = name; break; } }
+            window._editorClipboard = {
+              data: { id: 'sh_copy', type: shapeType, x, y, width: rect.width, height: rect.height, fill, stroke, strokeWidth: sw, borderRadius: 0, text: '', textColor: '#111827', fontSize: '0.85em', fontWeight: '500', fontFamily: 'var(--font-body)', textAlign: 'center' },
+              type: 'shapes',
+            };
+          }
+        }
+        // Then delete
+        pushUndo();
+        if (obj.source === 'added' && obj.addedId) {
+          removeAddedElement(obj.addedId);
+        } else if (obj.source === 'template') {
+          hideOriginalElement(obj.domRef);
         }
         return;
       }
@@ -2218,35 +2547,51 @@
       if (document.activeElement?.contentEditable === 'true') return;
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'SELECT') return;
 
-      // Delete: remove selected added element, OR hide original template element
+      // Delete: remove selected element(s)
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        const el = getSelectedElement();
-        if (el) {
+        if (selectedObjectIds.size > 0) {
           e.preventDefault();
           pushUndo();
-          const addedId = el.dataset?.addedId;
-          if (addedId) {
-            removeAddedElement(addedId);
-            renderAll();
-          } else {
-            // Original template element — hide it (saved as override)
-            hideOriginalElement(el);
-          }
+          const ids = [...selectedObjectIds];
+          ids.forEach(id => {
+            const obj = objects.get(id);
+            if (!obj) return;
+            const el = obj.domRef;
+            const addedId = el?.dataset?.addedId;
+            if (addedId) {
+              // Don't call removeAddedElement (it does renderAll each time)
+              const key = configKey();
+              const added = addedElements[key];
+              if (added) {
+                ['textboxes','icons','connectors','shapes'].forEach(arr => {
+                  if (added[arr]) added[arr] = added[arr].filter(item => item.id !== addedId);
+                });
+              }
+            } else if (el) {
+              hideOriginalElement(el);
+            }
+          });
+          saveAddedElements();
+          selectObject(null);
+          renderAll();
           return;
         }
       }
-      // Arrow keys: nudge selected element
-      if (selectedObjectId && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
-        const el = getSelectedElement();
-        if (el) {
-          e.preventDefault();
-          pushUndo();
-          const step = e.shiftKey ? 10 : 1;
-          let ndx = 0, ndy = 0;
-          if (e.key === 'ArrowLeft') ndx = -step;
-          if (e.key === 'ArrowRight') ndx = step;
-          if (e.key === 'ArrowUp') ndy = -step;
-          if (e.key === 'ArrowDown') ndy = step;
+      // Arrow keys: nudge selected element(s)
+      if (selectedObjectIds.size > 0 && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        pushUndo();
+        const step = e.shiftKey ? 10 : 1;
+        let ndx = 0, ndy = 0;
+        if (e.key === 'ArrowLeft') ndx = -step;
+        if (e.key === 'ArrowRight') ndx = step;
+        if (e.key === 'ArrowUp') ndy = -step;
+        if (e.key === 'ArrowDown') ndy = step;
+        // Nudge all selected elements
+        for (const id of selectedObjectIds) {
+          const obj = objects.get(id);
+          if (!obj?.domRef) continue;
+          const el = obj.domRef;
 
           const isSvgLine = isSvgElement(el) && el.tagName.toLowerCase() === 'line';
           if (isSvgLine) {
@@ -2276,6 +2621,12 @@
           requestAnimationFrame(() => buildOverlayHandles());
         }
       }
+      // Z-index: ] = bring to front, [ = send to back, Shift variants = one step
+      if (selectedObjectId && (e.key === ']' || e.key === '[')) {
+        e.preventDefault();
+        if (e.key === ']') window._changeZIndex?.(e.shiftKey ? 'forward' : 'front');
+        if (e.key === '[') window._changeZIndex?.(e.shiftKey ? 'backward' : 'back');
+      }
     });
 
     // ═══ RENDER ADDED ELEMENTS ═══
@@ -2292,12 +2643,13 @@
         const isSvgOverlay = tb.isSvgOverlay;
         div.className = isSvgOverlay ? 'added-textbox svg-text-overlay' : 'added-textbox';
         div.dataset.addedId = tb.id;
-        div.textContent = tb.text;
+        // Support multiline: convert \n to <br> for display
+        div.innerHTML = (tb.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
         const bgStyle = isSvgOverlay
           ? 'background:transparent; border:1px dashed transparent;'
           : 'background:transparent; border:1px dashed #d1d5db;';
         const justify = tb.textAlign === 'center' ? 'center' : tb.textAlign === 'right' ? 'flex-end' : 'flex-start';
-        div.style.cssText = `position:absolute; left:${tb.x}px; top:${tb.y}px; width:${tb.width}px; min-height:${tb.height}px; font-size:${tb.fontSize}; font-weight:${tb.fontWeight}; font-family:${tb.fontFamily}; color:${tb.color}; text-align:${tb.textAlign}; padding:${isSvgOverlay ? '2px 4px' : '4px 6px'}; border-radius:${isSvgOverlay ? '2' : '4'}px; cursor:move; ${bgStyle} ${isSvgOverlay ? 'line-height:1.2; display:flex; align-items:center; justify-content:' + justify + ';' : ''}`;
+        div.style.cssText = `position:absolute; left:${tb.x}px; top:${tb.y}px; width:${tb.width}px; min-height:${tb.height}px; font-size:${tb.fontSize}; font-weight:${tb.fontWeight}; font-family:${tb.fontFamily}; color:${tb.color}; text-align:${tb.textAlign}; white-space:pre-wrap; padding:${isSvgOverlay ? '2px 4px' : '4px 6px'}; border-radius:${isSvgOverlay ? '2' : '4'}px; cursor:move; ${bgStyle} ${isSvgOverlay ? 'line-height:1.2; display:flex; align-items:center; justify-content:' + justify + ';' : ''}`;
         renderTarget.appendChild(div);
       });
       (added.icons || []).forEach(ic => {
@@ -2314,28 +2666,41 @@
         div.className = 'added-shape';
         div.dataset.addedId = sh.id;
         const svgPoints = SVG_SHAPES[sh.type];
+        const w = sh.width;
+        const h = sh.height;
+        const sw = sh.strokeWidth || 1.5;
+        // Text foreignObject HTML (shared by all shape types)
+        const hasText = sh.text != null;
+        const textHtml = hasText ? `<foreignObject x="0" y="0" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" class="shape-text" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:${sh.textAlign||'center'};font-size:${sh.fontSize||'0.85em'};font-weight:${sh.fontWeight||'500'};font-family:${sh.fontFamily||'var(--font-body)'};color:${sh.textColor||'#111827'};padding:4px;overflow:hidden;white-space:pre-wrap;word-break:break-word;">${(sh.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div></foreignObject>` : '';
 
         if (svgPoints) {
-          // Complex shapes: render as inline SVG with proper stroke on all edges
-          // Scale the 0-100 normalized points to the actual width/height
-          const w = sh.width;
-          const h = sh.height;
+          // Complex shapes: polygon SVG
           const scaledPoints = svgPoints.split(' ').map(pt => {
             const [px, py] = pt.split(',').map(Number);
             return `${(px / 100 * w).toFixed(1)},${(py / 100 * h).toFixed(1)}`;
           }).join(' ');
-          const sw = sh.strokeWidth || 1.5;
-          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><polygon points="${scaledPoints}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}" stroke-linejoin="round"/></svg>`;
-          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; cursor:move; background:transparent; border:none;`;
+          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><polygon points="${scaledPoints}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}" stroke-linejoin="round"/>${textHtml}</svg>`;
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${w}px; height:${h}px; cursor:move; background:transparent; border:none;`;
         } else if (sh.type === 'petal') {
-          // Petal: use SVG ellipse
-          const w = sh.width, h = sh.height;
-          const sw = sh.strokeWidth || 1.5;
-          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><ellipse cx="${w/2}" cy="${h/2}" rx="${w*0.4}" ry="${h*0.5}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}"/></svg>`;
-          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; cursor:move; background:transparent; border:none;`;
+          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><ellipse cx="${w/2}" cy="${h/2}" rx="${w*0.4}" ry="${h*0.5}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}"/>${textHtml}</svg>`;
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${w}px; height:${h}px; cursor:move; background:transparent; border:none;`;
+        } else if (sh.type === 'circle') {
+          const r = Math.min(w, h) / 2;
+          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><circle cx="${w/2}" cy="${h/2}" r="${r - sw/2}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}"/>${textHtml}</svg>`;
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${w}px; height:${h}px; cursor:move; background:transparent; border:none;`;
+        } else if (sh.type === 'oval') {
+          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><ellipse cx="${w/2}" cy="${h/2}" rx="${w/2 - sw/2}" ry="${h/2 - sw/2}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}"/>${textHtml}</svg>`;
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${w}px; height:${h}px; cursor:move; background:transparent; border:none;`;
+        } else if (sh.type === 'ring') {
+          const outerR = Math.min(w, h) / 2 - sw/2;
+          const innerR = outerR * 0.5;
+          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><circle cx="${w/2}" cy="${h/2}" r="${outerR}" fill="none" stroke="${sh.stroke}" stroke-width="${sw * 2}"/><circle cx="${w/2}" cy="${h/2}" r="${innerR}" fill="none" stroke="${sh.stroke}" stroke-width="${sw}"/>${textHtml}</svg>`;
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${w}px; height:${h}px; cursor:move; background:transparent; border:none;`;
         } else {
-          // Simple shapes: rect, rounded-rect, circle, oval, pill, ring — use CSS
-          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${sh.width}px; height:${sh.height}px; background:${sh.fill}; border:${sh.strokeWidth}px solid ${sh.stroke}; border-radius:${sh.borderRadius||0}px; cursor:move;`;
+          // rect, rounded-rect, pill — all use SVG rect now (unified)
+          const br = sh.borderRadius || 0;
+          div.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;"><rect x="${sw/2}" y="${sw/2}" width="${w - sw}" height="${h - sw}" rx="${br}" ry="${br}" fill="${sh.fill}" stroke="${sh.stroke}" stroke-width="${sw}"/>${textHtml}</svg>`;
+          div.style.cssText = `position:absolute; left:${sh.x}px; top:${sh.y}px; width:${w}px; height:${h}px; cursor:move; background:transparent; border:none;`;
         }
         renderTarget.appendChild(div);
       });
@@ -2412,7 +2777,37 @@
       localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
     }
 
+    function getPlainTextWithNewlines(el) {
+      // Convert contenteditable HTML (div/br) back to plain text with \n
+      let html = el.innerHTML;
+      // Replace <br> variants with \n
+      html = html.replace(/<br\s*\/?>/gi, '\n');
+      // Replace block-level wrappers (Chrome creates <div> for new lines)
+      html = html.replace(/<\/div>\s*<div>/gi, '\n');
+      html = html.replace(/<div>/gi, '\n');
+      html = html.replace(/<\/div>/gi, '');
+      // Strip remaining tags
+      html = html.replace(/<[^>]+>/g, '');
+      // Decode HTML entities
+      const txt = document.createElement('textarea');
+      txt.innerHTML = html;
+      return txt.value.replace(/^\n/, ''); // strip leading newline artifact
+    }
+
     function saveTextOverride(el) {
+      // If it's an added textbox, save text back to addedElements
+      if (el.dataset?.addedId) {
+        const key = configKey();
+        const added = addedElements[key];
+        if (added?.textboxes) {
+          const tb = added.textboxes.find(t => t.id === el.dataset.addedId);
+          if (tb) {
+            tb.text = getPlainTextWithNewlines(el);
+            saveAddedElements();
+          }
+        }
+        return;
+      }
       const key = configKey();
       if (!elementOverrides[key]) elementOverrides[key] = {};
       const path = getElementPath(el);
@@ -2583,9 +2978,38 @@ export function applyLayoutConfig(container, variant, itemCount) {
       parent.appendChild(div);
     });
 
+    // SVG_SHAPES lookup for export (same as editor)
+    const SVG_SHAPES_EXPORT = {
+      'diamond': '50,0 100,50 50,100 0,50',
+      'triangle': '50,0 100,100 0,100',
+      'inv-triangle': '0,0 100,0 50,100',
+      'pentagon': '50,0 100,38 82,100 18,100 0,38',
+      'hexagon': '25,0 75,0 100,50 75,100 25,100 0,50',
+      'arrow-right': '0,20 65,20 65,0 100,50 65,100 65,80 0,80',
+      'arrow-left': '35,0 35,20 100,20 100,80 35,80 35,100 0,50',
+      'star': '50,0 61,35 98,35 68,57 79,91 50,70 21,91 32,57 2,35 39,35',
+    };
+
     (cfg.added.shapes || []).forEach(sh => {
       const div = document.createElement('div');
-      div.style.cssText = \`position:absolute; left:\${sh.x}px; top:\${sh.y}px; width:\${sh.width}px; height:\${sh.height}px; background:\${sh.fill}; border:\${sh.strokeWidth}px solid \${sh.stroke}; border-radius:\${sh.borderRadius || 0}px;\`;
+      const w = sh.width, h = sh.height, sw = sh.strokeWidth || 1.5;
+      const textHtml = sh.text ? \`<foreignObject x="0" y="0" width="\${w}" height="\${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:\${sh.textAlign||'center'};font-size:\${sh.fontSize||'0.85em'};font-weight:\${sh.fontWeight||'500'};font-family:\${sh.fontFamily||'var(--font-body)'};color:\${sh.textColor||'#111827'};padding:4px;overflow:hidden;white-space:pre-wrap;word-break:break-word;">\${(sh.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>')}</div></foreignObject>\` : '';
+      const svgPts = SVG_SHAPES_EXPORT[sh.type];
+      let svgInner = '';
+      if (svgPts) {
+        const scaled = svgPts.split(' ').map(pt => { const [px,py] = pt.split(',').map(Number); return \`\${(px/100*w).toFixed(1)},\${(py/100*h).toFixed(1)}\`; }).join(' ');
+        svgInner = \`<polygon points="\${scaled}" fill="\${sh.fill}" stroke="\${sh.stroke}" stroke-width="\${sw}" stroke-linejoin="round"/>\`;
+      } else if (sh.type === 'circle') {
+        const r = Math.min(w,h)/2;
+        svgInner = \`<circle cx="\${w/2}" cy="\${h/2}" r="\${r-sw/2}" fill="\${sh.fill}" stroke="\${sh.stroke}" stroke-width="\${sw}"/>\`;
+      } else if (sh.type === 'oval') {
+        svgInner = \`<ellipse cx="\${w/2}" cy="\${h/2}" rx="\${w/2-sw/2}" ry="\${h/2-sw/2}" fill="\${sh.fill}" stroke="\${sh.stroke}" stroke-width="\${sw}"/>\`;
+      } else {
+        const br = sh.borderRadius || 0;
+        svgInner = \`<rect x="\${sw/2}" y="\${sw/2}" width="\${w-sw}" height="\${h-sw}" rx="\${br}" ry="\${br}" fill="\${sh.fill}" stroke="\${sh.stroke}" stroke-width="\${sw}"/>\`;
+      }
+      div.innerHTML = \`<svg width="\${w}" height="\${h}" viewBox="0 0 \${w} \${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible;">\${svgInner}\${textHtml}</svg>\`;
+      div.style.cssText = \`position:absolute; left:\${sh.x}px; top:\${sh.y}px; width:\${w}px; height:\${h}px;\`;
       parent.appendChild(div);
     });
 
@@ -2694,10 +3118,15 @@ export function applyLayoutConfig(container, variant, itemCount) {
         thumb.innerHTML = `<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">${sh.svg}</svg>`;
         thumb.addEventListener('click', () => {
           pushUndo();
+          // Circle/oval default to equal width/height
+          const isCircular = ['circle','oval','ring'].includes(sh.name.toLowerCase());
+          const w = isCircular ? 70 : 80;
+          const h = isCircular ? 70 : 60;
           ensureAdded().shapes.push({
             id:'sh_' + Date.now(), type: sh.name.toLowerCase().replace(/\s+/g,'-'),
-            x:120, y:120, width:80, height:60,
+            x:120, y:120, width:w, height:h,
             fill:'rgba(37,99,235,0.1)', stroke:'#6b7280', strokeWidth:1.5, borderRadius: sh.br || 0,
+            text: '', textColor: '#111827', fontSize: '0.85em', fontWeight: '500', fontFamily: 'var(--font-body)', textAlign: 'center',
           });
           saveAddedElements(); renderAll();
         });
@@ -2705,11 +3134,89 @@ export function applyLayoutConfig(container, variant, itemCount) {
       });
     }
 
-    // ═══ DESELECT ON CANVAS CLICK ═══
+    // ═══ MARQUEE SELECTION & DESELECT ═══
+    let marqueeState = null;
+    const marqueeDiv = document.createElement('div');
+    marqueeDiv.style.cssText = 'position:absolute;border:1px dashed var(--accent);background:rgba(37,99,235,0.08);pointer-events:none;z-index:50;display:none;';
+    document.getElementById('editorCanvas').appendChild(marqueeDiv);
+
     document.getElementById('editorCanvas').addEventListener('mousedown', (e) => {
-      if (e.target === document.getElementById('editorCanvas') || e.target === document.getElementById('canvasFrame')) {
-        if (!drawingLine) selectObject(null);
+      const isCanvas = e.target === document.getElementById('editorCanvas') || e.target === document.getElementById('canvasFrame');
+      if (!isCanvas) return;
+      if (drawingLine) return;
+
+      // Start marquee selection
+      const canvasRect = document.getElementById('editorCanvas').getBoundingClientRect();
+      marqueeState = {
+        startX: e.clientX - canvasRect.left,
+        startY: e.clientY - canvasRect.top,
+        moved: false,
+      };
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!marqueeState) return;
+      const canvasRect = document.getElementById('editorCanvas').getBoundingClientRect();
+      const curX = e.clientX - canvasRect.left;
+      const curY = e.clientY - canvasRect.top;
+      const dx = curX - marqueeState.startX;
+      const dy = curY - marqueeState.startY;
+
+      if (!marqueeState.moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+        marqueeState.moved = true;
+        marqueeDiv.style.display = 'block';
       }
+
+      if (marqueeState.moved) {
+        const left = Math.min(marqueeState.startX, curX);
+        const top = Math.min(marqueeState.startY, curY);
+        const width = Math.abs(dx);
+        const height = Math.abs(dy);
+        marqueeDiv.style.left = left + 'px';
+        marqueeDiv.style.top = top + 'px';
+        marqueeDiv.style.width = width + 'px';
+        marqueeDiv.style.height = height + 'px';
+      }
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      if (!marqueeState) return;
+      marqueeDiv.style.display = 'none';
+
+      if (marqueeState.moved) {
+        // Find all objects whose handles intersect the marquee rect
+        const canvasRect = document.getElementById('editorCanvas').getBoundingClientRect();
+        const curX = e.clientX - canvasRect.left;
+        const curY = e.clientY - canvasRect.top;
+        const mLeft = Math.min(marqueeState.startX, curX);
+        const mTop = Math.min(marqueeState.startY, curY);
+        const mRight = Math.max(marqueeState.startX, curX);
+        const mBottom = Math.max(marqueeState.startY, curY);
+
+        const hitIds = [];
+        for (const [id, obj] of objects) {
+          const el = obj.domRef;
+          if (!el) continue;
+          const elRect = el.getBoundingClientRect();
+          const elLeft = elRect.left - canvasRect.left;
+          const elTop = elRect.top - canvasRect.top;
+          const elRight = elLeft + elRect.width;
+          const elBottom = elTop + elRect.height;
+          // Check overlap
+          if (elLeft < mRight && elRight > mLeft && elTop < mBottom && elBottom > mTop) {
+            hitIds.push(id);
+          }
+        }
+        if (hitIds.length > 0) {
+          selectMultiple(hitIds);
+        } else {
+          selectObject(null);
+        }
+      } else {
+        // Simple click on canvas — deselect
+        selectObject(null);
+      }
+      marqueeState = null;
     });
 
     // ═══ INIT ═══
