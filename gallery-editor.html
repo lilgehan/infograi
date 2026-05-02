@@ -143,6 +143,16 @@
       position: relative;
     }
 
+    /* ── Editor-mode overrides: make last-child connector lines visible ────────
+       Template CSS hides last-item connectors (timeline, road track) so exported
+       infographics look correct. In the editor every visible element must be
+       selectable, so we force them visible here. The override is scoped to
+       .canvas-frame so it never affects the exported/rendered output.        */
+    .canvas-frame .ig-page .igs-tl-item:last-child .igs-tl-line {
+      display: flex !important;
+      min-height: 20px;
+    }
+
     /* ── Selection overlay ── */
     .editor-overlay {
       position: absolute;
@@ -972,25 +982,40 @@
     }
 
     // ═══ OVERLAY HANDLES ═══
+    //
+    // ARCHITECTURE: Every visible template element gets a handle that covers at
+    // least MIN_HIT × MIN_HIT pixels. Thin elements (2px lines, 12px dots) get
+    // transparent padding so:
+    //   (a) the handle body is always large enough to click for a move gesture
+    //   (b) resize dots sit at the padded corners, not covering the move area
+    //
+    // Child elements are appended AFTER parent elements (DOM iteration order),
+    // so child handles win click priority over overlapping parent handles.
+    //
+    const MIN_HIT = 20; // px — minimum handle dimension in each axis
+
     function buildOverlayHandles() {
       editorOverlay.innerHTML = '';
       const frameRect = document.getElementById('canvasFrame').getBoundingClientRect();
       const seen = new Set();
 
-      // Iterate through objects map and create handles for each
       for (const [objectId, obj] of objects) {
         const el = obj.domRef;
         if (!el) continue;
 
         const r = el.getBoundingClientRect();
-        // For lines, use a wider hit area
-        const isLine = el.tagName.toLowerCase() === 'line';
-        if (!isLine && (r.width < 4 || r.height < 4)) continue;
-        if (isLine && r.width < 2 && r.height < 2) continue;
 
-        // Make thin lines clickable with padding
-        const padX = isLine && r.width < 12 ? 6 : 0;
-        const padY = isLine && r.height < 12 ? 6 : 0;
+        // Skip truly invisible elements (zero area and no padding would help)
+        if (r.width === 0 && r.height === 0) continue;
+
+        // ── Universal hit-area padding ──────────────────────────────────────
+        // Any element narrower or shorter than MIN_HIT gets transparent padding
+        // so the handle body is always big enough to start a move gesture,
+        // and resize dots don't cover the entire handle.
+        // This is how every thin line, small dot, and tiny icon becomes
+        // independently clickable without special-casing individual elements.
+        const padX = Math.max(0, Math.ceil((MIN_HIT - r.width)  / 2));
+        const padY = Math.max(0, Math.ceil((MIN_HIT - r.height) / 2));
 
         const key = `${Math.round(r.left)}_${Math.round(r.top)}_${Math.round(r.width)}_${Math.round(r.height)}_${el.tagName}`;
         if (seen.has(key)) continue;
@@ -999,12 +1024,12 @@
         const handle = document.createElement('div');
         handle.className = 'editor-handle';
         handle.dataset.objId = objectId;
-        handle.style.left = (r.left - frameRect.left - padX) + 'px';
-        handle.style.top = (r.top - frameRect.top - padY) + 'px';
-        handle.style.width = (r.width + padX * 2) + 'px';
+        handle.style.left   = (r.left   - frameRect.left - padX) + 'px';
+        handle.style.top    = (r.top    - frameRect.top  - padY) + 'px';
+        handle.style.width  = (r.width  + padX * 2) + 'px';
         handle.style.height = (r.height + padY * 2) + 'px';
 
-        // Resize dots
+        // Resize dots at the padded corners
         ['nw','ne','sw','se'].forEach(corner => {
           const dot = document.createElement('div');
           dot.className = `resize-dot ${corner}`;
@@ -1019,7 +1044,6 @@
             startResize(e, el, e.target.dataset.corner);
           } else {
             selectObject(objectId, isMultiKey);
-            // Start drag — if multiple selected, drag all
             if (selectedObjectIds.size > 1) {
               startMultiDrag(e);
             } else {
@@ -1202,9 +1226,13 @@
         '.igs-bl-process', '.igs-bl-boxsmall',
         '.igs-bl-title', '.igs-bl-body',
         '.igs-bl-dot', '.igs-bl-arrow-icon', '.igs-bl-num',
-        // ── Sequence / Timeline family — items + spine elements ──
-        '.igs-tl-item', '.igs-tl-content', '.igs-tl-title', '.igs-tl-label', '.igs-tl-body',
-        '.igs-tl-spine', '.igs-tl-dot', '.igs-tl-line',
+        // ── Sequence / Timeline family — items + visible elements ──
+        // NOTE: .igs-tl-spine is intentionally excluded — it is an invisible flex
+        // container whose handle would mask the dot and line children beneath it.
+        // NOTE: .igs-tl-content is excluded for the same reason.
+        '.igs-tl-item',
+        '.igs-tl-dot', '.igs-tl-line',
+        '.igs-tl-title', '.igs-tl-label', '.igs-tl-body',
         '.igs-mtl-item', '.igs-mtl-dot', '.igs-mtlb-item',
         '.igs-arrow-item', '.igs-arrow-block', '.igs-arrow-title', '.igs-arrow-body',
         '.igs-pill',
