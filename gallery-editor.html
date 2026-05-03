@@ -707,15 +707,18 @@
     let addedElements = JSON.parse(localStorage.getItem('igEditorAdded') || '{}');
     let elementOverrides = JSON.parse(localStorage.getItem('igEditorOverrides') || '{}');
 
-    // Remove any position/left/top entries saved by the old buggy drag system.
-    // Old code set position:relative + left/top which corrupted template layouts on re-render.
+    // Remove entries saved by the old buggy drag system.
+    // The old code set position:relative + left/top on flex-child elements, corrupting layout.
+    // The signature of a corrupt entry is position === 'relative' (absolute elements legitimately
+    // save top/left, so we must NOT delete those).
     (function cleanLegacyOverrides() {
       let dirty = false;
       Object.values(elementOverrides).forEach(store => {
         if (!store || typeof store !== 'object') return;
         Object.values(store).forEach(entry => {
           if (!entry || typeof entry !== 'object') return;
-          if ('position' in entry || 'left' in entry || 'top' in entry) {
+          // Only wipe entries where position was incorrectly set to 'relative' by the old code
+          if (entry.position === 'relative') {
             delete entry.position;
             delete entry.left;
             delete entry.top;
@@ -2090,9 +2093,11 @@
       const isAbsolute = el.style.position === 'absolute';
       const isSvgLine = isSvg && el.tagName.toLowerCase() === 'line';
       const isConnector = objectId.startsWith('cn_');
-      // Template HTML elements must be moved via transform:translate to avoid mutating their
-      // CSS position type (absolute/flex-child/etc.) which would collapse the layout.
+      // Template HTML elements need position-aware drag:
+      // • position:absolute  → update top/left inline (element is already independent, no layout impact)
+      // • flex-child/relative → use transform:translate (changing top/left would mutate layout role)
       const isTemplate = !isSvg && (objects.get(objectId)?.source === 'template');
+      const isTemplateAbsolute = isTemplate && getComputedStyle(el).position === 'absolute';
 
       // For SVG lines / connectors, check if mouse is near an endpoint for endpoint-only drag
       let dragMode = 'whole'; // 'whole' or 'endpoint'
@@ -2128,8 +2133,16 @@
         const svgT = getSvgTranslate(el);
         origLeft = svgT.x;
         origTop = svgT.y;
+      } else if (isTemplateAbsolute) {
+        // Absolutely positioned template element (e.g. road-horizontal track):
+        // Read pixel position relative to offsetParent so we get the resolved calc() value.
+        const parentEl = el.offsetParent || el.parentElement;
+        const parentRect = parentEl.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        origLeft = elRect.left - parentRect.left;
+        origTop  = elRect.top  - parentRect.top;
       } else if (isTemplate) {
-        // Template HTML elements: read existing CSS translate offset (default 0,0).
+        // Flex-child or relatively positioned template element: use CSS translate offset.
         // Never read style.left/style.top — those are set by the template CSS, not inline.
         const t = getCssTranslate(el);
         origLeft = t.x;
@@ -2151,7 +2164,7 @@
       }
 
       dragState = {
-        el, objectId, isSvg, isAbsolute, isSvgLine, isTemplate, lineCoords,
+        el, objectId, isSvg, isAbsolute, isSvgLine, isTemplate, isTemplateAbsolute, lineCoords,
         dragMode, endpointIdx,
         startX: e.clientX, startY: e.clientY,
         origLeft, origTop,
@@ -2192,9 +2205,13 @@
         }
       } else if (dragState.isSvg) {
         setSvgTranslate(dragState.el, dragState.origLeft + dx, dragState.origTop + dy);
+      } else if (dragState.isTemplateAbsolute) {
+        // Absolutely positioned template element: update top/left directly.
+        // This correctly moves the element within its containing block without affecting siblings.
+        dragState.el.style.left = (dragState.origLeft + dx) + 'px';
+        dragState.el.style.top  = (dragState.origTop  + dy) + 'px';
       } else if (dragState.isTemplate) {
-        // Template HTML elements: use transform:translate so the element's layout role
-        // (absolute, flex-child, etc.) is never changed. This prevents jumps and overflow clipping.
+        // Flex-child or relative template element: use transform so layout role is not changed.
         setCssTranslate(dragState.el, dragState.origLeft + dx, dragState.origTop + dy);
       } else {
         // User-added HTML elements: already absolutely positioned, left/top is correct.
@@ -2907,9 +2924,11 @@
       const path = getElementPath(el);
       if (!path) return;
       const o = {};
-      // Save transform (not position/left/top) for template elements so re-applying the override
-      // on re-render never changes the element's layout role (absolute, flex-child, etc.).
-      ['transform','width','height','fontSize','fontWeight','fontFamily','color','backgroundColor','textAlign','maxWidth','display'].forEach(p => {
+      // Absolutely positioned elements: save top/left (correct for absolute, doesn't change layout type).
+      // All other template elements: save transform (changing top/left on flex-children mutates layout).
+      const elIsAbsolute = getComputedStyle(el).position === 'absolute';
+      const positionProps = elIsAbsolute ? ['left', 'top'] : ['transform'];
+      [...positionProps, 'width','height','fontSize','fontWeight','fontFamily','color','backgroundColor','textAlign','maxWidth','display'].forEach(p => {
         if (el.style[p]) o[p] = el.style[p];
       });
       // Also save SVG attributes for shapes

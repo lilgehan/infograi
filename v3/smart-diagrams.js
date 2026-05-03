@@ -142,7 +142,7 @@ export const ROAD_CSS = `
 /* ── road-horizontal ── */
 .ig-page .igd-road-h {
   position: relative; padding: 16px 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 .ig-page .igd-road-h-track {
   position: absolute;
