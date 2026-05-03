@@ -1450,7 +1450,7 @@ export const NUMBERS_CSS = `
   border-radius: 50%;
 }
 .ig-page .igs-dg-dot.filled { background: var(--accent); }
-.ig-page .igs-dg-dot.empty  { background: #e5e7eb; }
+.ig-page .igs-dg-dot.empty  { background: rgba(var(--accent-rgb, 37,99,235), 0.12); }
 .ig-page .igs-dotgrid-lbl {
   font-family: var(--font-heading);
   font-size: 0.72em;
@@ -1497,8 +1497,8 @@ export const NUMBERS_CSS = `
   flex-shrink: 0;
 }
 .ig-page .igs-dl-dot.filled { background: var(--accent); }
-.ig-page .igs-dl-dot.empty  { background: #e5e7eb; }
-.ig-page .igs-dl-dot.half   { background: linear-gradient(90deg, var(--accent) 50%, #e5e7eb 50%); }
+.ig-page .igs-dl-dot.empty  { background: rgba(var(--accent-rgb, 37,99,235), 0.12); }
+.ig-page .igs-dl-dot.half   { background: linear-gradient(90deg, var(--accent) 50%, rgba(var(--accent-rgb, 37,99,235), 0.12) 50%); }
 .ig-page .igs-dotline-val {
   font-family: var(--font-heading);
   font-size: 0.78em;
@@ -1692,17 +1692,13 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
       const { pct, isPercent } = parsePctFill(numStr);
       const title  = esc(truncateTitle(item.title || '', density));
       const desc   = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
-      // Only render the dot grid when the value is a percentage.
-      // Non-percentage values ($2.4M, 150+, etc.) produce pct=null → 100 grey dots → looks like a grey blob.
-      let gridHtml = '';
-      if (pct !== null) {
-        const filled = Math.round((pct / 100) * TOTAL);
-        let dots = '';
-        for (let d = 0; d < TOTAL; d++) {
-          dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
-        }
-        gridHtml = `<div class="igs-dotgrid-grid">${dots}</div>`;
+      // Always render dots. Non-percentage values show all dots as empty (light accent).
+      const filled = pct !== null ? Math.round((pct / 100) * TOTAL) : 0;
+      let dots = '';
+      for (let d = 0; d < TOTAL; d++) {
+        dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
       }
+      const gridHtml = `<div class="igs-dotgrid-grid">${dots}</div>`;
       return `<div class="igs-dotgrid-card">
         <div class="igs-dotgrid-num">${esc(numStr)}</div>
         ${gridHtml}
@@ -1723,22 +1719,18 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
       const { pct }   = parsePctFill(numStr);
       const title     = esc(truncateTitle(item.title || '', density));
       const desc      = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
-      // Only render the dot track when the value is a percentage.
-      // Non-percentage values produce pct=null → all 10 dots grey → misleading visual.
-      let trackHtml = '';
-      if (pct !== null) {
-        const exactFill = (pct / 100) * DOT_COUNT;
-        const fullFill  = Math.floor(exactFill);
-        const fracPart  = exactFill - fullFill;
-        const hasFrac   = fracPart >= 0.2 && fracPart < 0.8;
-        let dots = '';
-        for (let d = 0; d < DOT_COUNT; d++) {
-          if (d < fullFill)                  dots += `<span class="igs-dl-dot filled"></span>`;
-          else if (d === fullFill && hasFrac) dots += `<span class="igs-dl-dot half"></span>`;
-          else                               dots += `<span class="igs-dl-dot empty"></span>`;
-        }
-        trackHtml = `<span class="igs-dotline-track">${dots}</span>`;
+      // Always render dots. Non-percentage values show all dots as empty (light accent).
+      const exactFill = pct !== null ? (pct / 100) * DOT_COUNT : 0;
+      const fullFill  = Math.floor(exactFill);
+      const fracPart  = exactFill - fullFill;
+      const hasFrac   = fracPart >= 0.2 && fracPart < 0.8;
+      let dots = '';
+      for (let d = 0; d < DOT_COUNT; d++) {
+        if (d < fullFill)                  dots += `<span class="igs-dl-dot filled"></span>`;
+        else if (d === fullFill && hasFrac) dots += `<span class="igs-dl-dot half"></span>`;
+        else                               dots += `<span class="igs-dl-dot empty"></span>`;
       }
+      const trackHtml = `<span class="igs-dotline-track">${dots}</span>`;
       return `<div class="igs-dotline-item">
         <div class="igs-dotline-row">
           <span class="igs-dotline-label">${title}</span>
