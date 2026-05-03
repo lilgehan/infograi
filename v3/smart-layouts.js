@@ -1689,17 +1689,23 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
     const TOTAL = 100;
     const cards = items.map(item => {
       const numStr = getNum(item);
-      const { pct } = parsePctFill(numStr);
-      const filled = pct !== null ? Math.round((pct / 100) * TOTAL) : 0;
+      const { pct, isPercent } = parsePctFill(numStr);
       const title  = esc(truncateTitle(item.title || '', density));
       const desc   = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
-      let dots = '';
-      for (let d = 0; d < TOTAL; d++) {
-        dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
+      // Only render the dot grid when the value is a percentage.
+      // Non-percentage values ($2.4M, 150+, etc.) produce pct=null → 100 grey dots → looks like a grey blob.
+      let gridHtml = '';
+      if (pct !== null) {
+        const filled = Math.round((pct / 100) * TOTAL);
+        let dots = '';
+        for (let d = 0; d < TOTAL; d++) {
+          dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
+        }
+        gridHtml = `<div class="igs-dotgrid-grid">${dots}</div>`;
       }
       return `<div class="igs-dotgrid-card">
         <div class="igs-dotgrid-num">${esc(numStr)}</div>
-        <div class="igs-dotgrid-grid">${dots}</div>
+        ${gridHtml}
         ${title ? `<div class="igs-dotgrid-lbl">${title}</div>` : ''}
         ${desc  ? `<div class="igs-dotgrid-desc">${desc}</div>`  : ''}
       </div>`;
@@ -1715,22 +1721,28 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
     const rows = items.map(item => {
       const numStr    = getNum(item);
       const { pct }   = parsePctFill(numStr);
-      const exactFill = pct !== null ? (pct / 100) * DOT_COUNT : 0;
-      const fullFill  = Math.floor(exactFill);
-      const fracPart  = exactFill - fullFill;
-      const hasFrac   = fracPart >= 0.2 && fracPart < 0.8;
       const title     = esc(truncateTitle(item.title || '', density));
       const desc      = density === 'compact' ? '' : esc(truncateBody(item.body || '', density));
-      let dots = '';
-      for (let d = 0; d < DOT_COUNT; d++) {
-        if (d < fullFill)                       dots += `<span class="igs-dl-dot filled"></span>`;
-        else if (d === fullFill && hasFrac)      dots += `<span class="igs-dl-dot half"></span>`;
-        else                                     dots += `<span class="igs-dl-dot empty"></span>`;
+      // Only render the dot track when the value is a percentage.
+      // Non-percentage values produce pct=null → all 10 dots grey → misleading visual.
+      let trackHtml = '';
+      if (pct !== null) {
+        const exactFill = (pct / 100) * DOT_COUNT;
+        const fullFill  = Math.floor(exactFill);
+        const fracPart  = exactFill - fullFill;
+        const hasFrac   = fracPart >= 0.2 && fracPart < 0.8;
+        let dots = '';
+        for (let d = 0; d < DOT_COUNT; d++) {
+          if (d < fullFill)                  dots += `<span class="igs-dl-dot filled"></span>`;
+          else if (d === fullFill && hasFrac) dots += `<span class="igs-dl-dot half"></span>`;
+          else                               dots += `<span class="igs-dl-dot empty"></span>`;
+        }
+        trackHtml = `<span class="igs-dotline-track">${dots}</span>`;
       }
       return `<div class="igs-dotline-item">
         <div class="igs-dotline-row">
           <span class="igs-dotline-label">${title}</span>
-          <span class="igs-dotline-track">${dots}</span>
+          ${trackHtml}
           <span class="igs-dotline-val">${esc(numStr)}</span>
         </div>
         ${desc ? `<div class="igs-dotline-desc">${desc}</div>` : ''}
