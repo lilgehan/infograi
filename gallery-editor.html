@@ -8,6 +8,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <!-- Persistent editor state — cross-browser, file-based.
+       This file is written by the Save button and lives next to gallery-editor.html.
+       If it doesn't exist yet, the onerror handler silently removes the tag. -->
+  <script src="editor-draft.js" onerror="this.remove()"></script>
   <style>
     :root {
       --accent: #2563EB;
@@ -433,7 +437,7 @@
 
     <span class="draft-indicator" id="draftIndicator"></span>
     <button id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
-    <button class="btn-primary" id="saveBtn" title="Save draft to browser">Save</button>
+    <button class="btn-primary" id="saveBtn" title="Save to file (cross-browser persistent)">Save</button>
     <button class="btn-success" id="exportBtn" title="Export layout-configs.js for gallery + generator">Export</button>
     <button class="btn-danger" id="resetBtn" title="Reset all changes for this layout">Reset</button>
     <button id="shapeLibBtn">Shapes</button>
@@ -703,9 +707,25 @@
     let currentDensity = 'standard';
     let selectedObjectId = null; // string ID, never a DOM ref (primary selection)
     const selectedObjectIds = new Set(); // multi-select support
-    let configs = JSON.parse(localStorage.getItem('igEditorConfigs') || '{}');
-    let addedElements = JSON.parse(localStorage.getItem('igEditorAdded') || '{}');
-    let elementOverrides = JSON.parse(localStorage.getItem('igEditorOverrides') || '{}');
+
+    // ── Persistent storage: file-first, localStorage-fallback ──
+    // editor-draft.js sets window.__editorDraft = { configs, overrides, added, savedAt }
+    // If the file exists, it's the cross-browser source of truth.
+    // localStorage is an auto-save cache for between file-saves.
+    const _draft = window.__editorDraft || null;
+    let configs = _draft?.configs || JSON.parse(localStorage.getItem('igEditorConfigs') || '{}');
+    let addedElements = _draft?.added || JSON.parse(localStorage.getItem('igEditorAdded') || '{}');
+    let elementOverrides = _draft?.overrides || JSON.parse(localStorage.getItem('igEditorOverrides') || '{}');
+
+    // Sync file state into localStorage so both stay aligned
+    if (_draft) {
+      localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
+      localStorage.setItem('igEditorAdded', JSON.stringify(addedElements));
+      localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
+    }
+
+    // File System Access API handle — kept alive so subsequent saves are silent (Chrome/Edge)
+    let _draftFileHandle = null;
 
     // Remove entries saved by the old buggy drag system.
     // The old code set position:relative + left/top on flex-child elements, corrupting layout.
@@ -760,6 +780,68 @@
       const k = configKey();
       if (!addedElements[k]) addedElements[k] = { textboxes:[], icons:[], connectors:[], shapes:[] };
       return addedElements[k];
+    }
+
+    // ═══ PERSISTENT FILE SAVE ═══
+    // Builds the editor-draft.js content from current state
+    function buildDraftFileContent() {
+      // Make sure current layout is captured in configs
+      const key = configKey();
+      if (elementOverrides[key] || addedElements[key]) {
+        configs[key] = {
+          overrides: elementOverrides[key] || {},
+          added: addedElements[key] || {},
+          tone: currentTone, density: currentDensity,
+          savedAt: new Date().toISOString(),
+        };
+      }
+      const draftData = {
+        configs: configs,
+        overrides: elementOverrides,
+        added: addedElements,
+        savedAt: new Date().toISOString(),
+      };
+      return `/**\n * Infogr.ai Editor Draft State\n * Auto-saved ${new Date().toISOString()}\n * This file is the cross-browser source of truth for editor state.\n * Place next to gallery-editor.html. Do NOT edit manually.\n */\nwindow.__editorDraft = ${JSON.stringify(draftData, null, 2)};\n`;
+    }
+
+    // Save draft to a real file — File System Access API (Chrome/Edge) or download fallback (Safari)
+    async function saveDraftToFile() {
+      const content = buildDraftFileContent();
+
+      // Also sync to localStorage as backup
+      localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
+      localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
+      localStorage.setItem('igEditorAdded', JSON.stringify(addedElements));
+
+      // Try File System Access API (Chrome 86+, Edge 86+)
+      if (window.showSaveFilePicker) {
+        try {
+          // Reuse the file handle from a previous save, or ask user to pick location
+          if (!_draftFileHandle) {
+            _draftFileHandle = await window.showSaveFilePicker({
+              suggestedName: 'editor-draft.js',
+              types: [{ description: 'JavaScript', accept: { 'application/javascript': ['.js'] } }],
+            });
+          }
+          const writable = await _draftFileHandle.createWritable();
+          await writable.write(content);
+          await writable.close();
+          return 'saved';  // silent save succeeded
+        } catch (err) {
+          if (err.name === 'AbortError') return 'cancelled';
+          // If permission was revoked, reset handle and fall through to download
+          _draftFileHandle = null;
+        }
+      }
+
+      // Fallback: standard file download
+      const blob = new Blob([content], { type: 'application/javascript' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'editor-draft.js';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      return 'downloaded';
     }
 
     // ═══ HELPERS ═══
@@ -891,7 +973,19 @@
       // Preserve any non-translate transforms (e.g. rotate, scale) already on the element
       let tr = el.style.transform || '';
       tr = tr.replace(/translate\([^)]*\)\s*/g, '').trim();
-      el.style.transform = `translate(${x}px, ${y}px)` + (tr ? ' ' + tr : '');
+
+      // If no other inline transforms, check if the element has a CSS stylesheet transform
+      // (e.g. translateX(-50%) for centering) that we must preserve.
+      // Cache the result on the element to avoid repeated reads.
+      if (!tr && el._origCssTransform === undefined) {
+        const saved = el.style.transform;
+        el.style.transform = '';
+        const computed = getComputedStyle(el).transform;
+        el.style.transform = saved;
+        el._origCssTransform = (computed && computed !== 'none') ? computed : '';
+      }
+      const preserved = tr || el._origCssTransform || '';
+      el.style.transform = `translate(${x}px, ${y}px)` + (preserved ? ' ' + preserved : '');
     }
     // ═══ REACTIVE DOT UPDATE ═══
     // When user edits a number in dot-grid or dot-line, recalculate and re-render the dots.
@@ -910,7 +1004,7 @@
         const filled = pct !== null ? Math.round((pct / 100) * TOTAL) : 0;
         let dots = '';
         for (let d = 0; d < TOTAL; d++) {
-          dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
+          dots += `<div class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></div>`;
         }
         grid.innerHTML = dots;
         return;
@@ -931,9 +1025,9 @@
         const hasFrac = fracPart >= 0.2 && fracPart < 0.8;
         let dots = '';
         for (let d = 0; d < DOT_COUNT; d++) {
-          if (d < fullFill)                  dots += `<span class="igs-dl-dot filled"></span>`;
-          else if (d === fullFill && hasFrac) dots += `<span class="igs-dl-dot half"></span>`;
-          else                               dots += `<span class="igs-dl-dot empty"></span>`;
+          if (d < fullFill)                  dots += `<div class="igs-dl-dot filled"></div>`;
+          else if (d === fullFill && hasFrac) dots += `<div class="igs-dl-dot half"></div>`;
+          else                               dots += `<div class="igs-dl-dot empty"></div>`;
         }
         track.innerHTML = dots;
         return;
@@ -3074,22 +3168,30 @@
     // Undo button
     document.getElementById('undoBtn').addEventListener('click', () => popUndo());
 
-    // Save = draft autosave to localStorage (so you don't lose work mid-session)
-    document.getElementById('saveBtn').addEventListener('click', () => {
-      const key = configKey();
-      configs[key] = {
-        overrides: elementOverrides[key] || {},
-        added: addedElements[key] || {},
-        tone: currentTone, density: currentDensity,
-        savedAt: new Date().toISOString(),
-      };
-      localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
-      updateDraftIndicator();
-      // Brief visual feedback
+    // Save = persist to file (cross-browser) + localStorage backup
+    document.getElementById('saveBtn').addEventListener('click', async () => {
       const btn = document.getElementById('saveBtn');
-      const orig = btn.textContent;
-      btn.textContent = 'Saved!';
-      setTimeout(() => btn.textContent = orig, 1200);
+      btn.textContent = 'Saving…';
+      btn.disabled = true;
+      try {
+        const result = await saveDraftToFile();
+        updateDraftIndicator();
+        if (result === 'cancelled') {
+          btn.textContent = 'Save';
+        } else if (result === 'saved') {
+          btn.textContent = 'Saved ✓';
+          setTimeout(() => btn.textContent = 'Save', 1500);
+        } else {
+          // 'downloaded' — file was downloaded, user needs to place it next to editor
+          btn.textContent = 'Downloaded!';
+          setTimeout(() => btn.textContent = 'Save', 2000);
+        }
+      } catch (e) {
+        console.error('Save failed:', e);
+        btn.textContent = 'Error!';
+        setTimeout(() => btn.textContent = 'Save', 2000);
+      }
+      btn.disabled = false;
     });
 
     // Reset
@@ -3327,10 +3429,12 @@ export function applyLayoutConfig(container, variant, itemCount) {
       const el = document.getElementById('draftIndicator');
       if (cfg?.savedAt) {
         el.className = 'draft-indicator has-draft';
-        el.textContent = 'draft saved';
+        // Show whether state came from file or only localStorage
+        const src = _draft ? 'file' : 'browser';
+        el.textContent = `saved (${src})`;
       } else {
         el.className = 'draft-indicator';
-        el.textContent = '';
+        el.textContent = _draft ? 'file loaded' : '';
       }
     }
 

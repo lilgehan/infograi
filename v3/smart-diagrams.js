@@ -201,10 +201,9 @@ export const ROAD_CSS = `
 }
 .ig-page .igd-road-v-track {
   position: absolute;
-  top: 0; bottom: 0; left: 50%;
+  top: 0; bottom: 0; left: calc(50% - 1.5px);
   width: 3px;
   background: var(--card-border, #e5e7eb);
-  transform: translateX(-50%);
   border-radius: 2px;
 }
 .ig-page .igd-road-v-items {
@@ -223,7 +222,7 @@ export const ROAD_CSS = `
   border: 2px solid var(--card-bg, #fff);
   box-shadow: 0 0 0 2px var(--accent);
   flex-shrink: 0; z-index: 2;
-  position: absolute; left: 50%; transform: translateX(-50%);
+  position: absolute; left: calc(50% - 7px);
 }
 .ig-page .igd-road-v-card {
   background: var(--card-bg, #fff);

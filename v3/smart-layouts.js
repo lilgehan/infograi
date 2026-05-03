@@ -1443,11 +1443,23 @@ export const NUMBERS_CSS = `
   grid-template-rows: repeat(10, 6px);
   gap: 2px;
   justify-content: center;
+  width: 78px;     /* 10×6 + 9×2 — explicit to prevent stretching */
+  height: 78px;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 .ig-page .igs-dg-dot {
+  display: block;
   width: 6px;
   height: 6px;
+  min-width: 6px;
+  min-height: 6px;
+  max-width: 6px;
+  max-height: 6px;
   border-radius: 50%;
+  flex-shrink: 0;
+  flex-grow: 0;
+  overflow: hidden;
 }
 .ig-page .igs-dg-dot.filled { background: var(--accent); }
 .ig-page .igs-dg-dot.empty  { background: rgba(var(--accent-rgb, 37,99,235), 0.12); }
@@ -1489,12 +1501,21 @@ export const NUMBERS_CSS = `
   gap: 3px;
   flex: 1;
   align-items: center;
+  height: 14px;       /* explicit height for the dot row */
+  overflow: hidden;
 }
 .ig-page .igs-dl-dot {
+  display: block;
   width: 10px;
   height: 10px;
+  min-width: 10px;
+  min-height: 10px;
+  max-width: 10px;
+  max-height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
+  flex-grow: 0;
+  overflow: hidden;
 }
 .ig-page .igs-dl-dot.filled { background: var(--accent); }
 .ig-page .igs-dl-dot.empty  { background: rgba(var(--accent-rgb, 37,99,235), 0.12); }
@@ -1696,7 +1717,7 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
       const filled = pct !== null ? Math.round((pct / 100) * TOTAL) : 0;
       let dots = '';
       for (let d = 0; d < TOTAL; d++) {
-        dots += `<span class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></span>`;
+        dots += `<div class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></div>`;
       }
       const gridHtml = `<div class="igs-dotgrid-grid">${dots}</div>`;
       return `<div class="igs-dotgrid-card">
@@ -1726,11 +1747,11 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
       const hasFrac   = fracPart >= 0.2 && fracPart < 0.8;
       let dots = '';
       for (let d = 0; d < DOT_COUNT; d++) {
-        if (d < fullFill)                  dots += `<span class="igs-dl-dot filled"></span>`;
-        else if (d === fullFill && hasFrac) dots += `<span class="igs-dl-dot half"></span>`;
-        else                               dots += `<span class="igs-dl-dot empty"></span>`;
+        if (d < fullFill)                  dots += `<div class="igs-dl-dot filled"></div>`;
+        else if (d === fullFill && hasFrac) dots += `<div class="igs-dl-dot half"></div>`;
+        else                               dots += `<div class="igs-dl-dot empty"></div>`;
       }
-      const trackHtml = `<span class="igs-dotline-track">${dots}</span>`;
+      const trackHtml = `<div class="igs-dotline-track">${dots}</div>`;
       return `<div class="igs-dotline-item">
         <div class="igs-dotline-row">
           <span class="igs-dotline-label">${title}</span>
