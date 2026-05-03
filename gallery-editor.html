@@ -193,6 +193,8 @@
       display: none;
     }
     .editor-handle.selected .resize-dot { display: block; }
+    .editor-handle.position-locked { cursor: default; border-style: dashed; }
+    .editor-handle.position-locked .resize-dot { display: none !important; }
     .resize-dot.nw { top: -4px; left: -4px; cursor: nw-resize; }
     .resize-dot.ne { top: -4px; right: -4px; cursor: ne-resize; }
     .resize-dot.sw { bottom: -4px; left: -4px; cursor: sw-resize; }
@@ -437,7 +439,7 @@
 
     <span class="draft-indicator" id="draftIndicator"></span>
     <button id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
-    <button class="btn-primary" id="saveBtn" title="Save to file (cross-browser persistent)">Save</button>
+    <button class="btn-primary" id="saveBtn" title="Save draft">Save</button>
     <button class="btn-success" id="exportBtn" title="Export layout-configs.js for gallery + generator">Export</button>
     <button class="btn-danger" id="resetBtn" title="Reset all changes for this layout">Reset</button>
     <button id="shapeLibBtn">Shapes</button>
@@ -1210,7 +1212,7 @@
         seen.add(key);
 
         const handle = document.createElement('div');
-        handle.className = 'editor-handle';
+        handle.className = 'editor-handle' + (isPositionLocked(el) ? ' position-locked' : '');
         handle.dataset.objId = objectId;
         handle.style.left   = (r.left   - frameRect.left - padX) + 'px';
         handle.style.top    = (r.top    - frameRect.top  - padY) + 'px';
@@ -2205,7 +2207,7 @@
             startTop = parseFloat(el.style.top) || 0;
           }
           return { id, el, isTemplate, startLeft, startTop };
-        }).filter(Boolean),
+        }).filter(x => x && !isPositionLocked(x.el)),
       };
 
       function onMultiDragMove(ev) {
@@ -2242,10 +2244,24 @@
       document.addEventListener('mouseup', onMultiDragEnd);
     }
 
+    // ═══ POSITION-LOCKED ELEMENTS ═══
+    // Road-horizontal structural elements: selectable for styling, text editable, but NOT draggable/resizable
+    const POSITION_LOCKED_CLASSES = [
+      'igd-road-h-track', 'igd-road-h-track-fill',
+      'igd-road-h-card', 'igd-road-h-dot', 'igd-road-h-num',
+      'igd-road-h-item', 'igd-road-h-items', 'igd-road-h'
+    ];
+    function isPositionLocked(el) {
+      if (!el || !el.classList) return false;
+      return POSITION_LOCKED_CLASSES.some(c => el.classList.contains(c));
+    }
+
     // ═══ DRAG TO MOVE ═══
     let dragState = null;
     function startDrag(e, el, objectId) {
       e.preventDefault();
+      // Block drag for position-locked road-h elements
+      if (isPositionLocked(el)) return;
       const isSvg = isSvgElement(el);
       const isAbsolute = el.style.position === 'absolute';
       const isSvgLine = isSvg && el.tagName.toLowerCase() === 'line';
@@ -2393,6 +2409,8 @@
     function startResize(e, el, corner) {
       e.preventDefault();
       e.stopPropagation();
+      // Block resize for position-locked road-h elements
+      if (isPositionLocked(el)) return;
 
       const isSvg = isSvgElement(el);
       const tag = el.tagName.toLowerCase();
@@ -2805,7 +2823,7 @@
         if (obj.source === 'added' && obj.addedId) {
           removeAddedElement(obj.addedId);
         } else if (obj.source === 'template') {
-          hideOriginalElement(obj.domRef);
+          if (!isPositionLocked(obj.domRef)) hideOriginalElement(obj.domRef);
         }
         return;
       }
@@ -2866,7 +2884,7 @@
                 });
               }
             } else if (el) {
-              hideOriginalElement(el);
+              if (!isPositionLocked(el)) hideOriginalElement(el);
             }
           });
           saveAddedElements();
@@ -3168,30 +3186,22 @@
     // Undo button
     document.getElementById('undoBtn').addEventListener('click', () => popUndo());
 
-    // Save = persist to file (cross-browser) + localStorage backup
-    document.getElementById('saveBtn').addEventListener('click', async () => {
+    // Save = save draft to localStorage
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const key = configKey();
+      configs[key] = {
+        overrides: elementOverrides[key] || {},
+        added: addedElements[key] || {},
+        tone: currentTone, density: currentDensity,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem('igEditorConfigs', JSON.stringify(configs));
+      localStorage.setItem('igEditorOverrides', JSON.stringify(elementOverrides));
+      localStorage.setItem('igEditorAdded', JSON.stringify(addedElements));
+      updateDraftIndicator();
       const btn = document.getElementById('saveBtn');
-      btn.textContent = 'Saving…';
-      btn.disabled = true;
-      try {
-        const result = await saveDraftToFile();
-        updateDraftIndicator();
-        if (result === 'cancelled') {
-          btn.textContent = 'Save';
-        } else if (result === 'saved') {
-          btn.textContent = 'Saved ✓';
-          setTimeout(() => btn.textContent = 'Save', 1500);
-        } else {
-          // 'downloaded' — file was downloaded, user needs to place it next to editor
-          btn.textContent = 'Downloaded!';
-          setTimeout(() => btn.textContent = 'Save', 2000);
-        }
-      } catch (e) {
-        console.error('Save failed:', e);
-        btn.textContent = 'Error!';
-        setTimeout(() => btn.textContent = 'Save', 2000);
-      }
-      btn.disabled = false;
+      btn.textContent = 'Saved!';
+      setTimeout(() => btn.textContent = 'Save', 1200);
     });
 
     // Reset
@@ -3429,12 +3439,10 @@ export function applyLayoutConfig(container, variant, itemCount) {
       const el = document.getElementById('draftIndicator');
       if (cfg?.savedAt) {
         el.className = 'draft-indicator has-draft';
-        // Show whether state came from file or only localStorage
-        const src = _draft ? 'file' : 'browser';
-        el.textContent = `saved (${src})`;
+        el.textContent = 'draft saved';
       } else {
         el.className = 'draft-indicator';
-        el.textContent = _draft ? 'file loaded' : '';
+        el.textContent = '';
       }
     }
 

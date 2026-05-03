@@ -141,16 +141,39 @@ export const ROAD_CSS = `
 
 /* ── road-horizontal ── */
 .ig-page .igd-road-h {
-  position: relative; padding: 16px 8px;
+  position: relative;
+  padding: 16px 8px 4px;
   overflow: visible;
+}
+.ig-page .igd-road-h-items {
+  display: flex;
+  align-items: flex-end;  /* bottom-align: cards grow upward, dots stay fixed */
+  position: relative;
+  z-index: 1;
+}
+.ig-page .igd-road-h-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ig-page .igd-road-h-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card-bg, #fff);
+  box-shadow: 0 0 0 2px var(--accent);
+  flex-shrink: 0;
+  z-index: 2;
 }
 .ig-page .igd-road-h-track {
   position: absolute;
   left: 0; right: 0;
-  top: calc(50% + 12px);
+  bottom: 9px;            /* centered on dots: 4px padding + 6px (half dot) - 1px */
   height: 3px;
   background: var(--card-border, #e5e7eb);
   border-radius: 2px;
+  z-index: 0;
 }
 .ig-page .igd-road-h-track-fill {
   height: 100%;
@@ -158,23 +181,6 @@ export const ROAD_CSS = `
   border-radius: 2px;
   width: 100%;
   opacity: 0.35;
-}
-.ig-page .igd-road-h-items {
-  display: flex; align-items: center;
-  position: relative; z-index: 1;
-}
-.ig-page .igd-road-h-item {
-  flex: 1; display: flex; flex-direction: column;
-  align-items: center; gap: 6px;
-}
-.ig-page .igd-road-h-item--above { flex-direction: column; padding-bottom: 6px; }
-.ig-page .igd-road-h-item--below { flex-direction: column-reverse; padding-top: 6px; }
-.ig-page .igd-road-h-dot {
-  width: 12px; height: 12px; border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--card-bg, #fff);
-  box-shadow: 0 0 0 2px var(--accent);
-  flex-shrink: 0; z-index: 2;
 }
 .ig-page .igd-road-h-card {
   background: var(--card-bg, #fff);
@@ -324,23 +330,15 @@ export function renderRoad(items, variant, tone, columns, density) {
   /* ── road-horizontal ── */
   if (variant === 'road-horizontal') {
     const cards = list.map((item, i) => {
-      const above = i % 2 === 0 ? 'igd-road-h-item--above' : 'igd-road-h-item--below';
       const title = esc(trunc(item.title || '', 25));
       const body  = esc(dgTruncateBody(item.body || '', density));
-      return `<div class="igd-road-h-item ${above}">
-        ${above === 'igd-road-h-item--above'
-          ? `<div class="igd-road-h-card">
-               <div class="igd-road-h-num">${i + 1}</div>
-               <p class="igd-title">${title}</p>
-               ${body ? `<p class="igd-body">${body}</p>` : ''}
-             </div>
-             <div class="igd-road-h-dot"></div>`
-          : `<div class="igd-road-h-dot"></div>
-             <div class="igd-road-h-card">
-               <div class="igd-road-h-num">${i + 1}</div>
-               <p class="igd-title">${title}</p>
-               ${body ? `<p class="igd-body">${body}</p>` : ''}
-             </div>`}
+      return `<div class="igd-road-h-item">
+        <div class="igd-road-h-card">
+          <div class="igd-road-h-num">${i + 1}</div>
+          <p class="igd-title">${title}</p>
+          ${body ? `<p class="igd-body">${body}</p>` : ''}
+        </div>
+        <div class="igd-road-h-dot"></div>
       </div>`;
     }).join('');
     return `<div class="igd-road-h">
