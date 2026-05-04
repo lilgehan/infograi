@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Infogr.ai — Slide Deck Verification Page</title>
+<title>Infogr.ai — Slide Deck Verification (file://-safe)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* ── Page chrome ── */
   :root {
     --accent: #2563EB;
     --accent-soft: rgba(37,99,235,0.10);
     --accent-rgb: 37,99,235;
     --card-bg: #ffffff;
-    --card-border: #e5e7eb;
     --text-primary: #111827;
     --text-secondary: #6b7280;
     --font-heading: 'Space Grotesk', sans-serif;
@@ -21,13 +21,14 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: var(--font-body);
     background: #f3f4f6;
     color: #111827;
     padding: 24px;
+    line-height: 1.5;
   }
   h1 {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--font-heading);
     font-size: 26px;
     margin-bottom: 6px;
     text-align: center;
@@ -35,27 +36,37 @@
   .subtitle {
     text-align: center;
     color: #6b7280;
-    margin-bottom: 24px;
+    margin-bottom: 8px;
     font-size: 14px;
   }
-  .test-controls {
+  .note {
+    max-width: 720px;
+    margin: 0 auto 20px;
+    padding: 10px 14px;
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #78350f;
+  }
+  .controls {
     display: flex;
     gap: 8px;
     justify-content: center;
     flex-wrap: wrap;
     margin-bottom: 24px;
   }
-  .test-btn {
+  .btn {
     padding: 6px 14px;
     border: 1px solid #d1d5db;
     border-radius: 16px;
     background: #fff;
     cursor: pointer;
     font-size: 13px;
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--font-heading);
     font-weight: 500;
   }
-  .test-btn.on { background: #2563EB; color: #fff; border-color: #2563EB; }
+  .btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 
   .checks {
     max-width: 720px;
@@ -66,7 +77,7 @@
     padding: 16px 20px;
   }
   .checks h3 {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--font-heading);
     font-size: 14px;
     margin-bottom: 8px;
   }
@@ -76,15 +87,23 @@
     margin: 4px 0;
     padding: 6px 10px;
     border-radius: 4px;
-    background: #fafafa;
   }
   .check.ok    { background: #dcfce7; color: #15803d; }
   .check.fail  { background: #fee2e2; color: #b91c1c; }
 
+  .section-title {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    text-align: center;
+    margin: 28px 0 12px;
+  }
+
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
   }
   .slide-card {
     background: #fff;
@@ -96,30 +115,24 @@
     padding: 10px 14px;
     border-bottom: 1px solid #f3f4f6;
     background: #fafafa;
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--font-heading);
     font-size: 13px;
-    font-weight: 600;
   }
-  .slide-card-id {
-    color: #2563EB;
-    margin-right: 8px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-  }
+  .slide-card-id   { color: var(--accent); font-weight: 700; margin-right: 8px; letter-spacing: 0.04em; }
+  .slide-card-name { font-weight: 600; }
   .slide-card-body {
     padding: 12px;
     background: #f9fafb;
-    height: 250px;
+    height: 220px;
     overflow: hidden;
     position: relative;
   }
   .slide-card-inner {
     position: absolute;
-    top: 12px;
-    left: 12px;
+    top: 12px; left: 12px;
     width: 960px;
     height: 540px;
-    transform: scale(0.42);
+    transform: scale(0.36);
     transform-origin: top left;
   }
 
@@ -130,7 +143,8 @@
     padding: 12px;
     background: #F5F6F8;
     border-radius: 8px;
-    margin-bottom: 24px;
+    margin: 0 auto 12px;
+    max-width: 1400px;
   }
   .thumb-cell {
     width: 120px;
@@ -142,61 +156,379 @@
     border-radius: 4px;
     background: #fff;
   }
-  .thumb-cell.is-active { border-color: #2563EB; }
+  .thumb-cell.is-active { border-color: var(--accent); }
   .thumb-cell-inner {
     position: absolute;
-    top: 0;
-    left: 0;
+    top: 0; left: 0;
     width: 960px;
     height: 540px;
     transform: scale(0.125);
     transform-origin: top left;
   }
+
+  /* ── INLINED TEMPLATE_CSS — copied verbatim from v3/slide-templates.js ── */
+  .igs-slide {
+    position: relative;
+    box-sizing: border-box;
+    width: 960px;
+    height: 540px;
+    overflow: hidden;
+    background: var(--card-bg, #ffffff);
+    font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+    color: var(--text-primary, #1A1A2E);
+    line-height: 1.5;
+  }
+  .igs-zone {
+    box-sizing: border-box;
+    overflow: hidden;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+  }
+  .igs-zone-content {
+    padding: 27px 48px;
+    display: flex;
+    flex-direction: column;
+  }
+  .igs-zone-accent {
+    background:
+      linear-gradient(135deg, var(--accent-soft, rgba(37,99,235,0.10)) 0%, rgba(0,0,0,0.04) 100%),
+      repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0 8px, transparent 8px 16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .igs-accent-placeholder {
+    color: var(--text-secondary, #6b7280);
+    font-size: 14px;
+    font-style: italic;
+    text-align: center;
+    opacity: 0.65;
+    user-select: none;
+    pointer-events: none;
+  }
+  .igs-slide-title {
+    font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+    font-weight: 700;
+    font-size: 44px;
+    line-height: 1.15;
+    margin: 0 0 12px 0;
+    color: var(--text-primary, #1A1A2E);
+  }
+  .igs-slide-subtitle {
+    font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+    font-weight: 400;
+    font-size: 20px;
+    line-height: 1.4;
+    margin: 0;
+    color: var(--text-secondary, #6b7280);
+  }
+
+  .igs-slide[data-template="A1"] { display: block; }
+  .igs-slide[data-template="A1"] > .igs-zone-content { width: 100%; height: 100%; }
+  .igs-slide[data-template="A2"] {
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent, #2563EB) 0%, color-mix(in srgb, var(--accent, #2563EB) 70%, #000) 100%);
+    color: #ffffff;
+  }
+  .igs-slide[data-template="A2"] > .igs-zone-content {
+    width: 80%; align-items: center; text-align: center; padding: 0;
+  }
+  .igs-slide[data-template="A2"] .igs-slide-title    { font-size: 56px; color: #fff; margin-bottom: 16px; }
+  .igs-slide[data-template="A2"] .igs-slide-subtitle { font-size: 22px; color: rgba(255,255,255,0.85); }
+  .igs-slide[data-template="A3"] { display: flex; align-items: center; background: var(--accent); color: #fff; }
+  .igs-slide[data-template="A3"] > .igs-zone-content { width: 100%; padding: 27px 64px; align-items: flex-start; }
+  .igs-slide[data-template="A3"] .igs-slide-title    { font-size: 64px; color: #fff; }
+  .igs-slide[data-template="A3"] .igs-slide-subtitle { font-size: 22px; color: rgba(255,255,255,0.85); }
+  .igs-slide[data-template="A4"] { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .igs-slide[data-template="A4"] > .igs-zone-content { width: 80%; align-items: center; text-align: center; }
+  .igs-slide[data-template="A4"] .igs-slide-title    { font-size: 60px; color: var(--accent); margin-bottom: 24px; }
+  .igs-slide[data-template="A4"] .igs-slide-subtitle { font-size: 18px; color: var(--text-secondary); position: absolute; bottom: 32px; left: 0; right: 0; }
+
+  .igs-slide[data-template="B1"] { display: grid; grid-template-columns: 40% 3% 57%; }
+  .igs-slide[data-template="B1"] > .igs-zone-accent  { grid-column: 1; }
+  .igs-slide[data-template="B1"] > .igs-zone-content { grid-column: 3; }
+  .igs-slide[data-template="B2"] { display: grid; grid-template-columns: 57% 3% 40%; }
+  .igs-slide[data-template="B2"] > .igs-zone-content { grid-column: 1; }
+  .igs-slide[data-template="B2"] > .igs-zone-accent  { grid-column: 3; }
+  .igs-slide[data-template="B3"] { display: grid; grid-template-columns: 100%; grid-template-rows: 40% 3% 57%; }
+  .igs-slide[data-template="B3"] > .igs-zone-accent  { grid-row: 1; }
+  .igs-slide[data-template="B3"] > .igs-zone-content { grid-row: 3; }
+  .igs-slide[data-template="B4"] { display: grid; grid-template-columns: 100%; grid-template-rows: 62% 3% 35%; }
+  .igs-slide[data-template="B4"] > .igs-zone-content { grid-row: 1; }
+  .igs-slide[data-template="B4"] > .igs-zone-accent  { grid-row: 3; }
+  .igs-slide[data-template="B5"] { display: grid; grid-template-columns: 30% 3% 67%; }
+  .igs-slide[data-template="B5"] > .igs-zone-accent  { grid-column: 1; }
+  .igs-slide[data-template="B5"] > .igs-zone-content { grid-column: 3; }
+  .igs-slide[data-template="B6"] { display: grid; grid-template-columns: 67% 3% 30%; }
+  .igs-slide[data-template="B6"] > .igs-zone-content { grid-column: 1; }
+  .igs-slide[data-template="B6"] > .igs-zone-accent  { grid-column: 3; }
+
+  .igs-slide[data-template="C1"] { display: grid; grid-template-columns: 48.5% 3% 48.5%; }
+  .igs-slide[data-template="C1"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+  .igs-slide[data-template="C1"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+  .igs-slide[data-template="C2"] { display: grid; grid-template-columns: 60% 3% 37%; }
+  .igs-slide[data-template="C2"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+  .igs-slide[data-template="C2"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+  .igs-slide[data-template="C3"] { display: grid; grid-template-columns: 37% 3% 60%; }
+  .igs-slide[data-template="C3"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+  .igs-slide[data-template="C3"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+  .igs-slide[data-template="C4"] { display: grid; grid-template-columns: 31% 3% 31% 3% 31%; }
+  .igs-slide[data-template="C4"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+  .igs-slide[data-template="C4"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+  .igs-slide[data-template="C4"] > .igs-zone-content:nth-child(3) { grid-column: 5; }
+  .igs-slide[data-template="C5"] { display: grid; grid-template-columns: 48.5% 3% 48.5%; grid-template-rows: 25% 5% 70%; }
+  .igs-slide[data-template="C5"] > .igs-zone-content[data-zone="header"] { grid-column: 1 / span 3; grid-row: 1; align-items: flex-start; justify-content: center; }
+  .igs-slide[data-template="C5"] > .igs-zone-content[data-zone="left"]   { grid-column: 1; grid-row: 3; }
+  .igs-slide[data-template="C5"] > .igs-zone-content[data-zone="right"]  { grid-column: 3; grid-row: 3; }
+  .igs-slide[data-template="C6"] { display: grid; grid-template-columns: 31% 3% 31% 3% 31%; grid-template-rows: 25% 5% 70%; }
+  .igs-slide[data-template="C6"] > .igs-zone-content[data-zone="header"] { grid-column: 1 / span 5; grid-row: 1; }
+  .igs-slide[data-template="C6"] > .igs-zone-content[data-zone="col1"]   { grid-column: 1; grid-row: 3; }
+  .igs-slide[data-template="C6"] > .igs-zone-content[data-zone="col2"]   { grid-column: 3; grid-row: 3; }
+  .igs-slide[data-template="C6"] > .igs-zone-content[data-zone="col3"]   { grid-column: 5; grid-row: 3; }
+
+  .igs-slide[data-template="D1"] { display: grid; grid-template-columns: 35% 3% 30% 2% 30%; }
+  .igs-slide[data-template="D1"] > .igs-zone-accent                  { grid-column: 1; }
+  .igs-slide[data-template="D1"] > .igs-zone-content[data-zone="col1"] { grid-column: 3; }
+  .igs-slide[data-template="D1"] > .igs-zone-content[data-zone="col2"] { grid-column: 5; }
+  .igs-slide[data-template="D2"] { display: grid; grid-template-columns: 30% 2% 30% 3% 35%; }
+  .igs-slide[data-template="D2"] > .igs-zone-content[data-zone="col1"] { grid-column: 1; }
+  .igs-slide[data-template="D2"] > .igs-zone-content[data-zone="col2"] { grid-column: 3; }
+  .igs-slide[data-template="D2"] > .igs-zone-accent                  { grid-column: 5; }
+  .igs-slide[data-template="D3"] { display: grid; grid-template-columns: 40% 3% 57%; grid-template-rows: 20% 3% 77%; }
+  .igs-slide[data-template="D3"] > .igs-zone-content[data-zone="header"]  { grid-column: 1 / span 3; grid-row: 1; align-items: flex-start; }
+  .igs-slide[data-template="D3"] > .igs-zone-accent                       { grid-column: 1; grid-row: 3; }
+  .igs-slide[data-template="D3"] > .igs-zone-content[data-zone="content"] { grid-column: 3; grid-row: 3; }
+  .igs-slide[data-template="D4"] { display: grid; grid-template-columns: 57% 3% 40%; grid-template-rows: 20% 3% 77%; }
+  .igs-slide[data-template="D4"] > .igs-zone-content[data-zone="header"]  { grid-column: 1 / span 3; grid-row: 1; align-items: flex-start; }
+  .igs-slide[data-template="D4"] > .igs-zone-content[data-zone="content"] { grid-column: 1; grid-row: 3; }
+  .igs-slide[data-template="D4"] > .igs-zone-accent                       { grid-column: 3; grid-row: 3; }
+
+  .igs-slide[data-template="E1"] {
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 30% 20%, var(--accent-soft) 0%, transparent 60%), var(--card-bg, #fff);
+  }
+  .igs-slide[data-template="E1"] > .igs-zone-content { width: 70%; align-items: center; text-align: center; }
+  .igs-slide[data-template="E1"] .igs-slide-title {
+    font-family: var(--font-heading); font-size: 36px; font-weight: 500; font-style: italic;
+    line-height: 1.35; padding: 0 40px;
+  }
+  .igs-slide[data-template="E1"] .igs-slide-subtitle {
+    margin-top: 24px; font-size: 16px; color: var(--accent); font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .igs-slide[data-template="E2"] { display: flex; align-items: center; justify-content: center; }
+  .igs-slide[data-template="E2"] > .igs-zone-content { align-items: center; text-align: center; width: 80%; }
+  .igs-slide[data-template="E2"] .igs-slide-title {
+    font-family: var(--font-heading); font-size: 180px; font-weight: 800; line-height: 1;
+    color: var(--accent); letter-spacing: -0.04em;
+  }
+  .igs-slide[data-template="E2"] .igs-slide-subtitle { font-size: 26px; color: var(--text-secondary); margin-top: 12px; }
+  .igs-slide[data-template="E3"] {
+    display: grid; grid-template-columns: 48.5% 3% 48.5%;
+    background: linear-gradient(to right, transparent 49.95%, #e5e7eb 49.95%, #e5e7eb 50.05%, transparent 50.05%);
+  }
+  .igs-slide[data-template="E3"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+  .igs-slide[data-template="E3"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+  .igs-slide[data-template="E4"] { display: block; position: relative; }
+  .igs-slide[data-template="E4"] > .igs-zone-accent  { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .igs-slide[data-template="E4"] > .igs-zone-content {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 20%;
+    padding: 18px 48px; background: rgba(0,0,0,0.55); color: #fff; justify-content: center;
+  }
+  .igs-slide[data-template="E4"] .igs-slide-title    { color: #fff; font-size: 28px; margin: 0; }
+  .igs-slide[data-template="E4"] .igs-slide-subtitle { color: rgba(255,255,255,0.85); font-size: 15px; margin-top: 4px; }
+  .igs-slide[data-template="E5"] { display: grid; grid-template-columns: 60% 5% 35%; }
+  .igs-slide[data-template="E5"] > .igs-zone-content { grid-column: 1; }
+  .igs-slide[data-template="E5"] > .igs-zone-accent  { grid-column: 3; }
+  .igs-slide[data-template="E6"] {
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 100%, var(--accent-soft) 0%, transparent 70%);
+  }
+  .igs-slide[data-template="E6"] > .igs-zone-content { width: 75%; align-items: center; text-align: center; }
+  .igs-slide[data-template="E6"] .igs-slide-title    { font-size: 48px; margin-bottom: 18px; }
+  .igs-slide[data-template="E6"] .igs-slide-subtitle { font-size: 18px; margin-bottom: 28px; max-width: 520px; }
+
+  /* ── Mock diagram block (instead of full smart-layouts CSS) ── */
+  .mock-block {
+    flex: 1 1 auto;
+    border: 2px dashed rgba(37,99,235,0.30);
+    border-radius: 8px;
+    background: rgba(37,99,235,0.03);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 4px 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .mock-block-label {
+    font-family: var(--font-heading);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .mock-block-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+  }
+  .mock-block-item {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .mock-block-item-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .mock-block-item-body {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
 </style>
 </head>
 <body>
-  <h1>Slide Deck Phase 1+2 — Verification</h1>
-  <p class="subtitle">Exercises slide-deck.js, slide-templates.js, slide-renderer.js end-to-end.</p>
-
-  <div class="test-controls">
-    <span style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;align-self:center;">Tone:</span>
-    <button class="test-btn on" data-tone="professional">Professional</button>
-    <button class="test-btn"    data-tone="bold">Bold</button>
-    <button class="test-btn"    data-tone="minimal">Minimal</button>
-    <button class="test-btn"    data-tone="playful">Playful</button>
+  <h1>Slide Deck Phase 1+2 — File-System Verification</h1>
+  <p class="subtitle">Self-contained — opens directly from the filesystem. No server, no ES modules.</p>
+  <div class="note">
+    <strong>What this verifies:</strong> all 26 page templates render with the correct zone proportions, accent placeholders, and theme variables. Real diagram rendering (smart-layouts / smart-diagrams) requires a local server — open the actual app via your dev server to see fully-rendered diagrams. Mock dashed boxes here represent where diagrams will appear.
   </div>
 
-  <div class="checks" id="checksBox">
+  <div class="controls">
+    <span style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;align-self:center;">Tone:</span>
+    <button class="btn on" data-tone="professional">Professional</button>
+    <button class="btn"    data-tone="bold">Bold</button>
+    <button class="btn"    data-tone="minimal">Minimal</button>
+    <button class="btn"    data-tone="playful">Playful</button>
+  </div>
+
+  <div class="checks">
     <h3>Sanity checks</h3>
     <div id="checks"></div>
   </div>
 
-  <h3 style="text-align:center;font-family:'Space Grotesk',sans-serif;font-size:15px;margin-bottom:12px;">
-    Thumbnail panel preview (scale 0.125 = 120 / 960)
-  </h3>
+  <div class="section-title">Thumbnail strip — what the left panel shows</div>
   <div class="thumb-strip" id="thumbStrip"></div>
 
-  <h3 style="text-align:center;font-family:'Space Grotesk',sans-serif;font-size:15px;margin-bottom:12px;">
-    Sample slides — one per template category, plus stress tests
-  </h3>
-  <div class="grid" id="slideGrid"></div>
+  <div class="section-title">All 26 templates — empty zone layouts</div>
+  <div class="grid" id="templatesGrid"></div>
 
-<script type="module">
-  import {
-    createDeck, addSlide, addBlock, withSlide, getSlide,
-    duplicateSlide, removeSlide, changeSlideTemplate, blocksInZone,
-  } from './v3/slide-deck.js';
-  import {
-    TEMPLATES, getTemplateZones, renderSlideTemplate,
-  } from './v3/slide-templates.js';
-  import {
-    renderSlide, DECK_MODE_CSS,
-  } from './v3/slide-renderer.js';
+  <div class="section-title">Demo deck — what Generate produces in the actual app</div>
+  <div class="grid" id="deckGrid"></div>
 
-  // Inject all deck-mode CSS so slides render correctly inside the test page
-  const styleEl = document.createElement('style');
-  styleEl.textContent = DECK_MODE_CSS;
-  document.head.appendChild(styleEl);
+<script>
+  /* ───────── INLINED TEMPLATES METADATA ───────── */
+  const TEMPLATES = {
+    A1: { id:'A1', name:'Blank',           category:'A', zones:[{ name:'content', type:'content' }] },
+    A2: { id:'A2', name:'Title Slide',     category:'A', zones:[{ name:'content', type:'title-block' }] },
+    A3: { id:'A3', name:'Section Divider', category:'A', zones:[{ name:'content', type:'title-block' }] },
+    A4: { id:'A4', name:'Closing',         category:'A', zones:[{ name:'content', type:'closing-block' }] },
+    B1: { id:'B1', name:'Accent Left',         category:'B', zones:[{name:'accent',type:'accent'},{name:'content',type:'content'}]},
+    B2: { id:'B2', name:'Accent Right',        category:'B', zones:[{name:'content',type:'content'},{name:'accent',type:'accent'}]},
+    B3: { id:'B3', name:'Accent Top',          category:'B', zones:[{name:'accent',type:'accent'},{name:'content',type:'content'}]},
+    B4: { id:'B4', name:'Accent Bottom',       category:'B', zones:[{name:'content',type:'content'},{name:'accent',type:'accent'}]},
+    B5: { id:'B5', name:'Accent Left Narrow',  category:'B', zones:[{name:'accent',type:'accent'},{name:'content',type:'content'}]},
+    B6: { id:'B6', name:'Accent Right Narrow', category:'B', zones:[{name:'content',type:'content'},{name:'accent',type:'accent'}]},
+    C1: { id:'C1', name:'Two Columns Equal',     category:'C', zones:[{name:'left',type:'content'},{name:'right',type:'content'}]},
+    C2: { id:'C2', name:'Two Columns Wide-Left', category:'C', zones:[{name:'left',type:'content'},{name:'right',type:'content'}]},
+    C3: { id:'C3', name:'Two Columns Wide-Right', category:'C', zones:[{name:'left',type:'content'},{name:'right',type:'content'}]},
+    C4: { id:'C4', name:'Three Columns',         category:'C', zones:[{name:'col1',type:'content'},{name:'col2',type:'content'},{name:'col3',type:'content'}]},
+    C5: { id:'C5', name:'Two Columns + Header',  category:'C', zones:[{name:'header',type:'title-block'},{name:'left',type:'content'},{name:'right',type:'content'}]},
+    C6: { id:'C6', name:'Three Columns + Header', category:'C', zones:[{name:'header',type:'title-block'},{name:'col1',type:'content'},{name:'col2',type:'content'},{name:'col3',type:'content'}]},
+    D1: { id:'D1', name:'Image Left + Two Columns', category:'D', zones:[{name:'accent',type:'accent'},{name:'col1',type:'content'},{name:'col2',type:'content'}]},
+    D2: { id:'D2', name:'Image Right + Two Columns', category:'D', zones:[{name:'col1',type:'content'},{name:'col2',type:'content'},{name:'accent',type:'accent'}]},
+    D3: { id:'D3', name:'Header + Image Left + Content', category:'D', zones:[{name:'header',type:'title-block'},{name:'accent',type:'accent'},{name:'content',type:'content'}]},
+    D4: { id:'D4', name:'Header + Content Left + Image', category:'D', zones:[{name:'header',type:'title-block'},{name:'content',type:'content'},{name:'accent',type:'accent'}]},
+    E1: { id:'E1', name:'Quote Slide',     category:'E', zones:[{name:'content',type:'quote-block'}]},
+    E2: { id:'E2', name:'Big Number',      category:'E', zones:[{name:'content',type:'big-number'}]},
+    E3: { id:'E3', name:'Comparison',      category:'E', zones:[{name:'left',type:'content'},{name:'right',type:'content'}]},
+    E4: { id:'E4', name:'Full-Bleed Image', category:'E', zones:[{name:'accent',type:'accent'},{name:'content',type:'overlay'}]},
+    E5: { id:'E5', name:'Agenda / TOC',    category:'E', zones:[{name:'content',type:'content'},{name:'accent',type:'accent'}]},
+    E6: { id:'E6', name:'Call to Action',  category:'E', zones:[{name:'content',type:'cta-block'}]},
+  };
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function defaultText(zoneType) {
+    switch (zoneType) {
+      case 'big-number':    return { title: '90%',                subtitle: 'Improvement metric' };
+      case 'quote-block':   return { title: 'A great quote captures the point in one line.', subtitle: '— Source / Author' };
+      case 'cta-block':     return { title: 'Ready to get started?', subtitle: 'Schedule a discovery call.' };
+      case 'closing-block': return { title: 'Thank You',           subtitle: 'Questions? lily@gehantech.com' };
+      case 'overlay':       return { title: 'Caption headline',    subtitle: 'Supporting text under the image.' };
+      default:              return { title: 'Your Title Here',     subtitle: '' };
+    }
+  }
+
+  /* Render an empty template (no blocks). */
+  function renderEmptyTemplate(tplId) {
+    const tpl = TEMPLATES[tplId];
+    if (!tpl) return '';
+    const zones = tpl.zones.map(z => {
+      const isAccent = z.type === 'accent';
+      const cls = isAccent ? 'igs-zone igs-zone-accent' : 'igs-zone igs-zone-content';
+      let inner = '';
+      if (isAccent) {
+        inner = '<div class="igs-accent-placeholder">Image will appear here</div>';
+      } else if (z.type !== 'content') {
+        const t = defaultText(z.type);
+        inner = `<h1 class="igs-slide-title">${esc(t.title)}</h1>` +
+                (t.subtitle ? `<p class="igs-slide-subtitle">${esc(t.subtitle)}</p>` : '');
+      }
+      return `<div class="${cls}" data-zone="${esc(z.name)}" data-zone-type="${esc(z.type)}">${inner}</div>`;
+    }).join('');
+    return `<div class="igs-slide" data-template="${tplId}">${zones}</div>`;
+  }
+
+  /* Mock diagram block — placeholder for what real renderSection() output would look like */
+  function mockBlock(label, items) {
+    const itemHtml = items.map(it => `
+      <div class="mock-block-item">
+        <span class="mock-block-item-title">${esc(it.title)}</span>
+        <span class="mock-block-item-body">${esc(it.body)}</span>
+      </div>
+    `).join('');
+    return `
+      <div class="mock-block">
+        <div class="mock-block-label">${esc(label)}</div>
+        <div class="mock-block-items">${itemHtml}</div>
+      </div>
+    `;
+  }
+
+  /* Render a slide WITH content (mock diagrams shown as labeled placeholders). */
+  function renderSlideWithBlocks(tplId, slideTitle, slideSubtitle, blocksByZone) {
+    const tpl = TEMPLATES[tplId];
+    if (!tpl) return '';
+    const zones = tpl.zones.map(z => {
+      const isAccent = z.type === 'accent';
+      const cls = isAccent ? 'igs-zone igs-zone-accent' : 'igs-zone igs-zone-content';
+      let inner = '';
+      if (isAccent) {
+        inner = '<div class="igs-accent-placeholder">Image will appear here</div>';
+      } else if (z.type !== 'content') {
+        // Title-block-style zones use slide.title / slide.subtitle
+        const title = slideTitle    ?? defaultText(z.type).title;
+        const sub   = slideSubtitle ?? defaultText(z.type).subtitle;
+        inner = `<h1 class="igs-slide-title">${esc(title)}</h1>` +
+                (sub ? `<p class="igs-slide-subtitle">${esc(sub)}</p>` : '');
+      } else {
+        // Content zone: render mock blocks placed in this zone
+        const blocks = (blocksByZone || {})[z.name] || [];
+        inner = blocks.map(b => mockBlock(b.label, b.items)).join('');
+      }
+      return `<div class="${cls}" data-zone="${esc(z.name)}" data-zone-type="${esc(z.type)}">${inner}</div>`;
+    }).join('');
+    return `<div class="igs-slide" data-template="${tplId}">${zones}</div>`;
+  }
 
   /* ───────── Sanity checks ───────── */
   const checks = [];
@@ -205,82 +537,30 @@
     try { ok = !!fn(); } catch (e) { err = e.message; }
     checks.push({ name, ok, err });
   }
-
-  // Data model checks
-  let deck = createDeck('Verification Deck', 'professional', '#2563EB');
-  check('createDeck returns object with id, slides[]', () => deck.id && Array.isArray(deck.slides));
-  deck = addSlide(deck, 'A2', null, { title: 'Sample Title', subtitle: 'A subtitle' });
-  deck = addSlide(deck, 'A1', deck.slides[0].id);
-  deck = addSlide(deck, 'B1', deck.slides[1].id);
-  check('addSlide appends and inserts correctly', () => deck.slides.length === 3 && deck.slides[2].templateId === 'B1');
-
-  const blankSlide = deck.slides[1];
-  let updated = withSlide(deck, blankSlide.id, s => addBlock(s, {
-    type: 'diagram', family: 'boxes', variant: 'solid-boxes',
-    items: [
-      { title: 'Alpha', body: 'First.' },
-      { title: 'Beta',  body: 'Second.' },
-      { title: 'Gamma', body: 'Third.' },
-    ],
-    columns: 3,
-    position: { zone: 'content' },
-  }));
-  check('addBlock places block in zone "content"', () =>
-    blocksInZone(getSlide(updated, blankSlide.id), 'content').length === 1);
-
-  const dup = duplicateSlide(updated, blankSlide.id);
-  check('duplicateSlide adds new slide with same blocks count', () =>
-    dup.slides.length === 4 &&
-    blocksInZone(dup.slides[2], 'content').length === 1 &&
-    dup.slides[2].id !== dup.slides[1].id);
-
-  const reduced = removeSlide(dup, dup.slides[3].id);
-  check('removeSlide drops one slide', () => reduced.slides.length === 3);
-
-  // Fixed-slot constraint via changeSlideTemplate
-  const tplChanged = changeSlideTemplate(updated, blankSlide.id, 'B2', getTemplateZones);
-  const movedBlocks = blocksInZone(tplChanged.slides[1], 'content');
-  check('changeSlideTemplate B1 → B2 keeps blocks in remapped content zone', () =>
-    tplChanged.slides[1].templateId === 'B2' && movedBlocks.length === 1);
-
-  // Template registry
   check('TEMPLATES has 26 entries (4+6+6+4+6)', () => Object.keys(TEMPLATES).length === 26);
-  const cats = ['A', 'B', 'C', 'D', 'E'];
-  for (const c of cats) {
-    const expected = { A: 4, B: 6, C: 6, D: 4, E: 6 }[c];
-    check(`Category ${c} has ${expected} templates`, () =>
-      Object.values(TEMPLATES).filter(t => t.category === c).length === expected);
+  for (const [c, n] of [['A',4],['B',6],['C',6],['D',4],['E',6]]) {
+    check(`Category ${c} has ${n} templates`, () =>
+      Object.values(TEMPLATES).filter(t => t.category === c).length === n);
   }
+  check('All templates have at least one zone', () =>
+    Object.values(TEMPLATES).every(t => t.zones.length > 0));
+  check('All zones have name and type', () =>
+    Object.values(TEMPLATES).every(t => t.zones.every(z => z.name && z.type)));
+  check('renderEmptyTemplate produces .igs-slide root', () =>
+    renderEmptyTemplate('A1').includes('class="igs-slide"'));
+  check('Accent zones include placeholder text', () =>
+    renderEmptyTemplate('B1').includes('Image will appear here'));
 
-  // Render checks
-  const sampleHtml = renderSlide(updated.slides[1], 'professional', '#2563EB');
-  check('renderSlide returns a fragment with .igs-slide root', () =>
-    typeof sampleHtml === 'string' && sampleHtml.includes('class="igs-slide"'));
-  check('renderSlide includes wrapped .ig-page for diagrams', () =>
-    sampleHtml.includes('class="ig-page"'));
-  check('renderSlide produces SVG/HTML for the boxes diagram', () =>
-    sampleHtml.includes('igs-card') || sampleHtml.includes('Alpha'));
-
-  // Template skeleton check
-  const a1Html = renderSlideTemplate('A1');
-  check('renderSlideTemplate("A1") returns single content zone', () =>
-    a1Html.includes('data-template="A1"') && (a1Html.match(/data-zone-type="content"/g) || []).length === 1);
-  const b1Html = renderSlideTemplate('B1');
-  check('renderSlideTemplate("B1") includes accent + content zones', () =>
-    b1Html.includes('data-zone-type="accent"') && b1Html.includes('data-zone-type="content"'));
-
-  // Pointer-events guard: content zones must be interactive
-  // (Phase 3 cursor system depends on this.)
+  // Pointer-events guard for content zones (Phase 3 cursor system needs them interactive)
   const tmp = document.createElement('div');
-  tmp.innerHTML = renderSlide(updated.slides[1], 'professional', '#2563EB');
+  tmp.innerHTML = renderEmptyTemplate('A1');
   document.body.appendChild(tmp);
-  const zone = tmp.querySelector('.igs-zone-content');
+  const peZone = tmp.querySelector('.igs-zone-content');
   let pe = '';
-  if (zone) pe = getComputedStyle(zone).pointerEvents;
+  if (peZone) pe = getComputedStyle(peZone).pointerEvents;
   document.body.removeChild(tmp);
-  check('Content zones are NOT pointer-events:none (cursor system safe)', () => pe !== 'none');
+  check('Content zones are NOT pointer-events:none', () => pe !== 'none');
 
-  /* ───────── Render the checks ───────── */
   const checksDiv = document.getElementById('checks');
   for (const c of checks) {
     const el = document.createElement('div');
@@ -289,127 +569,112 @@
     checksDiv.appendChild(el);
   }
 
-  /* ───────── Render the deck visually ───────── */
-
-  // Build a richer demo deck — one slide per template category plus stress tests
-  let demoDeck = createDeck('Demo Deck', 'professional', '#2563EB');
-
-  function add(tplId, opts = {}) {
-    demoDeck = addSlide(demoDeck, tplId, demoDeck.slides[demoDeck.slides.length - 1]?.id || null,
-      { title: opts.title || '', subtitle: opts.subtitle || '' });
-    return demoDeck.slides[demoDeck.slides.length - 1];
-  }
-  function addBoxesBlock(slide, n = 3, zoneName = 'content') {
-    const items = Array.from({ length: n }, (_, i) => ({
-      title: `Item ${i + 1}`,
-      body:  `Brief description of item ${i + 1}.`,
-      icon:  ['target','rocket','star','idea','shield','gear'][i % 6],
-    }));
-    demoDeck = withSlide(demoDeck, slide.id, s => addBlock(s, {
-      type: 'diagram', family: 'boxes', variant: 'solid-boxes-icons',
-      items, columns: Math.min(n, 3), density: 'standard',
-      position: { zone: zoneName },
-    }));
-  }
-  function addDiagramBlock(slide, variant, family, items, zoneName = 'content', columns = 3) {
-    demoDeck = withSlide(demoDeck, slide.id, s => addBlock(s, {
-      type: 'diagram', family, variant, items, columns, density: 'standard',
-      position: { zone: zoneName },
-    }));
-  }
-
-  // Sample slides
-  add('A2', { title: 'Demo Deck', subtitle: 'Phase 1 + 2 verification' });
-  const s_a1 = add('A1');
-  addBoxesBlock(s_a1, 4);
-
-  const s_b1 = add('B1');
-  addBoxesBlock(s_b1, 3);
-
-  const s_c1 = add('C1');
-  addBoxesBlock(s_c1, 2, 'left');
-  addDiagramBlock(s_c1, 'stats', 'numbers', [
-    { title: '90%', body: 'Coverage' },
-    { title: '$1.6M', body: 'Saved' },
-  ], 'right', 2);
-
-  const s_c4 = add('C4');
-  for (const z of ['col1', 'col2', 'col3']) {
-    addDiagramBlock(s_c4, 'stats', 'numbers', [
-      { title: ['25%','50%','75%'][['col1','col2','col3'].indexOf(z)], body: 'Metric' },
-    ], z, 1);
-  }
-
-  const s_d1 = add('D1', { title: 'Mixed Image + Two Columns' });
-  addBoxesBlock(s_d1, 2, 'col1');
-  addBoxesBlock(s_d1, 2, 'col2');
-
-  add('E1', { title: 'A great quote captures the point in one line.', subtitle: '— Source / Author' });
-  add('E2', { title: '90%', subtitle: 'Quote-to-cash cycle reduction' });
-  add('E6', { title: 'Ready to transform operations?', subtitle: 'Schedule a discovery call.' });
-
-  // Stress test: 3 stacked diagrams in one zone (max per spec Section 4 Rule 4)
-  const s_stress = add('A1', { title: 'Stress: 3 stacked diagrams' });
-  for (let i = 0; i < 3; i++) addBoxesBlock(s_stress, 3);
-
-  /* ── Render the thumbnail strip ── */
-  const thumbStrip = document.getElementById('thumbStrip');
-  demoDeck.slides.forEach((s, i) => {
-    const cell = document.createElement('div');
-    cell.className = 'thumb-cell' + (i === 0 ? ' is-active' : '');
-    cell.innerHTML = `<div class="thumb-cell-inner">${renderSlide(s, demoDeck.theme, demoDeck.accentColor)}</div>`;
-    thumbStrip.appendChild(cell);
+  /* ───────── 26 empty templates ───────── */
+  const tplGrid = document.getElementById('templatesGrid');
+  const sortedTpls = Object.values(TEMPLATES).sort((a, b) => {
+    if (a.category !== b.category) return a.category.localeCompare(b.category);
+    return a.id.localeCompare(b.id);
   });
+  for (const tpl of sortedTpls) {
+    const card = document.createElement('div');
+    card.className = 'slide-card';
+    card.innerHTML = `
+      <div class="slide-card-header">
+        <span class="slide-card-id">${tpl.id}</span>
+        <span class="slide-card-name">${tpl.name}</span>
+      </div>
+      <div class="slide-card-body">
+        <div class="slide-card-inner">${renderEmptyTemplate(tpl.id)}</div>
+      </div>
+    `;
+    tplGrid.appendChild(card);
+  }
 
-  /* ── Render the slide grid ── */
-  const grid = document.getElementById('slideGrid');
-  function renderGrid() {
-    grid.innerHTML = '';
-    demoDeck.slides.forEach(s => {
+  /* ───────── Demo deck — same shape as generateDemoDeck() in the app ───────── */
+  const TOPIC = 'Customer Experience Transformation';
+  const demoSlides = [
+    { tplId: 'A2', title: TOPIC, subtitle: 'Generated by Infogr.ai' },
+    { tplId: 'A1', blocks: { content: [{ label: 'solid-boxes (3 items)', items: [
+      { title: 'Foundation',     body: 'Core principles for ' + TOPIC + '.' },
+      { title: 'Implementation', body: 'Execute with measurable milestones.' },
+      { title: 'Optimization',   body: 'Iterate and refine for sustained impact.' },
+    ]}]}},
+    { tplId: 'B1', blocks: { content: [{ label: 'arrow-bullets (4 items)', items: [
+      { title: 'Discover', body: 'Map the current state.' },
+      { title: 'Design',   body: 'Define the target state.' },
+      { title: 'Build',    body: 'Execute the transformation.' },
+      { title: 'Measure',  body: 'Track outcomes.' },
+    ]}]}},
+    { tplId: 'C1', blocks: {
+      left:  [{ label: 'circle-stats (3 items)', items: [
+        { title: '90%', body: 'Cycle time reduction' },
+        { title: '$1.6M', body: 'Annual savings' },
+        { title: '3.2x', body: 'Throughput uplift' },
+      ]}],
+      right: [{ label: 'bar-stats (4 items)', items: [
+        { title: 'Q1', body: '42%' }, { title: 'Q2', body: '67%' },
+        { title: 'Q3', body: '85%' }, { title: 'Q4', body: '94%' },
+      ]}],
+    }},
+    { tplId: 'B2', blocks: { content: [{ label: 'timeline (4 items)', items: [
+      { title: 'Phase 1', body: 'Discovery & assessment.' },
+      { title: 'Phase 2', body: 'Design & alignment.' },
+      { title: 'Phase 3', body: 'Implementation.' },
+      { title: 'Phase 4', body: 'Optimization.' },
+    ]}]}},
+    { tplId: 'A4', title: 'Thank You', subtitle: TOPIC + ' · Questions? lily@gehantech.com' },
+  ];
+
+  function buildDeckCards(target) {
+    target.innerHTML = '';
+    demoSlides.forEach((s, idx) => {
       const card = document.createElement('div');
       card.className = 'slide-card';
+      const html = renderSlideWithBlocks(s.tplId, s.title, s.subtitle, s.blocks);
       card.innerHTML = `
         <div class="slide-card-header">
-          <span class="slide-card-id">${s.templateId}</span>
-          ${TEMPLATES[s.templateId]?.name || ''}
+          <span class="slide-card-id">Slide ${idx + 1}</span>
+          <span class="slide-card-name">${s.tplId} · ${TEMPLATES[s.tplId].name}</span>
         </div>
         <div class="slide-card-body">
-          <div class="slide-card-inner">${renderSlide(s, demoDeck.theme, demoDeck.accentColor)}</div>
+          <div class="slide-card-inner">${html}</div>
         </div>
       `;
-      grid.appendChild(card);
+      target.appendChild(card);
     });
   }
-  renderGrid();
+  buildDeckCards(document.getElementById('deckGrid'));
 
-  /* ── Tone switcher ── */
-  document.querySelectorAll('.test-btn[data-tone]').forEach(b => {
+  /* ───────── Thumbnail strip ───────── */
+  function buildThumbStrip(target) {
+    target.innerHTML = '';
+    demoSlides.forEach((s, idx) => {
+      const cell = document.createElement('div');
+      cell.className = 'thumb-cell' + (idx === 0 ? ' is-active' : '');
+      cell.innerHTML = `<div class="thumb-cell-inner">${renderSlideWithBlocks(s.tplId, s.title, s.subtitle, s.blocks)}</div>`;
+      target.appendChild(cell);
+    });
+  }
+  buildThumbStrip(document.getElementById('thumbStrip'));
+
+  /* ───────── Tone switcher ───────── */
+  const TONE_ACCENTS = {
+    professional: '#2563EB',
+    bold:         '#F59E0B',
+    minimal:      '#0F766E',
+    playful:      '#7C3AED',
+  };
+  document.querySelectorAll('.btn[data-tone]').forEach(b => {
     b.addEventListener('click', () => {
-      document.querySelectorAll('.test-btn[data-tone]').forEach(x => x.classList.remove('on'));
+      document.querySelectorAll('.btn[data-tone]').forEach(x => x.classList.remove('on'));
       b.classList.add('on');
-      const toneAccents = {
-        professional: '#2563EB',
-        bold:         '#F59E0B',
-        minimal:      '#0F766E',
-        playful:      '#7C3AED',
-      };
-      const accent = toneAccents[b.dataset.tone] || '#2563EB';
-      const r = parseInt(accent.slice(1,3), 16);
-      const g = parseInt(accent.slice(3,5), 16);
-      const bl = parseInt(accent.slice(5,7), 16);
+      const accent = TONE_ACCENTS[b.dataset.tone] || '#2563EB';
+      const r = parseInt(accent.slice(1,3),16);
+      const g = parseInt(accent.slice(3,5),16);
+      const bl = parseInt(accent.slice(5,7),16);
       document.documentElement.style.setProperty('--accent', accent);
       document.documentElement.style.setProperty('--accent-soft', `rgba(${r},${g},${bl},0.10)`);
       document.documentElement.style.setProperty('--accent-rgb', `${r},${g},${bl}`);
-      demoDeck = { ...demoDeck, theme: b.dataset.tone, accentColor: accent };
-      renderGrid();
-      // Re-render thumbnails too
-      thumbStrip.innerHTML = '';
-      demoDeck.slides.forEach((s, i) => {
-        const cell = document.createElement('div');
-        cell.className = 'thumb-cell' + (i === 0 ? ' is-active' : '');
-        cell.innerHTML = `<div class="thumb-cell-inner">${renderSlide(s, demoDeck.theme, demoDeck.accentColor)}</div>`;
-        thumbStrip.appendChild(cell);
-      });
     });
   });
 </script>

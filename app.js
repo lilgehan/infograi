@@ -4,7 +4,7 @@ import { buildPrompt, detectLayout       } from './v3/prompt-builder.js';
 import { detectAndParse                  } from './v3/schema.js';
 import { getArchetype, ARCHETYPE_IDS     } from './v3/archetypes.js';
 import {
-  enterSlideDeckMode, exitSlideDeckMode, applyToneToDeck,
+  enterSlideDeckMode, exitSlideDeckMode, applyToneToDeck, generateDemoDeck,
 } from './v3/slide-deck-ui.js';
 
 /* ============================================================
@@ -234,11 +234,15 @@ window.addEventListener('load', () => {
         STATE.size = 'landscape';
         $$('#sizeRow .sz-btn').forEach(b => b.classList.toggle('on', b.dataset.size === 'landscape'));
         $('ribbon').style.display = 'flex';
+        const lbl = $('genBtn').querySelector('.lbl-btn');
+        if (lbl) lbl.textContent = 'Generate Slide Deck';
         const topic = $('promptIn').value.trim();
         enterSlideDeckMode(topic, STATE.tone, STATE.accent);
       } else {
         // Back to Single Page mode
         exitSlideDeckMode();
+        const lbl = $('genBtn').querySelector('.lbl-btn');
+        if (lbl) lbl.textContent = 'Generate Infographic';
         if (STATE.currentHTML) {
           renderHTML(STATE.currentHTML);
         } else {
@@ -265,6 +269,14 @@ window.addEventListener('load', () => {
   });
 
   $('genBtn').addEventListener('click', generate);
+
+  // Enter key in the topic textarea triggers Generate (Shift+Enter inserts a newline)
+  $('promptIn').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      generate();
+    }
+  });
 
   $('accentPicker').addEventListener('input', (e) => {
     STATE.accent = e.target.value;
@@ -393,8 +405,21 @@ function layoutThumb(kind) {
 
 // ── GENERATE ───────────────────────────────────────────────
 async function generate() {
+  const topic = $('promptIn').value.trim();
+
+  // ── Slide Deck mode ──────────────────────────────────────
+  // Phase 1+2: build a hardcoded 6-slide demo deck. No AI / no API key.
+  // The Phase 4 AI pipeline will replace this with a real deck generator.
+  if (STATE.mode === 'deck') {
+    if (!topic) { alert('Please describe your topic.'); return; }
+    STATE.topic = topic;
+    generateDemoDeck(topic, STATE.tone, STATE.accent);
+    $('ribbon').style.display = 'flex';
+    return;
+  }
+
+  // ── Single-page mode (original AI flow) ──────────────────
   const apiKey = $('apiKey').value.trim();
-  const topic  = $('promptIn').value.trim();
   if (!apiKey) { alert('Please enter your Anthropic API key.'); return; }
   if (!topic)  { alert('Please describe your document topic.'); return; }
 

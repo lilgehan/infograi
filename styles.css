@@ -107,9 +107,10 @@ body[data-mode="deck"] .app {
   color: #fff;
 }
 
-/* Hide single-page UI elements when in deck mode */
-body[data-mode="deck"] .layout-sec,
-body[data-mode="deck"] .panel-bot {
+/* Hide single-page UI elements when in deck mode.
+   The Generate button stays visible (.panel-bot is NOT hidden) — in deck mode
+   it triggers the demo-deck builder via app.js → generateDemoDeck(). */
+body[data-mode="deck"] .layout-sec {
   display: none;
 }
 
