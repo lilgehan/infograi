@@ -3,6 +3,9 @@ import { initRenderer, renderFromContent } from './v3/renderer.js';
 import { buildPrompt, detectLayout       } from './v3/prompt-builder.js';
 import { detectAndParse                  } from './v3/schema.js';
 import { getArchetype, ARCHETYPE_IDS     } from './v3/archetypes.js';
+import {
+  enterSlideDeckMode, exitSlideDeckMode, applyToneToDeck,
+} from './v3/slide-deck-ui.js';
 
 /* ============================================================
    Infogr.ai v2.4 → v3 Integration
@@ -131,6 +134,7 @@ const STATE = {
   formatPainter: null,   // null | { fontFamily, fontSize, fontWeight, fontStyle, color, textDecoration }
   isV3:          false,  // true when current output was rendered by v3 template engine
   processedHTML: null,   // full HTML string for export
+  mode:          'single', // 'single' | 'deck' — controls which UI shell is active
 };
 
 // ── HISTORY (undo/redo) ─────────────────────────────────────
@@ -212,6 +216,42 @@ window.addEventListener('load', () => {
       STATE.accent = TONE_COLORS[STATE.tone];
       $('accentPicker').value = STATE.accent;
       applyAccentToCanvas();
+      if (STATE.mode === 'deck') applyToneToDeck(STATE.tone, STATE.accent);
+    });
+  });
+
+  // ── Mode toggle (Single Page / Slide Deck) ────────────────
+  $$('#modeRow .mode-btn').forEach(el => {
+    el.addEventListener('click', () => {
+      const mode = el.dataset.mode;
+      if (mode === STATE.mode) return;
+      $$('#modeRow .mode-btn').forEach(b => b.classList.toggle('on', b === el));
+      STATE.mode = mode;
+      document.body.dataset.mode = mode;
+
+      if (mode === 'deck') {
+        // Slide Deck mode: lock size to landscape, hand off canvas to UI controller
+        STATE.size = 'landscape';
+        $$('#sizeRow .sz-btn').forEach(b => b.classList.toggle('on', b.dataset.size === 'landscape'));
+        $('ribbon').style.display = 'flex';
+        const topic = $('promptIn').value.trim();
+        enterSlideDeckMode(topic, STATE.tone, STATE.accent);
+      } else {
+        // Back to Single Page mode
+        exitSlideDeckMode();
+        if (STATE.currentHTML) {
+          renderHTML(STATE.currentHTML);
+        } else {
+          $('outputWrap').innerHTML = `
+            <div class="empty">
+              <div class="empty-ico">◈</div>
+              <div class="empty-ttl">Your infographic will appear here</div>
+              <div class="empty-sub">Pick a layout, describe your topic, and the designer agent generates a complete, beautiful infographic as HTML — Canva level, in one shot.</div>
+            </div>
+          `;
+          $('ribbon').style.display = 'none';
+        }
+      }
     });
   });
 
@@ -229,6 +269,7 @@ window.addEventListener('load', () => {
   $('accentPicker').addEventListener('input', (e) => {
     STATE.accent = e.target.value;
     applyAccentToCanvas();
+    if (STATE.mode === 'deck') applyToneToDeck(STATE.tone, STATE.accent);
   });
 
   $('btnPNG').addEventListener('click',  exportPNG);

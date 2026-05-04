@@ -77,6 +77,49 @@ body {
   height: calc(100vh - 52px);
 }
 
+/* ── Slide Deck mode: 4-column layout (panel + thumbs + canvas + gallery) ── */
+body[data-mode="deck"] .app {
+  grid-template-columns: 320px 144px 1fr 248px;
+}
+
+/* ── Mode toggle row (Single Page / Slide Deck) ── */
+.mode-row {
+  display: flex;
+  gap: 6px;
+}
+.mode-btn {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mode-btn:hover { border-color: var(--ui-accent); color: var(--text); }
+.mode-btn.on {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: #fff;
+}
+
+/* Hide single-page UI elements when in deck mode */
+body[data-mode="deck"] .layout-sec,
+body[data-mode="deck"] .panel-bot {
+  display: none;
+}
+
+/* Hide deck-only DOM in single-page mode (defensive — JS already toggles display) */
+body[data-mode="single"] #igsThumbPanel,
+body[data-mode="single"] #igsGalleryPanel,
+body[data-mode="single"] #igsSlideNav {
+  display: none !important;
+}
+
 /* ── Left panel ────────────────────────────────────────── */
 .panel {
   background: var(--surface);

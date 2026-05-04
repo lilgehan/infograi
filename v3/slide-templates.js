@@ -1,0 +1,640 @@
+/**
+ * Infogr.ai v3 — Slide Page Templates (Phase 1)
+ *
+ * 26 page templates organized into 5 categories:
+ *   A — Blank & Full-Width      (4)
+ *   B — Accent Image Templates  (6)
+ *   C — Column Layouts          (6)
+ *   D — Mixed Image + Content   (4)
+ *   E — Special Purpose         (6)
+ *
+ * Each template defines named zones (content, accent, header, etc.) where
+ * blocks (diagrams, text, charts) get placed by slide-renderer.js.
+ *
+ * All CSS scoped to `.igs-slide` (independent of `.ig-page .igs-*` smart-layout CSS).
+ *
+ * Reference dimensions: 960 × 540 px (16:9). All zone percentages are
+ * relative to the slide. Outer slide padding is handled per-template
+ * (most use 5% padding on content zones, accent zones bleed to edge).
+ *
+ * Reference: SLIDE-DECK-PLAN.md Section 3.2
+ */
+
+/* ─────────────────────────────────────────
+   TEMPLATE METADATA
+   Used by the template picker and zone-aware rendering.
+───────────────────────────────────────── */
+
+export const TEMPLATES = {
+  /* ── A — Blank & Full-Width ──────────────── */
+  A1: { id: 'A1', name: 'Blank',           category: 'A', zones: [{ name: 'content', type: 'content' }] },
+  A2: { id: 'A2', name: 'Title Slide',     category: 'A', zones: [{ name: 'content', type: 'title-block' }] },
+  A3: { id: 'A3', name: 'Section Divider', category: 'A', zones: [{ name: 'content', type: 'title-block' }] },
+  A4: { id: 'A4', name: 'Closing',         category: 'A', zones: [{ name: 'content', type: 'closing-block' }] },
+
+  /* ── B — Accent Image Templates ──────────── */
+  B1: { id: 'B1', name: 'Accent Left',         category: 'B', zones: [
+    { name: 'accent',  type: 'accent' },
+    { name: 'content', type: 'content' },
+  ]},
+  B2: { id: 'B2', name: 'Accent Right',        category: 'B', zones: [
+    { name: 'content', type: 'content' },
+    { name: 'accent',  type: 'accent' },
+  ]},
+  B3: { id: 'B3', name: 'Accent Top',          category: 'B', zones: [
+    { name: 'accent',  type: 'accent' },
+    { name: 'content', type: 'content' },
+  ]},
+  B4: { id: 'B4', name: 'Accent Bottom',       category: 'B', zones: [
+    { name: 'content', type: 'content' },
+    { name: 'accent',  type: 'accent' },
+  ]},
+  B5: { id: 'B5', name: 'Accent Left Narrow',  category: 'B', zones: [
+    { name: 'accent',  type: 'accent' },
+    { name: 'content', type: 'content' },
+  ]},
+  B6: { id: 'B6', name: 'Accent Right Narrow', category: 'B', zones: [
+    { name: 'content', type: 'content' },
+    { name: 'accent',  type: 'accent' },
+  ]},
+
+  /* ── C — Column Layouts ──────────────────── */
+  C1: { id: 'C1', name: 'Two Columns Equal',     category: 'C', zones: [
+    { name: 'left',  type: 'content' }, { name: 'right', type: 'content' },
+  ]},
+  C2: { id: 'C2', name: 'Two Columns Wide-Left', category: 'C', zones: [
+    { name: 'left',  type: 'content' }, { name: 'right', type: 'content' },
+  ]},
+  C3: { id: 'C3', name: 'Two Columns Wide-Right', category: 'C', zones: [
+    { name: 'left',  type: 'content' }, { name: 'right', type: 'content' },
+  ]},
+  C4: { id: 'C4', name: 'Three Columns',         category: 'C', zones: [
+    { name: 'col1', type: 'content' }, { name: 'col2', type: 'content' }, { name: 'col3', type: 'content' },
+  ]},
+  C5: { id: 'C5', name: 'Two Columns + Header',  category: 'C', zones: [
+    { name: 'header', type: 'title-block' }, { name: 'left', type: 'content' }, { name: 'right', type: 'content' },
+  ]},
+  C6: { id: 'C6', name: 'Three Columns + Header', category: 'C', zones: [
+    { name: 'header', type: 'title-block' },
+    { name: 'col1', type: 'content' }, { name: 'col2', type: 'content' }, { name: 'col3', type: 'content' },
+  ]},
+
+  /* ── D — Mixed Image + Content ───────────── */
+  D1: { id: 'D1', name: 'Image Left + Two Columns', category: 'D', zones: [
+    { name: 'accent', type: 'accent' },
+    { name: 'col1', type: 'content' }, { name: 'col2', type: 'content' },
+  ]},
+  D2: { id: 'D2', name: 'Image Right + Two Columns', category: 'D', zones: [
+    { name: 'col1', type: 'content' }, { name: 'col2', type: 'content' },
+    { name: 'accent', type: 'accent' },
+  ]},
+  D3: { id: 'D3', name: 'Header + Image Left + Content', category: 'D', zones: [
+    { name: 'header', type: 'title-block' },
+    { name: 'accent', type: 'accent' }, { name: 'content', type: 'content' },
+  ]},
+  D4: { id: 'D4', name: 'Header + Content Left + Image', category: 'D', zones: [
+    { name: 'header', type: 'title-block' },
+    { name: 'content', type: 'content' }, { name: 'accent', type: 'accent' },
+  ]},
+
+  /* ── E — Special Purpose ─────────────────── */
+  E1: { id: 'E1', name: 'Quote Slide',     category: 'E', zones: [{ name: 'content', type: 'quote-block' }] },
+  E2: { id: 'E2', name: 'Big Number',      category: 'E', zones: [{ name: 'content', type: 'big-number' }] },
+  E3: { id: 'E3', name: 'Comparison',      category: 'E', zones: [
+    { name: 'left',  type: 'content' }, { name: 'right', type: 'content' },
+  ]},
+  E4: { id: 'E4', name: 'Full-Bleed Image', category: 'E', zones: [
+    { name: 'accent', type: 'accent' }, { name: 'content', type: 'overlay' },
+  ]},
+  E5: { id: 'E5', name: 'Agenda / TOC',    category: 'E', zones: [
+    { name: 'content', type: 'content' }, { name: 'accent', type: 'accent' },
+  ]},
+  E6: { id: 'E6', name: 'Call to Action',  category: 'E', zones: [{ name: 'content', type: 'cta-block' }] },
+};
+
+/**
+ * Returns the zone metadata array for a template id. Read-only.
+ */
+export function getTemplateZones(templateId) {
+  const tpl = TEMPLATES[templateId];
+  return tpl ? tpl.zones.slice() : [];
+}
+
+/* ─────────────────────────────────────────
+   SLIDE TEMPLATE RENDERER
+   Returns the empty skeleton HTML for a template.
+   slide-renderer.js fills the zones with block HTML.
+───────────────────────────────────────── */
+
+const PLACEHOLDER_HTML =
+  `<div class="igs-accent-placeholder">Image will appear here</div>`;
+
+/**
+ * Render the empty slide skeleton for a given template id.
+ * Each zone is left empty — the slide-renderer fills them.
+ *
+ * @param {string} templateId
+ * @param {string} [theme]   — currently unused; reserved for theme-specific variants
+ * @returns {string} HTML
+ */
+export function renderSlideTemplate(templateId, theme) {
+  const tpl = TEMPLATES[templateId];
+  if (!tpl) return renderSlideTemplate('A1', theme);
+
+  // Build inner zones HTML matching the template-specific zone names
+  const zones = tpl.zones
+    .map(z => {
+      const isAccent = z.type === 'accent';
+      const inner = isAccent ? PLACEHOLDER_HTML : '';
+      const cls   = isAccent ? 'igs-zone igs-zone-accent' : 'igs-zone igs-zone-content';
+      return `<div class="${cls}" data-zone="${z.name}" data-zone-type="${z.type}">${inner}</div>`;
+    })
+    .join('');
+
+  return `<div class="igs-slide" data-template="${templateId}">${zones}</div>`;
+}
+
+/* ─────────────────────────────────────────
+   TEMPLATE CSS
+   Single string — injected once into the deck-mode container by
+   slide-renderer.js (DECK_MODE_CSS bundle).
+───────────────────────────────────────── */
+
+export const TEMPLATE_CSS = `
+/* ── Slide root + shared zone styles ─────────────────────── */
+.igs-slide {
+  position: relative;
+  box-sizing: border-box;
+  width: 960px;
+  height: 540px;
+  overflow: hidden;
+  background: var(--card-bg, #ffffff);
+  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+  color: var(--text-primary, #1A1A2E);
+  line-height: 1.5;
+}
+.igs-zone {
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.igs-zone-content {
+  padding: 27px 48px;
+  display: flex;
+  flex-direction: column;
+}
+.igs-zone-accent {
+  background:
+    linear-gradient(135deg, var(--accent-soft, rgba(37,99,235,0.10)) 0%, rgba(0,0,0,0.04) 100%),
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0 8px, transparent 8px 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.igs-accent-placeholder {
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
+  font-style: italic;
+  text-align: center;
+  opacity: 0.65;
+  letter-spacing: 0.02em;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ── Title-block zones (A2, A3, A4, C5, C6, D3, D4 headers) ── */
+.igs-slide-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-weight: 700;
+  font-size: 44px;
+  line-height: 1.15;
+  margin: 0 0 12px 0;
+  color: var(--text-primary, #1A1A2E);
+}
+.igs-slide-subtitle {
+  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.4;
+  margin: 0;
+  color: var(--text-secondary, #6b7280);
+}
+
+/* ══════════════════════════════════════════════════════════
+   CATEGORY A — Blank & Full-Width
+   ══════════════════════════════════════════════════════════ */
+
+/* A1 — Blank: single full-bleed content zone */
+.igs-slide[data-template="A1"] {
+  display: block;
+}
+.igs-slide[data-template="A1"] > .igs-zone-content {
+  width: 100%;
+  height: 100%;
+}
+
+/* A2 — Title Slide: centered title block on accent gradient background */
+.igs-slide[data-template="A2"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg,
+    var(--accent, #2563EB) 0%,
+    color-mix(in srgb, var(--accent, #2563EB) 70%, #000) 100%);
+  color: #ffffff;
+}
+.igs-slide[data-template="A2"] > .igs-zone-content {
+  width: 80%;
+  align-items: center;
+  text-align: center;
+  padding: 0;
+}
+.igs-slide[data-template="A2"] .igs-slide-title {
+  font-size: 56px;
+  color: #ffffff;
+  margin-bottom: 16px;
+}
+.igs-slide[data-template="A2"] .igs-slide-subtitle {
+  font-size: 22px;
+  color: rgba(255,255,255,0.85);
+}
+
+/* A3 — Section Divider: bold heading, left-aligned, accent background */
+.igs-slide[data-template="A3"] {
+  display: flex;
+  align-items: center;
+  background: var(--accent, #2563EB);
+  color: #ffffff;
+}
+.igs-slide[data-template="A3"] > .igs-zone-content {
+  width: 100%;
+  padding: 27px 64px;
+  align-items: flex-start;
+}
+.igs-slide[data-template="A3"] .igs-slide-title {
+  font-size: 64px;
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.igs-slide[data-template="A3"] .igs-slide-subtitle {
+  font-size: 22px;
+  color: rgba(255,255,255,0.85);
+}
+
+/* A4 — Closing / Thank You: centered message + contact info at bottom */
+.igs-slide[data-template="A4"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.igs-slide[data-template="A4"] > .igs-zone-content {
+  width: 80%;
+  align-items: center;
+  text-align: center;
+}
+.igs-slide[data-template="A4"] .igs-slide-title {
+  font-size: 60px;
+  color: var(--accent, #2563EB);
+  margin-bottom: 24px;
+}
+.igs-slide[data-template="A4"] .igs-slide-subtitle {
+  font-size: 18px;
+  color: var(--text-secondary, #6b7280);
+  position: absolute;
+  bottom: 32px;
+  left: 0;
+  right: 0;
+}
+
+/* ══════════════════════════════════════════════════════════
+   CATEGORY B — Accent Image Templates
+   Numbers from SLIDE-DECK-PLAN.md Section 3.2.
+   Accent zones bleed to slide edges; content zones own their padding.
+   ══════════════════════════════════════════════════════════ */
+
+/* B1 — Accent Left 40 + 3 + 57 */
+.igs-slide[data-template="B1"] {
+  display: grid;
+  grid-template-columns: 40% 3% 57%;
+  grid-template-rows: 100%;
+}
+.igs-slide[data-template="B1"] > .igs-zone-accent  { grid-column: 1; }
+.igs-slide[data-template="B1"] > .igs-zone-content { grid-column: 3; }
+
+/* B2 — Accent Right 57 + 3 + 40 */
+.igs-slide[data-template="B2"] {
+  display: grid;
+  grid-template-columns: 57% 3% 40%;
+}
+.igs-slide[data-template="B2"] > .igs-zone-content { grid-column: 1; }
+.igs-slide[data-template="B2"] > .igs-zone-accent  { grid-column: 3; }
+
+/* B3 — Accent Top 100 × 40 + 3 + 57 */
+.igs-slide[data-template="B3"] {
+  display: grid;
+  grid-template-columns: 100%;
+  grid-template-rows: 40% 3% 57%;
+}
+.igs-slide[data-template="B3"] > .igs-zone-accent  { grid-row: 1; }
+.igs-slide[data-template="B3"] > .igs-zone-content { grid-row: 3; }
+
+/* B4 — Accent Bottom: top 62% content, bottom 35% accent (3% gap) */
+.igs-slide[data-template="B4"] {
+  display: grid;
+  grid-template-columns: 100%;
+  grid-template-rows: 62% 3% 35%;
+}
+.igs-slide[data-template="B4"] > .igs-zone-content { grid-row: 1; }
+.igs-slide[data-template="B4"] > .igs-zone-accent  { grid-row: 3; }
+
+/* B5 — Accent Left Narrow 30 + 3 + 67 */
+.igs-slide[data-template="B5"] {
+  display: grid;
+  grid-template-columns: 30% 3% 67%;
+}
+.igs-slide[data-template="B5"] > .igs-zone-accent  { grid-column: 1; }
+.igs-slide[data-template="B5"] > .igs-zone-content { grid-column: 3; }
+
+/* B6 — Accent Right Narrow 67 + 3 + 30 */
+.igs-slide[data-template="B6"] {
+  display: grid;
+  grid-template-columns: 67% 3% 30%;
+}
+.igs-slide[data-template="B6"] > .igs-zone-content { grid-column: 1; }
+.igs-slide[data-template="B6"] > .igs-zone-accent  { grid-column: 3; }
+
+/* ══════════════════════════════════════════════════════════
+   CATEGORY C — Column Layouts (no accent image)
+   ══════════════════════════════════════════════════════════ */
+
+/* C1 — Two Columns Equal 50 / 3 / 50 */
+.igs-slide[data-template="C1"] {
+  display: grid;
+  grid-template-columns: 48.5% 3% 48.5%;
+}
+.igs-slide[data-template="C1"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+.igs-slide[data-template="C1"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+
+/* C2 — Wide-Left 60 / 3 / 37 */
+.igs-slide[data-template="C2"] {
+  display: grid;
+  grid-template-columns: 60% 3% 37%;
+}
+.igs-slide[data-template="C2"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+.igs-slide[data-template="C2"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+
+/* C3 — Wide-Right 37 / 3 / 60 */
+.igs-slide[data-template="C3"] {
+  display: grid;
+  grid-template-columns: 37% 3% 60%;
+}
+.igs-slide[data-template="C3"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+.igs-slide[data-template="C3"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+
+/* C4 — Three Columns Equal 31 / 3 / 31 / 3 / 31 (with 1% adjustment for safety) */
+.igs-slide[data-template="C4"] {
+  display: grid;
+  grid-template-columns: 31% 3% 31% 3% 31%;
+}
+.igs-slide[data-template="C4"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+.igs-slide[data-template="C4"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+.igs-slide[data-template="C4"] > .igs-zone-content:nth-child(3) { grid-column: 5; }
+
+/* C5 — Two Columns + Header (header 25%, columns 70% with 5% gap row) */
+.igs-slide[data-template="C5"] {
+  display: grid;
+  grid-template-columns: 48.5% 3% 48.5%;
+  grid-template-rows: 25% 5% 70%;
+}
+.igs-slide[data-template="C5"] > .igs-zone-content[data-zone="header"] {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+  align-items: flex-start;
+  justify-content: center;
+}
+.igs-slide[data-template="C5"] > .igs-zone-content[data-zone="left"]  { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="C5"] > .igs-zone-content[data-zone="right"] { grid-column: 3; grid-row: 3; }
+
+/* C6 — Three Columns + Header */
+.igs-slide[data-template="C6"] {
+  display: grid;
+  grid-template-columns: 31% 3% 31% 3% 31%;
+  grid-template-rows: 25% 5% 70%;
+}
+.igs-slide[data-template="C6"] > .igs-zone-content[data-zone="header"] {
+  grid-column: 1 / span 5;
+  grid-row: 1;
+}
+.igs-slide[data-template="C6"] > .igs-zone-content[data-zone="col1"] { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="C6"] > .igs-zone-content[data-zone="col2"] { grid-column: 3; grid-row: 3; }
+.igs-slide[data-template="C6"] > .igs-zone-content[data-zone="col3"] { grid-column: 5; grid-row: 3; }
+
+/* ══════════════════════════════════════════════════════════
+   CATEGORY D — Mixed Image + Content Columns
+   ══════════════════════════════════════════════════════════ */
+
+/* D1 — Image Left 35 + 3 + (col1 30 + 2 + col2 30) */
+.igs-slide[data-template="D1"] {
+  display: grid;
+  grid-template-columns: 35% 3% 30% 2% 30%;
+}
+.igs-slide[data-template="D1"] > .igs-zone-accent              { grid-column: 1; }
+.igs-slide[data-template="D1"] > .igs-zone-content[data-zone="col1"] { grid-column: 3; }
+.igs-slide[data-template="D1"] > .igs-zone-content[data-zone="col2"] { grid-column: 5; }
+
+/* D2 — Image Right (col1 30 + 2 + col2 30) + 3 + 35 */
+.igs-slide[data-template="D2"] {
+  display: grid;
+  grid-template-columns: 30% 2% 30% 3% 35%;
+}
+.igs-slide[data-template="D2"] > .igs-zone-content[data-zone="col1"] { grid-column: 1; }
+.igs-slide[data-template="D2"] > .igs-zone-content[data-zone="col2"] { grid-column: 3; }
+.igs-slide[data-template="D2"] > .igs-zone-accent              { grid-column: 5; }
+
+/* D3 — Header + Image Left + Content Right */
+.igs-slide[data-template="D3"] {
+  display: grid;
+  grid-template-columns: 40% 3% 57%;
+  grid-template-rows: 20% 3% 77%;
+}
+.igs-slide[data-template="D3"] > .igs-zone-content[data-zone="header"] {
+  grid-column: 1 / span 3; grid-row: 1; align-items: flex-start;
+}
+.igs-slide[data-template="D3"] > .igs-zone-accent  { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="D3"] > .igs-zone-content[data-zone="content"] { grid-column: 3; grid-row: 3; }
+
+/* D4 — Header + Content Left + Image Right */
+.igs-slide[data-template="D4"] {
+  display: grid;
+  grid-template-columns: 57% 3% 40%;
+  grid-template-rows: 20% 3% 77%;
+}
+.igs-slide[data-template="D4"] > .igs-zone-content[data-zone="header"] {
+  grid-column: 1 / span 3; grid-row: 1; align-items: flex-start;
+}
+.igs-slide[data-template="D4"] > .igs-zone-content[data-zone="content"] { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="D4"] > .igs-zone-accent  { grid-column: 3; grid-row: 3; }
+
+/* ══════════════════════════════════════════════════════════
+   CATEGORY E — Special Purpose
+   ══════════════════════════════════════════════════════════ */
+
+/* E1 — Quote Slide */
+.igs-slide[data-template="E1"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 20%, var(--accent-soft, rgba(37,99,235,0.08)) 0%, transparent 60%),
+    var(--card-bg, #ffffff);
+}
+.igs-slide[data-template="E1"] > .igs-zone-content {
+  width: 70%;
+  align-items: center;
+  text-align: center;
+}
+.igs-slide[data-template="E1"] .igs-slide-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 36px;
+  font-weight: 500;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--text-primary, #1A1A2E);
+  position: relative;
+  padding: 0 40px;
+}
+.igs-slide[data-template="E1"] .igs-slide-title::before {
+  content: '\\201C';
+  position: absolute;
+  left: 0;
+  top: -20px;
+  font-size: 80px;
+  color: var(--accent, #2563EB);
+  opacity: 0.4;
+  line-height: 1;
+}
+.igs-slide[data-template="E1"] .igs-slide-subtitle {
+  margin-top: 24px;
+  font-size: 16px;
+  color: var(--accent, #2563EB);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* E2 — Big Number / Stat */
+.igs-slide[data-template="E2"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.igs-slide[data-template="E2"] > .igs-zone-content {
+  align-items: center;
+  text-align: center;
+  width: 80%;
+}
+.igs-slide[data-template="E2"] .igs-slide-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 180px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent, #2563EB);
+  letter-spacing: -0.04em;
+}
+.igs-slide[data-template="E2"] .igs-slide-subtitle {
+  font-size: 26px;
+  color: var(--text-secondary, #6b7280);
+  margin-top: 12px;
+}
+
+/* E3 — Comparison (Side-by-Side) */
+.igs-slide[data-template="E3"] {
+  display: grid;
+  grid-template-columns: 48.5% 3% 48.5%;
+  background:
+    linear-gradient(to right, transparent 49.95%, var(--card-border, #e5e7eb) 49.95%, var(--card-border, #e5e7eb) 50.05%, transparent 50.05%);
+}
+.igs-slide[data-template="E3"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
+.igs-slide[data-template="E3"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+
+/* E4 — Full-Bleed Image with overlay text band */
+.igs-slide[data-template="E4"] {
+  display: block;
+  position: relative;
+}
+.igs-slide[data-template="E4"] > .igs-zone-accent {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.igs-slide[data-template="E4"] > .igs-zone-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20%;
+  padding: 18px 48px;
+  background: rgba(0,0,0,0.55);
+  color: #ffffff;
+  justify-content: center;
+}
+.igs-slide[data-template="E4"] .igs-slide-title {
+  color: #ffffff;
+  font-size: 28px;
+  margin: 0;
+}
+.igs-slide[data-template="E4"] .igs-slide-subtitle {
+  color: rgba(255,255,255,0.85);
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+/* E5 — Agenda / Table of Contents */
+.igs-slide[data-template="E5"] {
+  display: grid;
+  grid-template-columns: 60% 5% 35%;
+}
+.igs-slide[data-template="E5"] > .igs-zone-content { grid-column: 1; }
+.igs-slide[data-template="E5"] > .igs-zone-accent  { grid-column: 3; }
+
+/* E6 — Call to Action */
+.igs-slide[data-template="E6"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 50% 100%, var(--accent-soft, rgba(37,99,235,0.10)) 0%, transparent 70%);
+}
+.igs-slide[data-template="E6"] > .igs-zone-content {
+  width: 75%;
+  align-items: center;
+  text-align: center;
+}
+.igs-slide[data-template="E6"] .igs-slide-title {
+  font-size: 48px;
+  margin-bottom: 18px;
+}
+.igs-slide[data-template="E6"] .igs-slide-subtitle {
+  font-size: 18px;
+  margin-bottom: 28px;
+  max-width: 520px;
+}
+.igs-slide[data-template="E6"] .igs-cta-button {
+  display: inline-block;
+  padding: 16px 40px;
+  background: var(--accent, #2563EB);
+  color: #ffffff;
+  border-radius: 8px;
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 20px var(--accent-soft, rgba(37,99,235,0.30));
+}
+`;

@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-mode="single">
 <header class="app-header">
   <div class="logo">Infogr<span>.</span>ai</div>
   <div class="header-right">
@@ -17,6 +17,14 @@
 
 <div class="app">
   <aside class="panel">
+    <section class="sec mode-toggle-sec">
+      <div class="lbl">Mode</div>
+      <div class="mode-row" id="modeRow">
+        <button class="mode-btn on" data-mode="single">Single Page</button>
+        <button class="mode-btn"    data-mode="deck">Slide Deck</button>
+      </div>
+    </section>
+
     <section class="sec">
       <div class="lbl">Anthropic API Key</div>
       <div class="api-wrap">
@@ -31,7 +39,7 @@
       <textarea class="prompt-in" id="promptIn" placeholder="e.g. How to set up Claude Cowork for non-technical users — steps, tips, prerequisites, folder structure..."></textarea>
     </section>
 
-    <section class="sec">
+    <section class="sec layout-sec">
       <div class="lbl">Layout</div>
       <div class="tpl-grid" id="layoutGrid"></div>
     </section>
@@ -63,6 +71,9 @@
       </button>
     </div>
   </aside>
+
+  <!-- Slide Deck mode: thumbnail panel (hidden in single-page mode) -->
+  <aside class="igs-thumb-panel" id="igsThumbPanel" style="display:none"></aside>
 
   <main class="canvas-area">
 
@@ -184,10 +195,22 @@
         </div>
       </div>
     </div>
+
+    <!-- Slide Deck mode: slide navigation strip (hidden in single-page mode) -->
+    <div class="igs-slide-nav" id="igsSlideNav" style="display:none">
+      <button class="igs-nav-prev" type="button" title="Previous slide (←)">‹</button>
+      <span class="igs-nav-counter">Slide 1 of 1</span>
+      <button class="igs-nav-next" type="button" title="Next slide (→)">›</button>
+    </div>
+
     <!-- Hidden iframe used ONLY for export (PNG/PDF/HTML) -->
     <iframe id="exportFrame" style="display:none;position:absolute;left:-9999px;"></iframe>
 
   </main>
+
+  <!-- Slide Deck mode: diagram gallery panel (hidden in single-page mode) -->
+  <aside class="igs-gallery-panel" id="igsGalleryPanel" style="display:none"></aside>
+
 </div>
 
 <!-- Libraries -->

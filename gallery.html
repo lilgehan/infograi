@@ -246,11 +246,104 @@
     import { renderSection, BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS } from './v3/smart-layouts.js';
     import { renderDiagramSection, DIAGRAM_CSS } from './v3/smart-diagrams.js';
     import { applyLayoutConfig } from './v3/layout-configs.js';
+    import { TEMPLATES, renderSlideTemplate, TEMPLATE_CSS } from './v3/slide-templates.js';
 
-    // Inject all CSS into the page
+    // Inject all CSS into the page (engine + slide template CSS)
     const styleEl = document.createElement('style');
-    styleEl.textContent = [BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS, DIAGRAM_CSS].join('\n');
+    styleEl.textContent = [
+      BOXES_CSS, BULLETS_CSS, SEQUENCE_CSS, NUMBERS_CSS, CIRCLES_CSS, QUOTES_CSS, STEPS_CSS,
+      DIAGRAM_CSS,
+      TEMPLATE_CSS,
+    ].join('\n');
     document.head.appendChild(styleEl);
+
+    // Inject template-preview-specific styles for the gallery
+    const tplStyleEl = document.createElement('style');
+    tplStyleEl.textContent = `
+      /* ── Templates section in the gallery ── */
+      .templates-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+      }
+      .template-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: box-shadow 0.2s, transform 0.15s;
+      }
+      .template-card:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        transform: translateY(-1px);
+      }
+      .template-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid #f3f4f6;
+        background: #fafafa;
+      }
+      .template-card-id {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 700;
+        font-size: 0.82em;
+        color: #2563EB;
+        letter-spacing: 0.04em;
+      }
+      .template-card-name {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 600;
+        font-size: 0.92em;
+        color: #111827;
+        flex: 1;
+        margin-left: 10px;
+      }
+      .template-card-cat {
+        font-size: 0.7em;
+        color: #9ca3af;
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'Space Grotesk', sans-serif;
+      }
+      .template-preview-wrap {
+        position: relative;
+        padding: 12px;
+        background: #f9fafb;
+        height: 188px;            /* roughly 16:9 of the inner card width */
+        overflow: hidden;
+      }
+      .template-preview-inner {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        width: 960px;
+        height: 540px;
+        transform: scale(0.29);
+        transform-origin: top left;
+      }
+      /* Make zone boundaries clearer in the preview */
+      .template-preview-inner .igs-zone-content {
+        outline: 2px dashed rgba(37,99,235,0.25);
+        outline-offset: -2px;
+      }
+      .template-preview-inner .igs-zone-content::before {
+        content: attr(data-zone);
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        font-size: 16px;
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: rgba(37,99,235,0.55);
+        pointer-events: none;
+      }
+    `;
+    document.head.appendChild(tplStyleEl);
 
     // ── Sample data generator ──
     const SAMPLE_TITLES = [
@@ -461,10 +554,63 @@
       return html;
     }
 
+    // ── Templates section builder ──
+    // Renders a "Templates" family-section at the top of the gallery showing
+    // all 22 page templates. Each card shows the template's zone layout at
+    // a readable scale. Templates section appears when filter is 'all' or
+    // 'templates'.
+    function buildTemplatesSection(gallery) {
+      if (currentFilter !== 'all' && currentFilter !== 'templates') return;
+
+      const section = document.createElement('div');
+      section.className = 'family-section';
+      section.dataset.family = 'Templates';
+
+      const total = Object.keys(TEMPLATES).length;
+      section.innerHTML = `
+        <h2 class="family-title">Templates (page layouts)</h2>
+        <p class="family-subtitle">${total} page templates · zone layouts for slide deck mode</p>
+        <div class="templates-grid" id="grid-Templates"></div>
+      `;
+      gallery.appendChild(section);
+
+      const grid = section.querySelector('.templates-grid');
+      // Group by category for stable visual order: A → B → C → D → E
+      const sortedTpls = Object.values(TEMPLATES).sort((a, b) => {
+        if (a.category !== b.category) return a.category.localeCompare(b.category);
+        return a.id.localeCompare(b.id);
+      });
+
+      for (const tpl of sortedTpls) {
+        const card = document.createElement('div');
+        card.className = 'template-card';
+        card.dataset.tplId = tpl.id;
+        card.innerHTML = `
+          <div class="template-card-header">
+            <span class="template-card-id">${tpl.id}</span>
+            <span class="template-card-name">${tpl.name}</span>
+            <span class="template-card-cat">Cat ${tpl.category}</span>
+          </div>
+          <div class="template-preview-wrap">
+            <div class="template-preview-inner">
+              ${renderSlideTemplate(tpl.id)}
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
     // ── Build the gallery ──
     function buildGallery() {
       const gallery = document.getElementById('gallery');
       gallery.innerHTML = '';
+
+      // Templates section appears first
+      buildTemplatesSection(gallery);
+
+      // Skip the diagram families when filter is 'templates'
+      if (currentFilter === 'templates') return;
 
       for (const [familyName, familyInfo] of Object.entries(FAMILIES)) {
         // Filter check
@@ -610,7 +756,7 @@
 
     // ── Filter bar ──
     const filterBar = document.getElementById('filterBar');
-    const filters = ['all', 'layouts', 'diagrams',
+    const filters = ['all', 'templates', 'layouts', 'diagrams',
       'boxes', 'bullets', 'sequence', 'numbers', 'circles', 'quotes', 'steps',
       'road', 'target', 'hierarchy', 'venn', 'process', 'business'];
     filters.forEach(f => {
