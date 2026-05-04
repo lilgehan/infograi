@@ -73,11 +73,12 @@
     '.igs-arrow-title', '.igs-arrow-body',
     '.igs-pill', '.igs-slant-body',
     // Numbers
-    '.igs-stat-num', '.igs-stat-label',
-    '.igs-bar-stat-label', '.igs-bar-stat-num',
-    '.igs-star-title', '.igs-star-score',
-    '.igs-dotgrid-label',
-    '.igs-dotline-title', '.igs-dotline-num',
+    '.igs-stat-num', '.igs-stat-label', '.igs-stat-desc',
+    '.igs-circstat-title', '.igs-circstat-desc',
+    '.igs-barstat-num', '.igs-barstat-title', '.igs-barstat-desc',
+    '.igs-starrating-score', '.igs-starrating-title', '.igs-starrating-desc',
+    '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
+    '.igs-dotline-val', '.igs-dotline-label',
     '.igs-cbl-title', '.igs-cbl-body',
     '.igs-cel-title', '.igs-cel-body',
     // Circles
@@ -110,8 +111,8 @@
     // Sequence containers
     '.igs-tl-item', '.igs-mtl-item', '.igs-mtlb-item', '.igs-arrow-item', '.igs-slant-item',
     // Numbers containers
-    '.igs-stat-item', '.igs-circle-stat-item', '.igs-bar-stat-item', '.igs-star-item',
-    '.igs-dotgrid-item', '.igs-dotline-item', '.igs-cbl-item', '.igs-cel-item',
+    '.igs-stat-col', '.igs-circstat-col', '.igs-barstat-item', '.igs-starrating-item',
+    '.igs-dotgrid-card', '.igs-dotline-item', '.igs-cbl-item', '.igs-cel-item',
     // Circles containers
     '.igs-cycle-item', '.igs-flower-petal', '.igs-flower-center',
     '.igs-circle-item', '.igs-ring-item', '.igs-semi-item',
@@ -385,6 +386,8 @@
 
   function exitEdit() {
     if (mode !== 'edit') return;
+    // Reactive visual update: if user edited a data-driven number, update the visual
+    if (sel) updateVisualAfterEdit(sel);
     freezeText(sel);
     mode = 'sel';
     sel.style.cursor = 'move';
@@ -392,6 +395,14 @@
     // Blur any focused text element
     var active = document.activeElement;
     if (active && sel.contains(active)) active.blur();
+  }
+
+  /* ── Reactive visual update ──────────────────────────────── */
+  // Delegates to shared v3/reactive-visuals.js (window.IgReactiveVisuals).
+  function updateVisualAfterEdit(el) {
+    if (window.IgReactiveVisuals) {
+      window.IgReactiveVisuals.updateVisualAfterEdit(el);
+    }
   }
 
   /* ── Find selectable ancestor ───────────────────────────── */

@@ -11,6 +11,7 @@
   <!-- Persistent editor state — cross-browser, file-based.
        This file is written by the Save button and lives next to gallery-editor.html.
        If it doesn't exist yet, the onerror handler silently removes the tag. -->
+  <script src="v3/reactive-visuals.js"></script>
   <script src="editor-draft.js" onerror="this.remove()"></script>
   <style>
     :root {
@@ -989,62 +990,13 @@
       const preserved = tr || el._origCssTransform || '';
       el.style.transform = `translate(${x}px, ${y}px)` + (preserved ? ' ' + preserved : '');
     }
-    // ═══ REACTIVE DOT UPDATE ═══
-    // When user edits a number in dot-grid or dot-line, recalculate and re-render the dots.
-    function updateDotsAfterEdit(el) {
-      const cls = el.className || '';
-
-      // Dot-grid: .igs-dotgrid-num → parent is .igs-dotgrid-card → find .igs-dotgrid-grid
-      if (cls.includes('igs-dotgrid-num')) {
-        const card = el.closest('.igs-dotgrid-card');
-        if (!card) return;
-        const grid = card.querySelector('.igs-dotgrid-grid');
-        if (!grid) return;
-        const numStr = el.textContent.trim();
-        const pct = parseDotPct(numStr);
-        const TOTAL = 100;
-        const filled = pct !== null ? Math.round((pct / 100) * TOTAL) : 0;
-        let dots = '';
-        for (let d = 0; d < TOTAL; d++) {
-          dots += `<div class="igs-dg-dot ${d < filled ? 'filled' : 'empty'}"></div>`;
-        }
-        grid.innerHTML = dots;
-        return;
+    // ═══ REACTIVE VISUAL UPDATE ═══
+    // Delegates to shared v3/reactive-visuals.js (window.IgReactiveVisuals).
+    // Passes renderTarget as searchRoot for SVG overlay spatial matching.
+    function updateVisualAfterEdit(el) {
+      if (window.IgReactiveVisuals) {
+        window.IgReactiveVisuals.updateVisualAfterEdit(el, renderTarget);
       }
-
-      // Dot-line: .igs-dotline-val → parent is .igs-dotline-row → find .igs-dotline-track
-      if (cls.includes('igs-dotline-val')) {
-        const row = el.closest('.igs-dotline-row');
-        if (!row) return;
-        const track = row.querySelector('.igs-dotline-track');
-        if (!track) return;
-        const numStr = el.textContent.trim();
-        const pct = parseDotPct(numStr);
-        const DOT_COUNT = 10;
-        const exactFill = pct !== null ? (pct / 100) * DOT_COUNT : 0;
-        const fullFill = Math.floor(exactFill);
-        const fracPart = exactFill - fullFill;
-        const hasFrac = fracPart >= 0.2 && fracPart < 0.8;
-        let dots = '';
-        for (let d = 0; d < DOT_COUNT; d++) {
-          if (d < fullFill)                  dots += `<div class="igs-dl-dot filled"></div>`;
-          else if (d === fullFill && hasFrac) dots += `<div class="igs-dl-dot half"></div>`;
-          else                               dots += `<div class="igs-dl-dot empty"></div>`;
-        }
-        track.innerHTML = dots;
-        return;
-      }
-    }
-
-    // Parse percentage from a string like "87%", "50", "$2.4M" → number or null
-    function parseDotPct(str) {
-      if (!str) return null;
-      const s = str.trim();
-      const pctMatch = s.match(/^(\d+(?:\.\d+)?)\s*%/);
-      if (pctMatch) return parseFloat(pctMatch[1]);
-      const plainMatch = s.match(/^(\d+(?:\.\d+)?)$/);
-      if (plainMatch) return Math.min(100, parseFloat(plainMatch[1]));
-      return null;
     }
 
     // Hide an original template element by saving display:none override
@@ -1158,6 +1110,16 @@
         // Hide original SVG text
         textEl.setAttribute('visibility', 'hidden');
 
+        // Link overlay to its parent SVG for reactive visual updates.
+        // If the <text> lives inside .igs-circstat-svg, stamp a data-rv-id
+        // on the SVG so the overlay can find it without spatial matching.
+        let linkedSvgId = null;
+        const parentSvg = textEl.closest('.igs-circstat-svg');
+        if (parentSvg) {
+          linkedSvgId = parentSvg.getAttribute('data-rv-id') || `rv_circstat_${idx}`;
+          parentSvg.setAttribute('data-rv-id', linkedSvgId);
+        }
+
         // Save overlay data — renderAddedElements() will create the DOM element
         ensureAdded().textboxes.push({
           id: overlayId, text: content,
@@ -1166,6 +1128,7 @@
           fontSize, fontWeight, fontFamily,
           color: fill, textAlign,
           isSvgOverlay: true, svgTextIdx: idx,
+          linkedSvgId: linkedSvgId, // for reactive visual lookup
         });
         saveAddedElements();
       });
@@ -1295,7 +1258,7 @@
         }
         // Reactive dot update: if the edited element is a dot-grid number or dot-line value,
         // re-render the dots based on the new text content.
-        updateDotsAfterEdit(el);
+        updateVisualAfterEdit(el);
         requestAnimationFrame(() => buildOverlayHandles());
       };
       editTarget.addEventListener('blur', finish, { once: true });
@@ -1431,8 +1394,14 @@
         '.igs-pill',
         '.igs-slant-item', '.igs-slant-label', '.igs-slant-body',
         // ── Numbers / Stats family ──
-        '.igs-stat-col', '.igs-circstat-col', '.igs-barstat-item', '.igs-starrating-item',
+        '.igs-stat-col', '.igs-stat-num', '.igs-stat-label', '.igs-stat-desc',
+        '.igs-circstat-col', '.igs-circstat-title', '.igs-circstat-desc',
+        '.igs-barstat-item', '.igs-barstat-num', '.igs-barstat-title', '.igs-barstat-desc',
         '.igs-barstat-track', '.igs-barstat-fill',
+        '.igs-starrating-item', '.igs-starrating-score', '.igs-starrating-title', '.igs-starrating-desc',
+        '.igs-starrating-stars',
+        '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
+        '.igs-dotline-val', '.igs-dotline-label',
         // ── Circles family ──
         '.igs-circ-textbox', '.igs-semi-textbox',
         // ── Quotes family ──
@@ -2963,6 +2932,7 @@
         const isSvgOverlay = tb.isSvgOverlay;
         div.className = isSvgOverlay ? 'added-textbox svg-text-overlay' : 'added-textbox';
         div.dataset.addedId = tb.id;
+        if (tb.linkedSvgId) div.dataset.linkedSvg = tb.linkedSvgId;
         // Support multiline: convert \n to <br> for display
         div.innerHTML = (tb.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
         const bgStyle = isSvgOverlay
