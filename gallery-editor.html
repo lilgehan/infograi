@@ -911,6 +911,7 @@
       applyOverrides();
       convertSvgTextToOverlays();
       renderAddedElements();
+      syncAllVisuals();
       renderConnectors();
       syncObjects();
       requestAnimationFrame(() => buildOverlayHandles());
@@ -999,6 +1000,30 @@
       }
     }
 
+    /**
+     * After re-render, applyOverrides() restores edited text but the visual
+     * shapes (bar width, star fill, circle arc, dot pattern) are rendered
+     * from original data. Walk all number elements and sync each visual
+     * to match the current DOM text.
+     */
+    function syncAllVisuals() {
+      if (!window.IgReactiveVisuals) return;
+      // Template number elements
+      const selectors = [
+        '.igs-barstat-num',
+        '.igs-starrating-score',
+        '.igs-dotgrid-num',
+        '.igs-dotline-val'
+      ];
+      renderTarget.querySelectorAll(selectors.join(',')).forEach(el => {
+        window.IgReactiveVisuals.updateVisualAfterEdit(el, renderTarget);
+      });
+      // SVG text overlays linked to circle-stats
+      renderTarget.querySelectorAll('.svg-text-overlay[data-linked-svg]').forEach(el => {
+        window.IgReactiveVisuals.updateVisualAfterEdit(el, renderTarget);
+      });
+    }
+
     // Hide an original template element by saving display:none override
     function hideOriginalElement(el) {
       if (isSvgElement(el)) {
@@ -1082,9 +1107,14 @@
         }
 
         // If saved data exists, the overlay will be rendered by renderAddedElements().
-        // Just hide the SVG text and skip.
+        // Just hide the SVG text — but re-stamp data-rv-id on the SVG so the
+        // overlay's data-linked-svg lookup still works after re-render.
         if (savedData) {
           textEl.setAttribute('visibility', 'hidden');
+          if (savedData.linkedSvgId) {
+            const parentSvg = textEl.closest('.igs-circstat-svg');
+            if (parentSvg) parentSvg.setAttribute('data-rv-id', savedData.linkedSvgId);
+          }
           return;
         }
 

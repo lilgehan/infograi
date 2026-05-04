@@ -231,7 +231,11 @@
     // Star-rating
     if (cls.indexOf('igs-starrating-score') !== -1) { updateStarRating(el); return; }
 
-    // Dot-grid and dot-line are excluded — variants need full redesign.
+    // Dot-grid
+    if (cls.indexOf('igs-dotgrid-num') !== -1) { updateDotGrid(el); return; }
+
+    // Dot-line
+    if (cls.indexOf('igs-dotline-val') !== -1) { updateDotLine(el); return; }
   }
 
   // ── Public API ───────────────────────────────────────────
@@ -243,7 +247,9 @@
     updateBarStat:         updateBarStat,
     updateStarRating:      updateStarRating,
     updateCircleStat:      updateCircleStat,
-    rebuildCircleSvg:      rebuildCircleSvg
+    rebuildCircleSvg:      rebuildCircleSvg,
+    updateDotGrid:         updateDotGrid,
+    updateDotLine:         updateDotLine
   };
 
 })();
