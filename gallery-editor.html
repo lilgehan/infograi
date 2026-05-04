@@ -993,10 +993,9 @@
     }
     // ═══ REACTIVE VISUAL UPDATE ═══
     // Delegates to shared v3/reactive-visuals.js (window.IgReactiveVisuals).
-    // Passes renderTarget as searchRoot for SVG overlay spatial matching.
     function updateVisualAfterEdit(el) {
       if (window.IgReactiveVisuals) {
-        window.IgReactiveVisuals.updateVisualAfterEdit(el, renderTarget);
+        window.IgReactiveVisuals.updateVisualAfterEdit(el);
       }
     }
 
@@ -1008,19 +1007,15 @@
      */
     function syncAllVisuals() {
       if (!window.IgReactiveVisuals) return;
-      // Template number elements
       const selectors = [
+        '.igs-circstat-num',
         '.igs-barstat-num',
         '.igs-starrating-score',
         '.igs-dotgrid-num',
         '.igs-dotline-val'
       ];
       renderTarget.querySelectorAll(selectors.join(',')).forEach(el => {
-        window.IgReactiveVisuals.updateVisualAfterEdit(el, renderTarget);
-      });
-      // SVG text overlays linked to circle-stats
-      renderTarget.querySelectorAll('.svg-text-overlay[data-linked-svg]').forEach(el => {
-        window.IgReactiveVisuals.updateVisualAfterEdit(el, renderTarget);
+        window.IgReactiveVisuals.updateVisualAfterEdit(el);
       });
     }
 
@@ -1107,14 +1102,9 @@
         }
 
         // If saved data exists, the overlay will be rendered by renderAddedElements().
-        // Just hide the SVG text — but re-stamp data-rv-id on the SVG so the
-        // overlay's data-linked-svg lookup still works after re-render.
+        // Just hide the SVG text.
         if (savedData) {
           textEl.setAttribute('visibility', 'hidden');
-          if (savedData.linkedSvgId) {
-            const parentSvg = textEl.closest('.igs-circstat-svg');
-            if (parentSvg) parentSvg.setAttribute('data-rv-id', savedData.linkedSvgId);
-          }
           return;
         }
 
@@ -1140,16 +1130,6 @@
         // Hide original SVG text
         textEl.setAttribute('visibility', 'hidden');
 
-        // Link overlay to its parent SVG for reactive visual updates.
-        // If the <text> lives inside .igs-circstat-svg, stamp a data-rv-id
-        // on the SVG so the overlay can find it without spatial matching.
-        let linkedSvgId = null;
-        const parentSvg = textEl.closest('.igs-circstat-svg');
-        if (parentSvg) {
-          linkedSvgId = parentSvg.getAttribute('data-rv-id') || `rv_circstat_${idx}`;
-          parentSvg.setAttribute('data-rv-id', linkedSvgId);
-        }
-
         // Save overlay data — renderAddedElements() will create the DOM element
         ensureAdded().textboxes.push({
           id: overlayId, text: content,
@@ -1158,7 +1138,6 @@
           fontSize, fontWeight, fontFamily,
           color: fill, textAlign,
           isSvgOverlay: true, svgTextIdx: idx,
-          linkedSvgId: linkedSvgId, // for reactive visual lookup
         });
         saveAddedElements();
       });
@@ -1245,6 +1224,7 @@
 
     // ═══ INLINE TEXT EDITING ═══
     function startInlineEdit(el) {
+      pushUndo();
       // Temporarily hide overlay so user can type
       editorOverlay.style.display = 'none';
 
@@ -1425,7 +1405,7 @@
         '.igs-slant-item', '.igs-slant-label', '.igs-slant-body',
         // ── Numbers / Stats family ──
         '.igs-stat-col', '.igs-stat-num', '.igs-stat-label', '.igs-stat-desc',
-        '.igs-circstat-col', '.igs-circstat-title', '.igs-circstat-desc',
+        '.igs-circstat-col', '.igs-circstat-num', '.igs-circstat-title', '.igs-circstat-desc',
         '.igs-barstat-item', '.igs-barstat-num', '.igs-barstat-title', '.igs-barstat-desc',
         '.igs-barstat-track', '.igs-barstat-fill',
         '.igs-starrating-item', '.igs-starrating-score', '.igs-starrating-title', '.igs-starrating-desc',
@@ -2962,7 +2942,6 @@
         const isSvgOverlay = tb.isSvgOverlay;
         div.className = isSvgOverlay ? 'added-textbox svg-text-overlay' : 'added-textbox';
         div.dataset.addedId = tb.id;
-        if (tb.linkedSvgId) div.dataset.linkedSvg = tb.linkedSvgId;
         // Support multiline: convert \n to <br> for display
         div.innerHTML = (tb.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
         const bgStyle = isSvgOverlay

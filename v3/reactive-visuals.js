@@ -158,8 +158,6 @@
     var pct = parsePctFill(numStr);
     var showFill = pct !== null;
     var fillLen = showFill ? +((pct / 100) * circ).toFixed(2) : 0;
-    var numEsc = escHtml(numStr);
-    var fontSize = numEsc.length <= 3 ? 22 : numEsc.length <= 5 ? 17 : 13;
 
     var outerRing = isExt
       ? '<circle cx="50" cy="50" r="46" fill="none" stroke="var(--accent-soft)" stroke-width="2"/>'
@@ -170,37 +168,21 @@
         + '" stroke-dasharray="' + fillLen + ' ' + circ + '" stroke-linecap="round" transform="rotate(-90 50 50)"/>'
       : '';
 
-    // Keep <text> with visibility:hidden so SVG text overlays still work
-    svg.innerHTML = outerRing + trackRing + fillRing
-      + '<text x="50" y="50" text-anchor="middle" dominant-baseline="central"'
-      + ' fill="var(--accent)" font-weight="bold" font-family="var(--font-heading)"'
-      + ' font-size="' + fontSize + '" visibility="hidden">' + numEsc + '</text>';
+    svg.innerHTML = outerRing + trackRing + fillRing;
   }
 
   /**
-   * Try to update the circle-stat SVG from el.
-   * Handles two cases:
-   *   1. el is inside .igs-circstat-col (direct child or descendant)
-   *   2. el is an SVG text overlay linked via data-linked-svg / data-rv-id
-   *
-   * @param {Element} el         - The edited element
-   * @param {Element} searchRoot - Root element to search for [data-rv-id] (for overlay lookup)
-   * @returns {boolean} true if a circle-stat was found and updated
+   * Update the circle-stat SVG arc from el (.igs-circstat-num).
+   * el is an HTML div inside .igs-circstat-col — simple DOM traversal,
+   * same pattern as updateBarStat.
    */
-  function updateCircleStat(el, searchRoot) {
+  function updateCircleStat(el) {
     var svg = null;
     var numStr = (el.textContent || '').trim();
 
-    // Case 1: el is inside a circstat-col
     if (el.closest) {
       var col = el.closest('.igs-circstat-col');
       if (col) svg = col.querySelector('.igs-circstat-svg');
-    }
-
-    // Case 2: SVG text overlay linked to circle-stat via data attribute
-    if (!svg && el.dataset && el.dataset.linkedSvg) {
-      var root = searchRoot || document;
-      svg = root.querySelector('.igs-circstat-svg[data-rv-id="' + el.dataset.linkedSvg + '"]');
     }
 
     if (!svg) return false;
@@ -214,16 +196,14 @@
    * Update the visual linked to an edited element.
    * Call this on blur / exitEdit after the user finishes editing a number.
    *
-   * @param {Element} el         - The element whose text was edited
-   * @param {Element} searchRoot - (optional) Root for spatial SVG overlay matching.
-   *                               Pass renderTarget in gallery-editor, omit in main tool.
+   * @param {Element} el - The element whose text was edited
    */
-  function updateVisualAfterEdit(el, searchRoot) {
+  function updateVisualAfterEdit(el) {
     if (!el) return;
     var cls = el.className || '';
 
-    // Circle-stats (check first — overlay has no igs- class, uses data-linked-svg)
-    if (updateCircleStat(el, searchRoot || document)) return;
+    // Circle-stats (HTML div inside .igs-circstat-col, same pattern as bar-stats)
+    if (cls.indexOf('igs-circstat-num') !== -1) { updateCircleStat(el); return; }
 
     // Bar-stats
     if (cls.indexOf('igs-barstat-num') !== -1) { updateBarStat(el); return; }

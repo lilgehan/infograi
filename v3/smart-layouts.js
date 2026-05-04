@@ -1290,10 +1290,25 @@ export const NUMBERS_CSS = `
   max-width: 160px;
   flex: 1;
 }
-.ig-page .igs-circstat-svg {
+.ig-page .igs-circstat-wrap {
+  position: relative;
   width: 100%;
   max-width: 120px;
+}
+.ig-page .igs-circstat-svg {
+  width: 100%;
   display: block;
+}
+.ig-page .igs-circstat-num {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-heading);
+  font-weight: bold;
+  color: var(--accent);
+  text-align: center;
+  line-height: 1;
+  pointer-events: auto;
 }
 .ig-page .igs-circstat-title {
   font-family: var(--font-heading);
@@ -1638,13 +1653,13 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
 
       const svg = `<svg class="igs-circstat-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
         ${outerRing}${trackRing}${fillRing}
-        <text x="50" y="50" text-anchor="middle" dominant-baseline="central"
-          fill="var(--accent)" font-weight="bold" font-family="var(--font-heading)"
-          font-size="${fontSize}">${numEsc}</text>
       </svg>`;
 
       return `<div class="igs-circstat-col">
-        ${svg}
+        <div class="igs-circstat-wrap">
+          ${svg}
+          <div class="igs-circstat-num" style="font-size:${fontSize}px">${numEsc}</div>
+        </div>
         ${title ? `<div class="igs-circstat-title">${title}</div>` : ''}
         ${desc  ? `<div class="igs-circstat-desc">${desc}</div>`   : ''}
       </div>`;

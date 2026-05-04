@@ -74,7 +74,7 @@
     '.igs-pill', '.igs-slant-body',
     // Numbers
     '.igs-stat-num', '.igs-stat-label', '.igs-stat-desc',
-    '.igs-circstat-title', '.igs-circstat-desc',
+    '.igs-circstat-num', '.igs-circstat-title', '.igs-circstat-desc',
     '.igs-barstat-num', '.igs-barstat-title', '.igs-barstat-desc',
     '.igs-starrating-score', '.igs-starrating-title', '.igs-starrating-desc',
     '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
