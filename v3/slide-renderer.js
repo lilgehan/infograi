@@ -528,6 +528,29 @@ const DECK_LAYOUT_CSS = `
   /* No padding, no margin — the diagram inside owns its own spacing. */
 }
 
+/* ── Toolbar visibility fix (Phase 3 Unified Interaction follow-up) ──
+   Content zones inherit overflow:hidden from the .igs-zone base rule in
+   slide-templates.js. That clips the selection toolbar (top:-64px from
+   the wrapper) when the wrapper sits in a column zone with a title row
+   above it (C1-C4, D1, D2, E3 — column templates with separate title
+   rows). Override here so the toolbar can render above the wrapper into
+   the title row's vertical space, which is the same behavior that works
+   naturally on B1-B6 / A1 / E5. The slide root keeps its overflow:hidden,
+   so the toolbar is still bounded by the slide edge. ── */
+.igs-slide .igs-zone-content {
+  overflow: visible;
+}
+
+/* ── Smart toolbar flip — when there isn't 80px of clearance above the
+   wrapper inside the slide, the toolbar flips below the wrapper. JS in
+   slide-deck-ui.js adds .igs-toolbar-below to the wrapper on selection.
+   Covers the edge case where a wrapper sits at the very top of an A1 / E1
+   slide with no title row above it. ── */
+.igs-block-wrapper.igs-toolbar-below .igs-block-toolbar {
+  top: auto;
+  bottom: -52px;
+}
+
 /* ── Slide boundary flash (Section 12.4 Rule 5) ──
    Triggered when an Enter keystroke would push content past the slide
    bottom edge. The handler adds .igs-boundary-flash to the slide element

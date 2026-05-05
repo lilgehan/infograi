@@ -253,16 +253,46 @@ function setSelected(blockId) {
     const prev = wrap.querySelector(
       `.igs-block-wrapper[data-block-id="${cssEscape(interactionState.selectedBlockId)}"]`
     );
-    if (prev) prev.classList.remove('igs-selected');
+    if (prev) {
+      prev.classList.remove('igs-selected');
+      prev.classList.remove('igs-toolbar-below');
+    }
   }
   interactionState.selectedBlockId = blockId;
   if (wrap && blockId) {
     const next = wrap.querySelector(
       `.igs-block-wrapper[data-block-id="${cssEscape(blockId)}"]`
     );
-    if (next) next.classList.add('igs-selected');
+    if (next) {
+      next.classList.add('igs-selected');
+      _positionToolbarSmart(next);
+    }
   }
   setMode(blockId ? 'selectedBlock' : 'idle');
+}
+
+/**
+ * Toolbar smart positioning — flip the toolbar BELOW the wrapper when
+ * there isn't enough vertical clearance above (less than ~80px in slide
+ * coordinates). Solves the edge case where a wrapper sits at the very
+ * top of a slide with no title row above (A1 first block, E1 quote
+ * inside the quote zone, etc.).
+ */
+function _positionToolbarSmart(wrapper) {
+  if (!wrapper) return;
+  const slide = wrapper.closest('.igs-slide');
+  if (!slide) return;
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const slideRect   = slide.getBoundingClientRect();
+  if (slideRect.height === 0) return;
+  const scaleY = slideRect.height / 540;
+  const TOOLBAR_NEEDED_ABOVE = 80; // toolbar height ~36 + grab bar 16 + cushion 28
+  const availableAbove = (wrapperRect.top - slideRect.top) / scaleY;
+  if (availableAbove < TOOLBAR_NEEDED_ABOVE) {
+    wrapper.classList.add('igs-toolbar-below');
+  } else {
+    wrapper.classList.remove('igs-toolbar-below');
+  }
 }
 
 function clearSelection() {
@@ -275,9 +305,10 @@ function clearSelection() {
   }
   const wrap = byId('outputWrap');
   if (wrap) {
-    wrap.querySelectorAll('.igs-block-wrapper.igs-selected').forEach(el =>
-      el.classList.remove('igs-selected')
-    );
+    wrap.querySelectorAll('.igs-block-wrapper.igs-selected').forEach(el => {
+      el.classList.remove('igs-selected');
+      el.classList.remove('igs-toolbar-below');
+    });
   }
   interactionState.selectedBlockId = null;
   if (_state && _state.replaceMode) {
@@ -305,6 +336,130 @@ function clearHover() {
 function cssEscape(value) {
   if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(value);
   return String(value).replace(/([^A-Za-z0-9_-])/g, '\\$1');
+}
+
+/* ─────────────────────────────────────────
+   DECK-MODE UNDO / REDO HISTORY
+   Snapshots the deck (and active slide id) BEFORE every state-mutating
+   operation. Cmd+Z restores the most recent snapshot; Cmd+Shift+Z (or
+   Cmd+Y) replays the next one. Text-edit keystrokes are NOT pushed —
+   the browser's native contenteditable undo handles those — so the deck
+   stack stays focused on structural changes (add/delete/reorder slides
+   and blocks, template swaps, replace operations).
+───────────────────────────────────────── */
+
+const _deckHistory = {
+  past:   [],
+  future: [],
+  max:    50,
+};
+
+function _deckDeepClone(value) {
+  if (typeof structuredClone === 'function') {
+    try { return structuredClone(value); } catch { /* fall through */ }
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
+/**
+ * Snapshot the current deck onto the past stack and clear the redo stack.
+ * Call this BEFORE every mutating operation (add/remove slide, add/remove
+ * block, template change, replace). The snapshot includes the active slide
+ * id so undo restores you to the same view.
+ */
+function _pushHistory() {
+  if (!_state) return;
+  const snap = {
+    deck: _deckDeepClone(_state.deck),
+    activeSlideId: _state.activeSlideId,
+  };
+  _deckHistory.past.push(snap);
+  if (_deckHistory.past.length > _deckHistory.max) {
+    _deckHistory.past.shift();
+  }
+  // A new operation invalidates everything in the redo stack.
+  _deckHistory.future = [];
+  _updateUndoRedoButtonsExternal();
+}
+
+function _restoreFromSnapshot(snap) {
+  if (!_state || !snap) return;
+  _state.deck = snap.deck;
+  // Validate activeSlideId — it may point to a slide that no longer exists.
+  if (getSlide(_state.deck, snap.activeSlideId)) {
+    _state.activeSlideId = snap.activeSlideId;
+  } else if (_state.deck.slides.length > 0) {
+    _state.activeSlideId = _state.deck.slides[0].id;
+  }
+  // Drop selection / hover / mode — they referenced the previous DOM.
+  setHovered(null);
+  clearSelection();
+  setMode('idle');
+  interactionState.activeTextEl = null;
+  rerenderEverything();
+}
+
+/** Public: called by slide-deck-ui internals and by app.js's undo button. */
+export function undoDeck() {
+  if (!_state) return false;
+  if (_deckHistory.past.length === 0) return false;
+  // Push the current state onto the redo stack before restoring.
+  const current = {
+    deck: _deckDeepClone(_state.deck),
+    activeSlideId: _state.activeSlideId,
+  };
+  const prev = _deckHistory.past.pop();
+  _deckHistory.future.push(current);
+  if (_deckHistory.future.length > _deckHistory.max) {
+    _deckHistory.future.shift();
+  }
+  _restoreFromSnapshot(prev);
+  _updateUndoRedoButtonsExternal();
+  return true;
+}
+
+export function redoDeck() {
+  if (!_state) return false;
+  if (_deckHistory.future.length === 0) return false;
+  const current = {
+    deck: _deckDeepClone(_state.deck),
+    activeSlideId: _state.activeSlideId,
+  };
+  const next = _deckHistory.future.pop();
+  _deckHistory.past.push(current);
+  if (_deckHistory.past.length > _deckHistory.max) {
+    _deckHistory.past.shift();
+  }
+  _restoreFromSnapshot(next);
+  _updateUndoRedoButtonsExternal();
+  return true;
+}
+
+/** Read-only state for app.js to dim undo/redo buttons appropriately. */
+export function canUndoDeck() { return _state !== null && _deckHistory.past.length   > 0; }
+export function canRedoDeck() { return _state !== null && _deckHistory.future.length > 0; }
+
+/**
+ * Reset the history. Called on enter/exit so a fresh deck starts with a
+ * clean stack and a previous deck's history doesn't leak into the next.
+ */
+function _clearDeckHistory() {
+  _deckHistory.past   = [];
+  _deckHistory.future = [];
+}
+
+/**
+ * Tell app.js to re-evaluate the undo/redo button dim state. Lazy lookup —
+ * app.js owns the function and registers it on `window.IgDeckUndoRedo` if
+ * it's available. We keep it loose so slide-deck-ui doesn't hard-depend
+ * on app.js.
+ */
+function _updateUndoRedoButtonsExternal() {
+  if (typeof window !== 'undefined' &&
+      window.IgDeckUndoRedo &&
+      typeof window.IgDeckUndoRedo.refresh === 'function') {
+    try { window.IgDeckUndoRedo.refresh(); } catch {}
+  }
 }
 /* shape:
    {
@@ -368,6 +523,7 @@ export function enterSlideDeckMode(initialTopic, tone, accentColor) {
   };
 
   injectDeckModeCSS();
+  _clearDeckHistory();
   renderThumbnailPanel();
   renderGalleryPanel();
   renderActiveSlide();
@@ -410,6 +566,7 @@ export function exitSlideDeckMode() {
   setMode('idle');
   interactionState.activeTextEl = null;
   _canvasInputWired = false;
+  _clearDeckHistory();
 
   hidePopover();
   hideContextMenu();
@@ -889,6 +1046,7 @@ function closeGalleryOverlay() {
 function applyTemplateToActiveSlide(templateId) {
   if (!_state || !templateId) return;
   if (!TEMPLATES[templateId]) return;
+  _pushHistory();
   _state.deck = changeSlideTemplate(
     _state.deck,
     _state.activeSlideId,
@@ -1039,6 +1197,7 @@ function navigateSlide(delta) {
 
 function insertSlideAfter(afterSlideId, templateId) {
   if (!_state) return;
+  _pushHistory();
   _state.deck = addSlide(_state.deck, templateId, afterSlideId);
   // Activate the new slide (the one after afterSlideId)
   const idx = _state.deck.slides.findIndex(s => s.id === afterSlideId);
@@ -1049,6 +1208,7 @@ function insertSlideAfter(afterSlideId, templateId) {
 
 function duplicateActiveSlide() {
   if (!_state) return;
+  _pushHistory();
   const id = _state.activeSlideId;
   _state.deck = duplicateSlide(_state.deck, id);
   // Activate the duplicate
@@ -1061,6 +1221,7 @@ function duplicateActiveSlide() {
 function deleteActiveSlide() {
   if (!_state) return;
   if (_state.deck.slides.length <= 1) return;
+  _pushHistory();
   const id = _state.activeSlideId;
   const idx = _state.deck.slides.findIndex(s => s.id === id);
   _state.deck = removeSlide(_state.deck, id);
@@ -1142,6 +1303,7 @@ function insertBlockOnActiveSlide(variant, family) {
     size:     { widthPct: 100, heightPct: null },
   };
 
+  _pushHistory();
   _state.deck = withSlide(_state.deck, slide.id, s => addBlock(s, blockDef));
   rerenderEverything();
 }
@@ -1325,6 +1487,25 @@ function handleKeyDown(e) {
   const tag = (e.target && e.target.tagName) || '';
   // Always let regular form fields handle their own keys (API key input, etc.).
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  // Cmd+Z / Cmd+Shift+Z / Cmd+Y — deck-level undo / redo for structural
+  // operations (add/delete slide, add/delete block, replace, template
+  // change). Inside a contenteditable element, let the browser handle
+  // text-level undo natively — don't preventDefault.
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) {
+    if (interactionState.mode === 'editingText' && interactionState.activeTextEl) {
+      // Browser owns text-level undo inside contenteditable.
+      return;
+    }
+    e.preventDefault();
+    if (e.key === 'y' || e.key === 'Y' || ((e.key === 'z' || e.key === 'Z') && e.shiftKey)) {
+      redoDeck();
+    } else {
+      undoDeck();
+    }
+    return;
+  }
 
   switch (interactionState.mode) {
     case 'editingText':       handleKeyDownInTextEdit(e);    return;
@@ -1775,11 +1956,31 @@ function handleCanvasMouseDown(e) {
     return;
   }
 
-  // (4) Contenteditable text — Section 12 Rule 21. Edit, don't select.
-  // The browser handles caret placement; we just record the active element.
+  // (4) Contenteditable text — Lily-amended Rule 21 (Option B).
+  // Original spec: clicking text places caret AND deselects any block.
+  // Amended: clicking text inside a diagram block ALSO selects the parent
+  // block (toolbar follows the user — Figma/PowerPoint/Canva pattern). The
+  // INTERACTION mode stays 'editingText' so Delete deletes characters, not
+  // the block. Clicking text outside a diagram (slide title, free-text
+  // block, etc.) still deselects any prior block selection.
   const editableEl = t.closest('[contenteditable="true"]');
   if (editableEl) {
-    if (interactionState.selectedBlockId) clearSelection();
+    const wrapper = editableEl.closest('.igs-block-wrapper');
+    const isDiagramBlock = wrapper && !wrapper.classList.contains('igs-text-block');
+
+    if (isDiagramBlock) {
+      const blockId = wrapper.getAttribute('data-block-id');
+      if (blockId) {
+        // setSelected swaps the .igs-selected class on the wrappers and
+        // runs smart toolbar positioning. We then override the mode below
+        // so keyboard handling stays in editingText (Delete = chars).
+        setSelected(blockId);
+      }
+    } else if (interactionState.selectedBlockId) {
+      // Slide title / free-text / other contenteditable outside a diagram.
+      clearSelection();
+    }
+
     interactionState.activeTextEl = editableEl;
     setMode('editingText');
     // Don't preventDefault — let the browser place the caret naturally.
@@ -2245,6 +2446,7 @@ function _deleteSelectedBlock() {
   if (!blockId) return;
   const slideId = _state.activeSlideId;
   if (!slideId) return;
+  _pushHistory();
   _state.deck = withSlide(_state.deck, slideId, s => removeBlock(s, blockId));
   clearSelection();
   setMode('idle');
@@ -2285,6 +2487,7 @@ function _replaceSelectedBlockVariant(variant, family) {
     if (newItems.length > fixed) newItems = newItems.slice(0, fixed);
   }
 
+  _pushHistory();
   _state.deck = withSlide(_state.deck, slideId, s =>
     updateBlock(s, blockId, {
       variant,

@@ -5,6 +5,7 @@ import { detectAndParse                  } from './v3/schema.js';
 import { getArchetype, ARCHETYPE_IDS     } from './v3/archetypes.js';
 import {
   enterSlideDeckMode, exitSlideDeckMode, applyToneToDeck, generateDemoDeck,
+  undoDeck, redoDeck, canUndoDeck, canRedoDeck,
 } from './v3/slide-deck-ui.js';
 
 /* ============================================================
@@ -1093,6 +1094,13 @@ function pushUndoSnapshot() {
 }
 
 function performUndo() {
+  // In Slide Deck mode, delegate to the deck-mode history (structural ops:
+  // add/delete slide, add/delete block, replace, template change).
+  if (STATE.mode === 'deck') {
+    undoDeck();
+    updateUndoRedoButtons();
+    return;
+  }
   if (HISTORY.index <= 0) return;
   HISTORY.index--;
   restoreSnapshot(HISTORY.stack[HISTORY.index]);
@@ -1100,6 +1108,11 @@ function performUndo() {
 }
 
 function performRedo() {
+  if (STATE.mode === 'deck') {
+    redoDeck();
+    updateUndoRedoButtons();
+    return;
+  }
   if (HISTORY.index >= HISTORY.stack.length - 1) return;
   HISTORY.index++;
   restoreSnapshot(HISTORY.stack[HISTORY.index]);
@@ -1120,6 +1133,11 @@ function restoreSnapshot(html) {
 function updateUndoRedoButtons() {
   const btnUndo = $('btnUndo');
   const btnRedo = $('btnRedo');
+  if (STATE.mode === 'deck') {
+    if (btnUndo) btnUndo.style.opacity = canUndoDeck() ? '' : '0.35';
+    if (btnRedo) btnRedo.style.opacity = canRedoDeck() ? '' : '0.35';
+    return;
+  }
   if (btnUndo) btnUndo.style.opacity = HISTORY.index <= 0 ? '0.35' : '';
   if (btnRedo) btnRedo.style.opacity = HISTORY.index >= HISTORY.stack.length - 1 ? '0.35' : '';
 }
@@ -1523,6 +1541,12 @@ function setupRibbon() {
   // Undo / Redo
   $('btnUndo').addEventListener('mousedown', (e) => { e.preventDefault(); performUndo(); });
   $('btnRedo').addEventListener('mousedown', (e) => { e.preventDefault(); performRedo(); });
+
+  // Bridge: slide-deck-ui calls window.IgDeckUndoRedo.refresh() after every
+  // structural mutation so the toolbar undo/redo buttons dim correctly in
+  // deck mode without slide-deck-ui needing to import from app.js.
+  window.IgDeckUndoRedo = window.IgDeckUndoRedo || {};
+  window.IgDeckUndoRedo.refresh = updateUndoRedoButtons;
 
   // B I U S
   $('btnBold').addEventListener('mousedown',      (e) => { e.preventDefault(); applyBold(); });
