@@ -33,42 +33,52 @@ export const TEMPLATES = {
   A4: { id: 'A4', name: 'Closing',         category: 'A', zones: [{ name: 'content', type: 'closing-block' }] },
 
   /* ── B — Accent Image Templates ──────────── */
-  B1: { id: 'B1', name: 'Accent Left',         category: 'B', zones: [
+  /* All B-templates carry an inline title at the top of their content zone
+     (Phase 3A). The zone CSS-grid layout itself does not change — the title
+     element is rendered as the first child of .igs-zone-content via the
+     renderer when `inlineTitle: true`. */
+  B1: { id: 'B1', name: 'Accent Left',         category: 'B', inlineTitle: true, zones: [
     { name: 'accent',  type: 'accent' },
     { name: 'content', type: 'content' },
   ]},
-  B2: { id: 'B2', name: 'Accent Right',        category: 'B', zones: [
+  B2: { id: 'B2', name: 'Accent Right',        category: 'B', inlineTitle: true, zones: [
     { name: 'content', type: 'content' },
     { name: 'accent',  type: 'accent' },
   ]},
-  B3: { id: 'B3', name: 'Accent Top',          category: 'B', zones: [
+  B3: { id: 'B3', name: 'Accent Top',          category: 'B', inlineTitle: true, zones: [
     { name: 'accent',  type: 'accent' },
     { name: 'content', type: 'content' },
   ]},
-  B4: { id: 'B4', name: 'Accent Bottom',       category: 'B', zones: [
+  B4: { id: 'B4', name: 'Accent Bottom',       category: 'B', inlineTitle: true, zones: [
     { name: 'content', type: 'content' },
     { name: 'accent',  type: 'accent' },
   ]},
-  B5: { id: 'B5', name: 'Accent Left Narrow',  category: 'B', zones: [
+  B5: { id: 'B5', name: 'Accent Left Narrow',  category: 'B', inlineTitle: true, zones: [
     { name: 'accent',  type: 'accent' },
     { name: 'content', type: 'content' },
   ]},
-  B6: { id: 'B6', name: 'Accent Right Narrow', category: 'B', zones: [
+  B6: { id: 'B6', name: 'Accent Right Narrow', category: 'B', inlineTitle: true, zones: [
     { name: 'content', type: 'content' },
     { name: 'accent',  type: 'accent' },
   ]},
 
   /* ── C — Column Layouts ──────────────────── */
+  /* C1-C4 carry a full-width title row above the columns (Phase 3A).
+     C5 and C6 already had explicit `header` zones — those stay as-is. */
   C1: { id: 'C1', name: 'Two Columns Equal',     category: 'C', zones: [
+    { name: 'title', type: 'title-block' },
     { name: 'left',  type: 'content' }, { name: 'right', type: 'content' },
   ]},
   C2: { id: 'C2', name: 'Two Columns Wide-Left', category: 'C', zones: [
+    { name: 'title', type: 'title-block' },
     { name: 'left',  type: 'content' }, { name: 'right', type: 'content' },
   ]},
   C3: { id: 'C3', name: 'Two Columns Wide-Right', category: 'C', zones: [
+    { name: 'title', type: 'title-block' },
     { name: 'left',  type: 'content' }, { name: 'right', type: 'content' },
   ]},
   C4: { id: 'C4', name: 'Three Columns',         category: 'C', zones: [
+    { name: 'title', type: 'title-block' },
     { name: 'col1', type: 'content' }, { name: 'col2', type: 'content' }, { name: 'col3', type: 'content' },
   ]},
   C5: { id: 'C5', name: 'Two Columns + Header',  category: 'C', zones: [
@@ -80,11 +90,15 @@ export const TEMPLATES = {
   ]},
 
   /* ── D — Mixed Image + Content ───────────── */
+  /* D1 and D2 carry a full-width title row above the image+columns area
+     (Phase 3A). D3 and D4 already had `header` zones — those stay as-is. */
   D1: { id: 'D1', name: 'Image Left + Two Columns', category: 'D', zones: [
+    { name: 'title', type: 'title-block' },
     { name: 'accent', type: 'accent' },
     { name: 'col1', type: 'content' }, { name: 'col2', type: 'content' },
   ]},
   D2: { id: 'D2', name: 'Image Right + Two Columns', category: 'D', zones: [
+    { name: 'title', type: 'title-block' },
     { name: 'col1', type: 'content' }, { name: 'col2', type: 'content' },
     { name: 'accent', type: 'accent' },
   ]},
@@ -101,12 +115,13 @@ export const TEMPLATES = {
   E1: { id: 'E1', name: 'Quote Slide',     category: 'E', zones: [{ name: 'content', type: 'quote-block' }] },
   E2: { id: 'E2', name: 'Big Number',      category: 'E', zones: [{ name: 'content', type: 'big-number' }] },
   E3: { id: 'E3', name: 'Comparison',      category: 'E', zones: [
+    { name: 'title', type: 'title-block' },
     { name: 'left',  type: 'content' }, { name: 'right', type: 'content' },
   ]},
   E4: { id: 'E4', name: 'Full-Bleed Image', category: 'E', zones: [
     { name: 'accent', type: 'accent' }, { name: 'content', type: 'overlay' },
   ]},
-  E5: { id: 'E5', name: 'Agenda / TOC',    category: 'E', zones: [
+  E5: { id: 'E5', name: 'Agenda / TOC',    category: 'E', inlineTitle: true, zones: [
     { name: 'content', type: 'content' }, { name: 'accent', type: 'accent' },
   ]},
   E6: { id: 'E6', name: 'Call to Action',  category: 'E', zones: [{ name: 'content', type: 'cta-block' }] },
@@ -220,6 +235,61 @@ export const TEMPLATE_CSS = `
   line-height: 1.4;
   margin: 0;
   color: var(--text-secondary, #6b7280);
+}
+
+/* ── Phase 3A — Title zones on B/C/D/E templates ──
+   .igs-zone-title is the wrapper rendered either inline at the top of a
+   content zone (B1-B6, E5) or as the standalone full-width title row
+   (C1-C4, D1, D2, E3). It carries an H2 inside. The size is smaller
+   than the special A2/A3 hero titles (28-32px range). */
+.igs-zone-title {
+  flex: 0 0 auto;
+  width: 100%;
+  margin-bottom: 12px;
+}
+.igs-zone .igs-slide-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+  outline: none;
+  color: var(--text-primary, #1A1A2E);
+  cursor: text;
+}
+/* Phase 3C — Invisible editing: placeholder via CSS attr(). The H2 is always
+   contenteditable; when empty, this :empty::before injects the placeholder
+   text. Disappears the moment the user types, with no JS bookkeeping. */
+.igs-slide-title[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #9aa3ad;
+  font-style: italic;
+  font-weight: 600;
+  opacity: 0.75;
+  pointer-events: none;
+}
+/* Same placeholder pattern for diagram text and free text — invisible editing. */
+.igs-slide [data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #9aa3ad;
+  font-style: italic;
+  opacity: 0.65;
+  pointer-events: none;
+}
+/* No focus ring on text edit — invisible editing means no "selected" affordance.
+   The browser's native caret indicates editing position. */
+.igs-slide-title[contenteditable="true"]:focus,
+.igs-slide [contenteditable="true"]:focus {
+  outline: none;
+}
+/* Ensure full-width title rows at top of column templates align nicely */
+.igs-zone-content[data-zone="title"],
+.igs-zone-content[data-zone="header"] {
+  padding: 22px 48px 14px;
+}
+.igs-zone-content[data-zone="title"] .igs-zone-title,
+.igs-zone-content[data-zone="header"] .igs-zone-title {
+  margin-bottom: 0;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -371,38 +441,66 @@ export const TEMPLATE_CSS = `
    CATEGORY C — Column Layouts (no accent image)
    ══════════════════════════════════════════════════════════ */
 
-/* C1 — Two Columns Equal 50 / 3 / 50 */
+/* C1 — Two Columns Equal 50 / 3 / 50 (with 15% title row) */
 .igs-slide[data-template="C1"] {
   display: grid;
   grid-template-columns: 48.5% 3% 48.5%;
+  grid-template-rows: 15% 3% 82%;
 }
-.igs-slide[data-template="C1"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
-.igs-slide[data-template="C1"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+.igs-slide[data-template="C1"] > .igs-zone-content[data-zone="title"] {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+  align-items: flex-start;
+  justify-content: center;
+}
+.igs-slide[data-template="C1"] > .igs-zone-content[data-zone="left"]  { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="C1"] > .igs-zone-content[data-zone="right"] { grid-column: 3; grid-row: 3; }
 
-/* C2 — Wide-Left 60 / 3 / 37 */
+/* C2 — Wide-Left 60 / 3 / 37 (with 15% title row) */
 .igs-slide[data-template="C2"] {
   display: grid;
   grid-template-columns: 60% 3% 37%;
+  grid-template-rows: 15% 3% 82%;
 }
-.igs-slide[data-template="C2"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
-.igs-slide[data-template="C2"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+.igs-slide[data-template="C2"] > .igs-zone-content[data-zone="title"] {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+  align-items: flex-start;
+  justify-content: center;
+}
+.igs-slide[data-template="C2"] > .igs-zone-content[data-zone="left"]  { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="C2"] > .igs-zone-content[data-zone="right"] { grid-column: 3; grid-row: 3; }
 
-/* C3 — Wide-Right 37 / 3 / 60 */
+/* C3 — Wide-Right 37 / 3 / 60 (with 15% title row) */
 .igs-slide[data-template="C3"] {
   display: grid;
   grid-template-columns: 37% 3% 60%;
+  grid-template-rows: 15% 3% 82%;
 }
-.igs-slide[data-template="C3"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
-.igs-slide[data-template="C3"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+.igs-slide[data-template="C3"] > .igs-zone-content[data-zone="title"] {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+  align-items: flex-start;
+  justify-content: center;
+}
+.igs-slide[data-template="C3"] > .igs-zone-content[data-zone="left"]  { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="C3"] > .igs-zone-content[data-zone="right"] { grid-column: 3; grid-row: 3; }
 
-/* C4 — Three Columns Equal 31 / 3 / 31 / 3 / 31 (with 1% adjustment for safety) */
+/* C4 — Three Columns Equal 31 / 3 / 31 / 3 / 31 (with 15% title row) */
 .igs-slide[data-template="C4"] {
   display: grid;
   grid-template-columns: 31% 3% 31% 3% 31%;
+  grid-template-rows: 15% 3% 82%;
 }
-.igs-slide[data-template="C4"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
-.igs-slide[data-template="C4"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
-.igs-slide[data-template="C4"] > .igs-zone-content:nth-child(3) { grid-column: 5; }
+.igs-slide[data-template="C4"] > .igs-zone-content[data-zone="title"] {
+  grid-column: 1 / span 5;
+  grid-row: 1;
+  align-items: flex-start;
+  justify-content: center;
+}
+.igs-slide[data-template="C4"] > .igs-zone-content[data-zone="col1"] { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="C4"] > .igs-zone-content[data-zone="col2"] { grid-column: 3; grid-row: 3; }
+.igs-slide[data-template="C4"] > .igs-zone-content[data-zone="col3"] { grid-column: 5; grid-row: 3; }
 
 /* C5 — Two Columns + Header (header 25%, columns 70% with 5% gap row) */
 .igs-slide[data-template="C5"] {
@@ -437,23 +535,37 @@ export const TEMPLATE_CSS = `
    CATEGORY D — Mixed Image + Content Columns
    ══════════════════════════════════════════════════════════ */
 
-/* D1 — Image Left 35 + 3 + (col1 30 + 2 + col2 30) */
+/* D1 — Image Left 35 + 3 + (col1 30 + 2 + col2 30) (with 15% title row) */
 .igs-slide[data-template="D1"] {
   display: grid;
   grid-template-columns: 35% 3% 30% 2% 30%;
+  grid-template-rows: 15% 3% 82%;
 }
-.igs-slide[data-template="D1"] > .igs-zone-accent              { grid-column: 1; }
-.igs-slide[data-template="D1"] > .igs-zone-content[data-zone="col1"] { grid-column: 3; }
-.igs-slide[data-template="D1"] > .igs-zone-content[data-zone="col2"] { grid-column: 5; }
+.igs-slide[data-template="D1"] > .igs-zone-content[data-zone="title"] {
+  grid-column: 1 / span 5;
+  grid-row: 1;
+  align-items: flex-start;
+  justify-content: center;
+}
+.igs-slide[data-template="D1"] > .igs-zone-accent              { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="D1"] > .igs-zone-content[data-zone="col1"] { grid-column: 3; grid-row: 3; }
+.igs-slide[data-template="D1"] > .igs-zone-content[data-zone="col2"] { grid-column: 5; grid-row: 3; }
 
-/* D2 — Image Right (col1 30 + 2 + col2 30) + 3 + 35 */
+/* D2 — Image Right (col1 30 + 2 + col2 30) + 3 + 35 (with 15% title row) */
 .igs-slide[data-template="D2"] {
   display: grid;
   grid-template-columns: 30% 2% 30% 3% 35%;
+  grid-template-rows: 15% 3% 82%;
 }
-.igs-slide[data-template="D2"] > .igs-zone-content[data-zone="col1"] { grid-column: 1; }
-.igs-slide[data-template="D2"] > .igs-zone-content[data-zone="col2"] { grid-column: 3; }
-.igs-slide[data-template="D2"] > .igs-zone-accent              { grid-column: 5; }
+.igs-slide[data-template="D2"] > .igs-zone-content[data-zone="title"] {
+  grid-column: 1 / span 5;
+  grid-row: 1;
+  align-items: flex-start;
+  justify-content: center;
+}
+.igs-slide[data-template="D2"] > .igs-zone-content[data-zone="col1"] { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="D2"] > .igs-zone-content[data-zone="col2"] { grid-column: 3; grid-row: 3; }
+.igs-slide[data-template="D2"] > .igs-zone-accent              { grid-column: 5; grid-row: 3; }
 
 /* D3 — Header + Image Left + Content Right */
 .igs-slide[data-template="D3"] {
@@ -551,15 +663,23 @@ export const TEMPLATE_CSS = `
   margin-top: 12px;
 }
 
-/* E3 — Comparison (Side-by-Side) */
+/* E3 — Comparison (Side-by-Side) (with 15% title row) */
 .igs-slide[data-template="E3"] {
   display: grid;
   grid-template-columns: 48.5% 3% 48.5%;
+  grid-template-rows: 15% 3% 82%;
   background:
     linear-gradient(to right, transparent 49.95%, var(--card-border, #e5e7eb) 49.95%, var(--card-border, #e5e7eb) 50.05%, transparent 50.05%);
 }
-.igs-slide[data-template="E3"] > .igs-zone-content:nth-child(1) { grid-column: 1; }
-.igs-slide[data-template="E3"] > .igs-zone-content:nth-child(2) { grid-column: 3; }
+.igs-slide[data-template="E3"] > .igs-zone-content[data-zone="title"] {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+  background: var(--card-bg, #fff);
+  align-items: flex-start;
+  justify-content: center;
+}
+.igs-slide[data-template="E3"] > .igs-zone-content[data-zone="left"]  { grid-column: 1; grid-row: 3; }
+.igs-slide[data-template="E3"] > .igs-zone-content[data-zone="right"] { grid-column: 3; grid-row: 3; }
 
 /* E4 — Full-Bleed Image with overlay text band */
 .igs-slide[data-template="E4"] {

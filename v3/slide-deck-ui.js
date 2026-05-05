@@ -23,7 +23,8 @@
 
 import {
   createDeck, addSlide, removeSlide, duplicateSlide,
-  addBlock, getSlide, blocksInZone, withSlide, changeSlideTemplate,
+  addBlock, removeBlock, updateBlock, getSlide, blocksInZone, withSlide,
+  changeSlideTemplate, updateSlide,
 } from './slide-deck.js';
 import { renderSlide, DECK_MODE_CSS } from './slide-renderer.js';
 import { TEMPLATES, getTemplateZones, renderSlideTemplate } from './slide-templates.js';
@@ -198,6 +199,21 @@ let _state = null;
      openSections: { boxes: true, bullets: false, ... },   // gallery accordion state
      popover: null | HTMLElement,
      contextMenu: null | HTMLElement,
+     // Phase 3C — Cursor system
+     editing: null | {
+       element: HTMLElement,
+       kind: 'title' | 'diagram-text' | 'free-text-new' | 'free-text-existing',
+       slideId: string,
+       blockId?: string,
+       itemIndex?: number,
+       fieldName?: 'title' | 'body',
+       zoneName?: string,
+       originalText?: string,
+     },
+     // Phase 3D — Selection
+     selected: null | { blockId: string, slideId: string },
+     // Phase 3D — Replace flow
+     replaceMode: null | { blockId: string, slideId: string },
    }
 */
 
@@ -341,6 +357,7 @@ export function generateDemoDeck(topic, tone, accentColor) {
   /* ── Slide 2: A1 Blank with solid-boxes (3 items) ── */
   deck = addSlide(deck, 'A1', s1id);
   const s2id = deck.slides[deck.slides.length - 1].id;
+  /* A1 has no title zone (per spec). No title set. */
   deck = withSlide(deck, s2id, s => addBlock(s, {
     type:    'diagram',
     family:  'boxes',
@@ -356,7 +373,7 @@ export function generateDemoDeck(topic, tone, accentColor) {
   }));
 
   /* ── Slide 3: B1 Accent Left with arrow-bullets (4 items) ── */
-  deck = addSlide(deck, 'B1', s2id);
+  deck = addSlide(deck, 'B1', s2id, { title: 'Our Approach' });
   const s3id = deck.slides[deck.slides.length - 1].id;
   deck = withSlide(deck, s3id, s => addBlock(s, {
     type:    'diagram',
@@ -374,7 +391,7 @@ export function generateDemoDeck(topic, tone, accentColor) {
   }));
 
   /* ── Slide 4: C1 Two Columns — circle-stats left, bar-stats right ── */
-  deck = addSlide(deck, 'C1', s3id);
+  deck = addSlide(deck, 'C1', s3id, { title: 'Key Performance Metrics' });
   const s4id = deck.slides[deck.slides.length - 1].id;
   deck = withSlide(deck, s4id, s => addBlock(s, {
     type:    'diagram',
@@ -405,7 +422,7 @@ export function generateDemoDeck(topic, tone, accentColor) {
   }));
 
   /* ── Slide 5: B2 Accent Right with timeline (4 items) ── */
-  deck = addSlide(deck, 'B2', s4id);
+  deck = addSlide(deck, 'B2', s4id, { title: 'Implementation Roadmap' });
   const s5id = deck.slides[deck.slides.length - 1].id;
   deck = withSlide(deck, s5id, s => addBlock(s, {
     type:    'diagram',
@@ -770,6 +787,14 @@ function renderActiveSlide() {
   fitSlideStage();
   ensureCanvasResizeObserver();
 
+  // Phase 3C — invisible editing: every text node is contenteditable from
+  // render time, and the canvas-level input handler is wired exactly once.
+  wireCanvasEditingOnce();
+  makeSlideTextEditable();
+  // Drop any block selection from a prior render
+  _hideBlockToolbar();
+  if (_state) _state.selected = null;
+
   updateSlideNav();
 }
 
@@ -853,6 +878,7 @@ function updateSlideNav() {
 function setActiveSlide(slideId) {
   if (!_state || !slideId) return;
   if (_state.activeSlideId === slideId) return;
+  _flushPendingEdit();
   _state.activeSlideId = slideId;
   renderThumbnailPanel();
   renderActiveSlide();
@@ -905,22 +931,43 @@ function deleteActiveSlide() {
 
 function insertBlockOnActiveSlide(variant, family) {
   if (!_state) return;
+  // Phase 3D — if a replace is in progress, swap the selected block's
+  // variant rather than inserting a new block.
+  if (_state.replaceMode) {
+    if (_replaceSelectedBlockVariant(variant, family)) return;
+    // fall through to insert if the replace target was lost
+  }
   const slide = getSlide(_state.deck, _state.activeSlideId);
   if (!slide) return;
 
   const tpl = TEMPLATES[slide.templateId];
   if (!tpl) return;
 
-  // Find the first content-typed zone on the current template
-  const targetZone = tpl.zones.find(z => z.type === 'content');
-  if (!targetZone) {
-    // No content zone (e.g. A2 title slide). Tell the user to switch slides.
+  // Phase 3B — Smart placement: walk content zones in order, fill the first
+  // one with fewer than 3 blocks. Because zones are listed left-to-right in
+  // the TEMPLATES metadata, this naturally fills left column first, then
+  // right column, then col3 (for C4/C6).
+  const contentZones = tpl.zones.filter(z => z.type === 'content');
+  if (contentZones.length === 0) {
     flashCanvasMessage('This template has no content zone — pick a Blank slide or a Column slide first.');
     return;
   }
 
-  const items   = placeholderItems(variant);
-  const columns = pickDefaultColumns(variant, items.length);
+  let targetZone = null;
+  for (const z of contentZones) {
+    if (blocksInZone(slide, z.name).length < 3) {
+      targetZone = z;
+      break;
+    }
+  }
+  if (!targetZone) {
+    flashCanvasMessage('All content zones are full — insert a new slide for more diagrams.');
+    return;
+  }
+
+  const items     = placeholderItems(variant);
+  const widthTier = zoneWidthTier(slide.templateId, targetZone.name);
+  const columns   = pickDefaultColumns(variant, items.length, widthTier);
 
   const blockDef = {
     type:    'diagram',
@@ -937,14 +984,61 @@ function insertBlockOnActiveSlide(variant, family) {
   rerenderEverything();
 }
 
-function pickDefaultColumns(variant, itemCount) {
-  // Compact label-only layouts go wide
+/**
+ * Phase 3B — Width tier classification for a zone on a template.
+ * Returns 'full' | 'half' | 'narrow' so pickDefaultColumns can choose
+ * a column count that fits without crowding.
+ *   full    → ~80%+ slide width (A1, B-templates' content area is ~57%-67%)
+ *   half    → ~40-50% slide width (C1, C2 left, C3 right, E3, D1/D2 cols)
+ *   narrow  → ~25-35% slide width (C4 cols, C6 cols, B5/B6 narrow accents)
+ */
+function zoneWidthTier(templateId, zoneName) {
+  if (!templateId) return 'full';
+  // Three-column templates always render narrow zones
+  if (templateId === 'C4' || templateId === 'C6') return 'narrow';
+  // D1 / D2 split content area into two columns of ~30% each → narrow
+  if ((templateId === 'D1' || templateId === 'D2') && (zoneName === 'col1' || zoneName === 'col2')) {
+    return 'narrow';
+  }
+  // Two-column templates put each column at ~half the slide
+  if (
+    templateId === 'C1' || templateId === 'C2' || templateId === 'C3' ||
+    templateId === 'C5' || templateId === 'E3'
+  ) {
+    return 'half';
+  }
+  // B-templates have 57-67% content width — close enough to full
+  // A1 Blank is full
+  return 'full';
+}
+
+function pickDefaultColumns(variant, itemCount, widthTier) {
+  const tier = widthTier || 'full';
+
+  // Bullet/single-stack layouts always render 1 column
+  if (
+    variant === 'large-bullets' || variant === 'arrow-bullets' ||
+    variant === 'process-steps' || variant === 'solid-box-small-bullets'
+  ) {
+    return 1;
+  }
+
+  // Compact label-only layouts go wide when there's room
   if (variant === 'pills' || variant === 'slanted-labels' || variant === 'bullseye' || variant === 'pyramid') {
+    if (tier === 'narrow') return Math.min(itemCount, 1);
+    if (tier === 'half')   return Math.min(itemCount, 2);
     return Math.min(itemCount, 4);
   }
   // Stats and small-bullets work nicely at 4 columns when there's room
-  if (variant === 'stats' || variant === 'small-bullets') return Math.min(itemCount, 4);
-  // Most box/bullet/sequence layouts: 3 columns is a safe default
+  if (variant === 'stats' || variant === 'small-bullets') {
+    if (tier === 'narrow') return 1;
+    if (tier === 'half')   return Math.min(itemCount, 2);
+    return Math.min(itemCount, 4);
+  }
+  // Box-type variants: scale columns down to fit narrow zones (Section 4.2)
+  if (tier === 'narrow') return 1;
+  if (tier === 'half')   return Math.min(itemCount, 2);
+  // Most box/bullet/sequence layouts at full width: 3 columns is a safe default
   if (itemCount >= 3) return 3;
   return Math.max(1, itemCount);
 }
@@ -1100,6 +1194,7 @@ function _onDocumentClick(e) {
 
 function rerenderEverything() {
   if (!_state) return;
+  _flushPendingEdit();
   applyAccentVars();
   renderThumbnailPanel();
   renderGalleryPanel();
@@ -1118,6 +1213,576 @@ function flashCanvasMessage(msg) {
   flash.textContent = msg;
   wrap.appendChild(flash);
   setTimeout(() => flash.remove(), 2400);
+}
+
+/* ─────────────────────────────────────────
+   PHASE 3C — INVISIBLE EDITING
+   Every text node on the slide is contenteditable from render. The user
+   clicks and types — no mode toggle, no edit ceremony. Debounced save
+   (300ms) writes back to the data model and refreshes the thumbnail.
+───────────────────────────────────────── */
+
+/* All editable diagram-text classes from smart-layouts.js + smart-diagrams.js.
+   Mirrors app.js V3_TEXT_SEL but trimmed for deck mode (no chrome elements
+   like .ig-title, .ig-callout-* — those don't appear inside slide blocks). */
+const SLIDE_TEXT_SEL = [
+  // Boxes family
+  '.igs-title', '.igs-body', '.igs-circle-num', '.igs-labeled-tag',
+  // Bullets family
+  '.igs-bl-title', '.igs-bl-body', '.igs-bl-num',
+  // Sequence family
+  '.igs-tl-title', '.igs-tl-label', '.igs-tl-body',
+  '.igs-mtl-title', '.igs-mtl-body',
+  '.igs-mtlb-title', '.igs-mtlb-body',
+  '.igs-arrow-title', '.igs-arrow-body',
+  '.igs-pill', '.igs-slant-body',
+  // Numbers family — match the actual classes used by smart-layouts
+  '.igs-stat-num', '.igs-stat-label', '.igs-stat-desc',
+  '.igs-circstat-num', '.igs-circstat-title', '.igs-circstat-desc',
+  '.igs-barstat-num', '.igs-barstat-title', '.igs-barstat-desc',
+  '.igs-starrating-score', '.igs-starrating-title', '.igs-starrating-desc',
+  '.igs-dotgrid-num', '.igs-dotgrid-lbl', '.igs-dotgrid-desc',
+  '.igs-dotline-val', '.igs-dotline-label',
+  '.igs-cbl-title', '.igs-cbl-body',
+  '.igs-cel-title', '.igs-cel-body',
+  // Circles family
+  '.igs-cycle-title', '.igs-cycle-body',
+  '.igs-flower-title', '.igs-flower-body',
+  '.igs-circle-title', '.igs-circle-body',
+  '.igs-ring-title', '.igs-ring-body',
+  '.igs-semi-title', '.igs-semi-body',
+  // Quotes family
+  '.igs-qbox-text', '.igs-qbox-attr',
+  '.igs-bubble-box', '.igs-bubble-attr',
+  // Steps family
+  '.igs-stair-title', '.igs-stair-body',
+  '.igs-step-title', '.igs-step-body',
+  '.igs-boxstep-title', '.igs-boxstep-body',
+  '.igs-arrowstep-title', '.igs-arrowstep-body',
+  '.igs-stepicon-title', '.igs-stepicon-body',
+  '.igs-pyramid-title', '.igs-pyramid-body',
+  '.igs-funnel-title', '.igs-funnel-body',
+  // Diagrams family (smart-diagrams.js)
+  '.igd-title', '.igd-body', '.igd-label',
+].join(', ');
+
+/* Class fragments → which item field they edit. Used to map a clicked
+   text element to (itemIndex, field) for data-model updates. */
+const FIELD_MAP = (() => {
+  const m = {
+    // Boxes
+    'igs-title': 'title', 'igs-body': 'body',
+    'igs-circle-num': 'title', 'igs-labeled-tag': 'title',
+    // Bullets
+    'igs-bl-title': 'title', 'igs-bl-body': 'body', 'igs-bl-num': 'title',
+    // Sequence
+    'igs-tl-title': 'title', 'igs-tl-label': 'title', 'igs-tl-body': 'body',
+    'igs-mtl-title': 'title', 'igs-mtl-body': 'body',
+    'igs-mtlb-title': 'title', 'igs-mtlb-body': 'body',
+    'igs-arrow-title': 'title', 'igs-arrow-body': 'body',
+    'igs-pill': 'title', 'igs-slant-body': 'body',
+    // Numbers
+    'igs-stat-num': 'title', 'igs-stat-label': 'body', 'igs-stat-desc': 'body',
+    'igs-circstat-num': 'title', 'igs-circstat-title': 'body', 'igs-circstat-desc': 'body',
+    'igs-barstat-num': 'title', 'igs-barstat-title': 'body', 'igs-barstat-desc': 'body',
+    'igs-starrating-score': 'title', 'igs-starrating-title': 'body', 'igs-starrating-desc': 'body',
+    'igs-dotgrid-num': 'title', 'igs-dotgrid-lbl': 'body', 'igs-dotgrid-desc': 'body',
+    'igs-dotline-val': 'title', 'igs-dotline-label': 'body',
+    'igs-cbl-title': 'title', 'igs-cbl-body': 'body',
+    'igs-cel-title': 'title', 'igs-cel-body': 'body',
+    // Circles
+    'igs-cycle-title': 'title', 'igs-cycle-body': 'body',
+    'igs-flower-title': 'title', 'igs-flower-body': 'body',
+    'igs-circle-title': 'title', 'igs-circle-body': 'body',
+    'igs-ring-title': 'title', 'igs-ring-body': 'body',
+    'igs-semi-title': 'title', 'igs-semi-body': 'body',
+    // Quotes — quote text is the body, attribution is the title
+    'igs-qbox-text': 'body', 'igs-qbox-attr': 'title',
+    'igs-bubble-box': 'body', 'igs-bubble-attr': 'title',
+    // Steps
+    'igs-stair-title': 'title', 'igs-stair-body': 'body',
+    'igs-step-title': 'title', 'igs-step-body': 'body',
+    'igs-boxstep-title': 'title', 'igs-boxstep-body': 'body',
+    'igs-arrowstep-title': 'title', 'igs-arrowstep-body': 'body',
+    'igs-stepicon-title': 'title', 'igs-stepicon-body': 'body',
+    'igs-pyramid-title': 'title', 'igs-pyramid-body': 'body',
+    'igs-funnel-title': 'title', 'igs-funnel-body': 'body',
+    // Diagrams (igd-*)
+    'igd-title': 'title', 'igd-body': 'body', 'igd-label': 'title',
+  };
+  return m;
+})();
+
+/* Item-container class fragments. Used to walk up from a clicked text
+   element and find its enclosing item container, then derive the item
+   index from sibling position. */
+const ITEM_CONTAINER_FRAGMENTS = [
+  'igs-card', 'igs-cycle-item', 'igs-flower-petal', 'igs-flower-center',
+  'igs-tl-item', 'igs-mtl-item', 'igs-mtlb-item',
+  'igs-arrow-item', 'igs-slant-item',
+  'igs-stat-col', 'igs-circstat-col', 'igs-barstat-item', 'igs-starrating-item',
+  'igs-dotgrid-card', 'igs-dotline-item', 'igs-cbl-item', 'igs-cel-item',
+  'igs-circle-item', 'igs-ring-item', 'igs-semi-item',
+  'igs-qbox-item', 'igs-bubble-item',
+  'igs-stair-item', 'igs-step-item', 'igs-boxstep-item', 'igs-arrowstep-item',
+  'igs-stepicon-item', 'igs-pyramid-item', 'igs-funnel-item',
+  'igs-bl-large', 'igs-bl-small', 'igs-bl-arrow', 'igs-bl-process', 'igs-bl-boxsmall',
+  'igs-pill',
+];
+
+/* Number-family text classes — when one of these is edited, call
+   IgReactiveVisuals.updateVisualAfterEdit to redraw the bar/star/SVG. */
+const NUMBER_TEXT_FRAGMENTS = [
+  'igs-circstat-num', 'igs-barstat-num', 'igs-starrating-score',
+  'igs-dotgrid-num', 'igs-dotline-val',
+];
+
+let _editTimer  = null;     // debounce timer per active edit element
+let _editTarget = null;     // tracks the currently-debouncing element
+let _editCommit = null;     // commit function for the pending save
+let _canvasInputWired = false;
+
+/**
+ * Make every text node inside the active slide editable. Called after every
+ * renderActiveSlide() so freshly-rendered diagrams are immediately editable.
+ */
+function makeSlideTextEditable() {
+  const wrap = byId('outputWrap');
+  if (!wrap) return;
+  const slide = wrap.querySelector('.igs-slide');
+  if (!slide) return;
+  slide.querySelectorAll(SLIDE_TEXT_SEL).forEach(el => {
+    if (el.contentEditable !== 'true') el.contentEditable = 'true';
+  });
+}
+
+/**
+ * Wire the canvas-level input/click handlers exactly once. The handlers
+ * use event delegation, so they survive renderActiveSlide() replacing the
+ * inner HTML.
+ */
+function wireCanvasEditingOnce() {
+  if (_canvasInputWired) return;
+  const wrap = byId('outputWrap');
+  if (!wrap) return;
+  _canvasInputWired = true;
+
+  // Debounced save on every keystroke inside an editable text element
+  wrap.addEventListener('input', _onCanvasInput);
+  // Detect blank-zone clicks → create free-text element
+  wrap.addEventListener('click',  _onCanvasClick);
+  // Sanitize empty contenteditable elements so :empty CSS placeholder works
+  wrap.addEventListener('input',  _sanitizeEmptyOnInput);
+  // Block selection (Phase 3D) — happens on click, dispatched in _onCanvasClick
+}
+
+function _onCanvasInput(e) {
+  if (!_state) return;
+  const el = e.target;
+  if (!el || !el.matches) return;
+
+  // Slide-title edits (H2 with data-edit-role="slide-title")
+  if (el.matches('h2.igs-slide-title[data-edit-role="slide-title"]')) {
+    _scheduleSave(el, () => _commitSlideTitle(el));
+    return;
+  }
+  // Diagram text edits — match any of SLIDE_TEXT_SEL
+  if (el.matches(SLIDE_TEXT_SEL)) {
+    _scheduleSave(el, () => _commitDiagramText(el));
+    return;
+  }
+  // Free-text element (created on blank-zone click)
+  if (el.matches('.igs-free-text-temp')) {
+    _scheduleSave(el, () => _commitFreeText(el));
+    return;
+  }
+}
+
+/**
+ * Sanitize contenteditable elements that look empty (lone <br>, &nbsp;, etc.)
+ * so the CSS `:empty::before` placeholder shows correctly.
+ */
+function _sanitizeEmptyOnInput(e) {
+  const el = e.target;
+  if (!el || el.nodeType !== 1) return;
+  if (!el.hasAttribute('data-placeholder')) return;
+  // Strip lone <br> when textContent is empty
+  if (el.textContent.length === 0 && el.children.length > 0) {
+    el.innerHTML = '';
+  }
+}
+
+function _scheduleSave(el, commitFn) {
+  // If the same element is already debouncing, just reset the timer.
+  if (_editTimer) clearTimeout(_editTimer);
+  _editTarget = el;
+  _editCommit = commitFn;
+  _editTimer = setTimeout(() => {
+    _editTimer  = null;
+    _editTarget = null;
+    _editCommit = null;
+    try { commitFn(); } catch (err) { /* swallow — never break editing */ }
+  }, 300);
+}
+
+/**
+ * Flush a pending debounced save synchronously. Call this before any operation
+ * that replaces the active slide DOM (slide navigation, template change,
+ * full re-render) so the user's most recent typing is captured.
+ */
+function _flushPendingEdit() {
+  if (!_editTimer) return;
+  clearTimeout(_editTimer);
+  const fn = _editCommit;
+  _editTimer  = null;
+  _editTarget = null;
+  _editCommit = null;
+  if (fn) {
+    try { fn(); } catch (err) {}
+  }
+}
+
+/* ── Commit handlers ──────────────────────── */
+
+function _commitSlideTitle(el) {
+  if (!_state) return;
+  const slideEl = el.closest('.igs-slide');
+  if (!slideEl) return;
+  const slideId = slideEl.getAttribute('data-slide-id');
+  if (!slideId) return;
+  const newTitle = (el.textContent || '').trim();
+  _state.deck = updateSlide(_state.deck, slideId, { title: newTitle });
+  // Refresh ONLY the thumbnail for this slide — don't re-render the active
+  // slide canvas (would interrupt the user's caret).
+  refreshThumbnail(slideId);
+}
+
+function _commitDiagramText(el) {
+  if (!_state) return;
+  const slideEl = el.closest('.igs-slide');
+  const blockEl = el.closest('.igs-block');
+  if (!slideEl || !blockEl) return;
+  const slideId = slideEl.getAttribute('data-slide-id');
+  const blockId = blockEl.getAttribute('data-block-id');
+  if (!slideId || !blockId) return;
+
+  const mapping = _findItemAndField(el, blockEl);
+  if (!mapping || mapping.itemIndex < 0) return;
+
+  const slide = getSlide(_state.deck, slideId);
+  if (!slide) return;
+  const block = slide.blocks.find(b => b.id === blockId);
+  if (!block) return;
+
+  const newText = (el.textContent || '').trim();
+  const newItems = block.items.slice();
+  if (!newItems[mapping.itemIndex]) return;
+  newItems[mapping.itemIndex] = {
+    ...newItems[mapping.itemIndex],
+    [mapping.field]: newText,
+  };
+
+  _state.deck = withSlide(_state.deck, slideId, s =>
+    updateBlock(s, blockId, { items: newItems })
+  );
+  refreshThumbnail(slideId);
+
+  // Wire reactive visuals: bar fill, star count, SVG arc, dot pattern
+  if (window.IgReactiveVisuals && _isNumberFamilyText(el)) {
+    try { window.IgReactiveVisuals.updateVisualAfterEdit(el); } catch (err) {}
+  }
+}
+
+function _commitFreeText(el) {
+  if (!_state) return;
+  const slideEl = el.closest('.igs-slide');
+  const zoneEl  = el.closest('.igs-zone-content');
+  if (!slideEl || !zoneEl) return;
+  const slideId  = slideEl.getAttribute('data-slide-id');
+  const zoneName = zoneEl.getAttribute('data-zone');
+  const newText  = (el.textContent || '').trim();
+  if (!slideId || !zoneName) return;
+
+  // First commit — promote the temp element into a real text block.
+  if (!el.dataset.committedBlock) {
+    if (!newText) return; // ignore until user actually types
+    const slide = getSlide(_state.deck, slideId);
+    if (!slide) return;
+    let updatedSlide;
+    _state.deck = withSlide(_state.deck, slideId, s => {
+      updatedSlide = addBlock(s, {
+        type: 'text',
+        variant: null,
+        family: 'text',
+        items: [{ title: '', body: newText }],
+        position: { zone: zoneName },
+        size: { widthPct: 100, heightPct: null },
+      });
+      return updatedSlide;
+    });
+    // Mark the temp element so subsequent edits update the same block
+    const newBlockId = updatedSlide.blocks[updatedSlide.blocks.length - 1].id;
+    el.dataset.committedBlock = newBlockId;
+    refreshThumbnail(slideId);
+    return;
+  }
+
+  // Subsequent edits — patch the block body
+  const blockId = el.dataset.committedBlock;
+  _state.deck = withSlide(_state.deck, slideId, s =>
+    updateBlock(s, blockId, { items: [{ title: '', body: newText }] })
+  );
+  refreshThumbnail(slideId);
+}
+
+/* ── Item / field mapping ─────────────────── */
+
+function _findItemAndField(textEl, blockEl) {
+  // Walk up looking for an item-container ancestor inside blockEl
+  let cur = textEl;
+  while (cur && cur !== blockEl && cur.parentElement) {
+    const cls = cur.className || '';
+    if (typeof cls === 'string' && _isItemContainer(cls)) {
+      // Find this item's index among siblings that are also item containers
+      const siblings = Array.from(cur.parentElement.children)
+        .filter(c => typeof c.className === 'string' && _isItemContainer(c.className));
+      const itemIndex = siblings.indexOf(cur);
+      const field = _fieldFromTextClass(textEl.className || '');
+      return { itemIndex, field };
+    }
+    cur = cur.parentElement;
+  }
+  return null;
+}
+
+function _isItemContainer(className) {
+  for (const f of ITEM_CONTAINER_FRAGMENTS) {
+    if (className.indexOf(f) !== -1) return true;
+  }
+  return false;
+}
+
+function _fieldFromTextClass(className) {
+  for (const cls of Object.keys(FIELD_MAP)) {
+    if (className.indexOf(cls) !== -1) return FIELD_MAP[cls];
+  }
+  return 'body';
+}
+
+function _isNumberFamilyText(el) {
+  const cls = el.className || '';
+  for (const f of NUMBER_TEXT_FRAGMENTS) {
+    if (cls.indexOf(f) !== -1) return true;
+  }
+  return false;
+}
+
+/* ── Free-text creation on blank-zone click ─ */
+
+function _onCanvasClick(e) {
+  if (!_state) return;
+  const target = e.target;
+  if (!target || !target.matches) return;
+
+  // Click inside a contenteditable element — let the browser handle caret
+  if (target.closest && target.closest('[contenteditable="true"]')) return;
+  // Click on accent placeholder or interactive UI — ignore
+  if (target.closest && target.closest('.igs-accent-placeholder')) return;
+  // Click on a diagram block — Phase 3D selection (handled below)
+  const blockEl = target.closest && target.closest('.igs-block');
+  if (blockEl) {
+    _selectBlock(blockEl);
+    return;
+  }
+  // Click on a content zone's blank area → free-text creation
+  const zoneEl = target.closest && target.closest('.igs-zone-content');
+  if (zoneEl && zoneEl.getAttribute('data-zone-type') !== 'title-block') {
+    _createFreeText(zoneEl, e);
+    return;
+  }
+  // Click outside any block → deselect any selection
+  _deselectBlock();
+}
+
+function _createFreeText(zoneEl, evt) {
+  // Don't create a free text if user clicked something interactive
+  if (evt.target !== zoneEl &&
+      evt.target !== zoneEl.querySelector('.igs-block-stack')) {
+    return;
+  }
+  // Append a contenteditable element. It becomes a real text block on first
+  // input via _commitFreeText.
+  let stack = zoneEl.querySelector('.igs-block-stack');
+  if (!stack) {
+    // Empty zone — create a stack on the fly so the new text sits in it
+    const slideEl = zoneEl.closest('.igs-slide');
+    const tplId = slideEl ? slideEl.getAttribute('data-template') : '';
+    const blockCount = 0;
+    const density = blockCount === 0 ? 'light' : 'standard';
+    stack = document.createElement('div');
+    stack.className = 'igs-block-stack';
+    stack.setAttribute('data-density', density);
+    zoneEl.appendChild(stack);
+  }
+  const ft = document.createElement('div');
+  ft.className = 'igs-free-text-temp';
+  ft.contentEditable = 'true';
+  ft.setAttribute('data-placeholder', 'Type here');
+  stack.appendChild(ft);
+  ft.focus();
+}
+
+/* ─────────────────────────────────────────
+   PHASE 3D — DIAGRAM SELECTION + DELETE + REPLACE
+───────────────────────────────────────── */
+
+function _selectBlock(blockEl) {
+  if (!_state) return;
+  const slideEl = blockEl.closest('.igs-slide');
+  if (!slideEl) return;
+  const slideId = slideEl.getAttribute('data-slide-id');
+  const blockId = blockEl.getAttribute('data-block-id');
+  if (!slideId || !blockId) return;
+
+  // If clicking the already-selected block, no-op
+  if (_state.selected &&
+      _state.selected.blockId === blockId &&
+      _state.selected.slideId === slideId) {
+    return;
+  }
+
+  _deselectBlock();
+  _state.selected = { blockId, slideId };
+  blockEl.classList.add('igs-selected');
+  _showBlockToolbar(blockEl);
+}
+
+function _deselectBlock() {
+  if (!_state || !_state.selected) return;
+  const wrap = byId('outputWrap');
+  if (wrap) {
+    wrap.querySelectorAll('.igs-block.igs-selected').forEach(el =>
+      el.classList.remove('igs-selected')
+    );
+  }
+  _hideBlockToolbar();
+  _state.selected = null;
+  // Cancel any pending replace mode if user clicked away
+  if (_state.replaceMode) {
+    _state.replaceMode = null;
+    _flashReplaceModeEnd();
+  }
+}
+
+function _showBlockToolbar(blockEl) {
+  _hideBlockToolbar();
+  const tb = document.createElement('div');
+  tb.className = 'igs-block-toolbar';
+  tb.innerHTML = `
+    <button data-action="replace" title="Replace with another diagram">Replace</button>
+    <button data-action="delete"  title="Delete this diagram">Delete</button>
+  `;
+  // Position above the block
+  const rect = blockEl.getBoundingClientRect();
+  tb.style.cssText = `
+    position: fixed;
+    left: ${Math.round(rect.left)}px;
+    top: ${Math.round(Math.max(8, rect.top - 36))}px;
+    z-index: 9999;
+  `;
+  document.body.appendChild(tb);
+  tb.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    _deleteSelectedBlock();
+  });
+  tb.querySelector('[data-action="replace"]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    _enterReplaceMode();
+  });
+  _state.blockToolbar = tb;
+}
+
+function _hideBlockToolbar() {
+  if (_state && _state.blockToolbar) {
+    _state.blockToolbar.remove();
+    _state.blockToolbar = null;
+  }
+}
+
+function _deleteSelectedBlock() {
+  if (!_state || !_state.selected) return;
+  const { slideId, blockId } = _state.selected;
+  _state.deck = withSlide(_state.deck, slideId, s => removeBlock(s, blockId));
+  _state.selected = null;
+  _hideBlockToolbar();
+  rerenderEverything();
+}
+
+function _enterReplaceMode() {
+  if (!_state || !_state.selected) return;
+  _state.replaceMode = { ..._state.selected };
+  _hideBlockToolbar();
+  flashCanvasMessage('Replace mode — pick a diagram from the gallery to swap.');
+  // Open the gallery overlay scrolled to diagrams
+  toggleGalleryOverlay('diagrams');
+}
+
+function _flashReplaceModeEnd() {
+  flashCanvasMessage('Replace cancelled.');
+}
+
+/**
+ * Replace the selected block's variant/family while preserving items.
+ * Called by insertBlockOnActiveSlide() when replaceMode is active.
+ */
+function _replaceSelectedBlockVariant(variant, family) {
+  if (!_state || !_state.replaceMode) return false;
+  const { slideId, blockId } = _state.replaceMode;
+  const slide = getSlide(_state.deck, slideId);
+  if (!slide) { _state.replaceMode = null; return false; }
+  const block = slide.blocks.find(b => b.id === blockId);
+  if (!block) { _state.replaceMode = null; return false; }
+
+  // Pad/trim items to the new variant's fixed-slot count (if any)
+  let newItems = block.items.slice();
+  const fixed = FIXED_SLOT_COUNT[variant];
+  if (fixed !== undefined) {
+    while (newItems.length < fixed) newItems.push({ title: '', body: '' });
+    if (newItems.length > fixed) newItems = newItems.slice(0, fixed);
+  }
+
+  _state.deck = withSlide(_state.deck, slideId, s =>
+    updateBlock(s, blockId, {
+      variant,
+      family: family || VARIANT_FAMILY[variant] || null,
+      items: newItems,
+    })
+  );
+  _state.replaceMode = null;
+  _state.selected   = null;
+  closeGalleryOverlay();
+  rerenderEverything();
+  return true;
+}
+
+/* ─────────────────────────────────────────
+   THUMBNAIL REFRESH (lightweight — single slide)
+   Used after debounced text saves so the thumbnail reflects the edit
+   without re-rendering the active slide canvas (would interrupt the
+   user's caret).
+───────────────────────────────────────── */
+
+function refreshThumbnail(slideId) {
+  if (!_state) return;
+  const panel = byId('igsThumbPanel');
+  if (!panel) return;
+  const cell = panel.querySelector(`.igs-thumb-wrap[data-slide-id="${slideId}"]`);
+  if (!cell) return;
+  const slide = getSlide(_state.deck, slideId);
+  if (!slide) return;
+  const inner = renderSlide(slide, _state.tone, _state.accentColor);
+  const innerHost = cell.querySelector('.igs-thumb-inner');
+  if (innerHost) innerHost.innerHTML = inner;
 }
 
 /* ─────────────────────────────────────────
@@ -1557,6 +2222,52 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
 .igs-context-menu button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* ── Phase 3D — Diagram selection ── */
+.igs-block.igs-selected {
+  outline: 2px solid var(--accent, #2563EB);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.igs-block-toolbar {
+  display: flex;
+  gap: 4px;
+  background: var(--accent, #2563EB);
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.igs-block-toolbar button {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.igs-block-toolbar button:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+/* ── Phase 3C — Free-text temp element ──
+   Created on blank-zone click. On first input it becomes a real text
+   block in the data model. ── */
+.igs-free-text-temp {
+  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text-primary, #1A1A2E);
+  outline: none;
+  cursor: text;
+  min-height: 1.55em;
+  width: 100%;
 }
 
 /* ── Flash message ── */

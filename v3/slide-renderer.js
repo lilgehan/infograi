@@ -45,12 +45,15 @@ function esc(str) {
 }
 
 /* ─────────────────────────────────────────
-   ZONE RENDERING
+   ZONE RENDERING + ADAPTIVE SPACING (Section 6.5)
 ───────────────────────────────────────── */
 
 /**
  * Compute the height percentage and stack-gap CSS for a zone given how many
  * blocks it contains. Returns the CSS for the zone's flex layout.
+ *
+ * Heights are tighter at higher densities to leave more breathing room when
+ * a zone is light, per Section 6.5. The gap is also density-aware.
  */
 function zoneStackHeights(count) {
   if (count <= 1) return ['100%'];
@@ -61,7 +64,49 @@ function zoneStackHeights(count) {
 
 function zoneStackGap(count) {
   if (count <= 1) return '0px';
-  return '3%';
+  if (count === 2) return '16px';   // standard
+  return '12px';                    // dense
+}
+
+/**
+ * Phase 6.5 — Density tier per zone. Drives padding/gap/font-size adaptation.
+ *   0 blocks → 'empty'
+ *   1 block  → 'light'
+ *   2 blocks → 'standard'
+ *   3 blocks → 'dense'
+ */
+function zoneDensity(count) {
+  if (count <= 0) return 'empty';
+  if (count === 1) return 'light';
+  if (count === 2) return 'standard';
+  return 'dense';
+}
+
+/**
+ * Phase 6.5 — Auto-balance hint. When one content zone in a multi-column
+ * template carries fewer blocks than its sibling, the lighter zone gets
+ * `data-balance="center"` so its block stack vertically centers. This
+ * creates visual balance instead of top-aligning a single diagram against
+ * a stack of two.
+ *
+ * @param {object} slide
+ * @param {string} zoneName
+ * @param {Array}  contentZoneNames — every content-typed zone on the template
+ * @returns {'top'|'center'}
+ */
+function zoneBalance(slide, zoneName, contentZoneNames) {
+  if (!contentZoneNames || contentZoneNames.length < 2) return 'top';
+  const myCount = blocksInZone(slide, zoneName).length;
+  if (myCount === 0) return 'top';
+  // Find max sibling count (not including this zone)
+  let maxOther = 0;
+  for (const other of contentZoneNames) {
+    if (other === zoneName) continue;
+    const c = blocksInZone(slide, other).length;
+    if (c > maxOther) maxOther = c;
+  }
+  // Center if this zone has strictly fewer blocks than a sibling
+  return (myCount < maxOther) ? 'center' : 'top';
 }
 
 /**
@@ -74,12 +119,16 @@ function zoneStackGap(count) {
  * @returns {string}
  */
 function renderBlock(block, tone) {
-  if (!block || !block.variant) return '';
+  if (!block) return '';
 
+  // Text blocks (free-text, no variant) — Phase 3C
   if (block.type === 'text') {
     const text = (block.items && block.items[0] && block.items[0].body) || '';
-    return `<div class="igs-block igs-text-block">${esc(text)}</div>`;
+    return `<div class="igs-block igs-text-block" data-block-id="${esc(block.id)}">${esc(text)}</div>`;
   }
+
+  // Diagrams without a variant can't render
+  if (!block.variant) return '';
 
   // Diagram / chart blocks: use renderSection from smart-layouts.js.
   // It accepts a "section" object — same shape as content-v1 sections.
@@ -94,13 +143,18 @@ function renderBlock(block, tone) {
 
   const inner = renderSection(section, tone);
   // Wrap in .ig-page so existing `.ig-page .igs-* / .igd-*` CSS applies.
-  // Outer .igs-block carries the height assignment.
-  return `<div class="igs-block"><div class="ig-page">${inner}</div></div>`;
+  // Outer .igs-block carries the height assignment + the block id used by
+  // the Phase 3C cursor system to map text edits back to the data model.
+  return `<div class="igs-block" data-block-id="${esc(block.id)}"><div class="ig-page">${inner}</div></div>`;
 }
 
 /**
  * Render a content zone — fills it with stacked blocks per position.order.
  * Capped at 3 blocks visible (extras are dropped silently in Phase 1+2).
+ *
+ * The block stack carries `data-density` (light/standard/dense) so CSS in
+ * DECK_LAYOUT_CSS can tighten the gap, padding, and font sizes per
+ * Section 6.5.
  */
 function renderContentZone(slide, zoneName, tone) {
   const blocks = blocksInZone(slide, zoneName).slice(0, 3);
@@ -108,19 +162,45 @@ function renderContentZone(slide, zoneName, tone) {
 
   const heights = zoneStackHeights(blocks.length);
   const gap     = zoneStackGap(blocks.length);
+  const density = zoneDensity(blocks.length);
 
   const items = blocks.map((b, i) =>
     `<div class="igs-block-slot" style="height:${heights[i]};">${renderBlock(b, tone)}</div>`
   ).join('');
 
-  return `<div class="igs-block-stack" style="gap:${gap};">${items}</div>`;
+  return `<div class="igs-block-stack" data-density="${density}" style="gap:${gap};">${items}</div>`;
 }
 
 /**
- * Render a title-block zone (A2 / A3 / A4 / E1 / E2 / E6 / C5+C6+D3+D4 headers).
- * Pulls slide.title and slide.subtitle. Each zone-type can layer in extras.
+ * Render a title-block zone (A2 / A3 / A4 / E1 / E2 / E6 / C5+C6+D3+D4 headers,
+ * plus the new Phase 3A title rows on C1-C4, D1, D2, E3).
+ * Pulls slide.title and slide.subtitle.
+ *
+ * For the new compact title zones (full-width row above column templates,
+ * zone names "title" or "header" with type "title-block"), we render an
+ * H2 with `.is-placeholder` class when the title is empty, so the cursor
+ * system can detect placeholder vs. real content on click.
  */
-function renderTitleBlock(slide, zoneType) {
+function renderTitleBlock(slide, zoneType, zoneName) {
+  // Compact / standard title row (C1-C4, D1, D2, E3, C5, C6, D3, D4 headers)
+  const isCompact = (zoneType === 'title-block') &&
+                    (zoneName === 'title' || zoneName === 'header');
+  if (isCompact) {
+    // Phase 3C — Invisible editing. The H2 is always contenteditable; the
+    // placeholder is rendered via CSS attr() when the H2 is empty. No mode
+    // toggle, no JS placeholder management.
+    const titleText = (slide.title || '').trim();
+    return `
+      <div class="igs-zone-title" data-zone="title">
+        <h2 class="igs-slide-title"
+            contenteditable="true"
+            data-edit-role="slide-title"
+            data-placeholder="Click to add title">${esc(titleText)}</h2>
+      </div>
+    `;
+  }
+
+  // Hero / special title blocks (A2, A3, A4, E1, E2, E6, A4 closing, etc.)
   const title    = slide.title    || defaultTitleFor(zoneType);
   const subtitle = slide.subtitle || defaultSubtitleFor(zoneType);
 
@@ -134,6 +214,25 @@ function renderTitleBlock(slide, zoneType) {
     <h1 class="igs-slide-title">${esc(title)}</h1>
     ${subtitle ? `<p class="igs-slide-subtitle">${esc(subtitle)}</p>` : ''}
     ${extras}
+  `;
+}
+
+/**
+ * Render the inline title element for B1-B6 / E5 (templates with
+ * inlineTitle: true). This is prepended inside the content zone before
+ * the block stack. Uses the same compact title styling as full-width
+ * title rows.
+ */
+function renderInlineTitle(slide) {
+  // Phase 3C — Invisible editing. Always contenteditable, CSS handles placeholder.
+  const titleText = (slide.title || '').trim();
+  return `
+    <div class="igs-zone-title" data-zone="title">
+      <h2 class="igs-slide-title"
+          contenteditable="true"
+          data-edit-role="slide-title"
+          data-placeholder="Click to add title">${esc(titleText)}</h2>
+    </div>
   `;
 }
 
@@ -175,9 +274,34 @@ export function renderSlide(slide, theme, accentColor) {
   const tone = theme || 'professional';
   const tpl  = TEMPLATES[slide.templateId] || TEMPLATES.A1;
 
+  // For inline-title templates (B1-B6, E5), the title element is prepended
+  // inside the FIRST content-typed zone. Track which zone gets it.
+  const inlineTitle = !!tpl.inlineTitle;
+  const firstContentZoneName = inlineTitle
+    ? (tpl.zones.find(z => z.type === 'content') || {}).name
+    : null;
+
+  // Phase 6.5 — Auto-balance: collect every content-typed zone name so the
+  // balance helper can compare block counts across siblings.
+  const contentZoneNames = tpl.zones
+    .filter(z => z.type === 'content')
+    .map(z => z.name);
+
   const zonesHtml = tpl.zones.map(zoneMeta => {
     const isAccent = zoneMeta.type === 'accent';
     const cls = isAccent ? 'igs-zone igs-zone-accent' : 'igs-zone igs-zone-content';
+
+    // Phase 6.5 — density + balance attributes. Drive padding/gap/centering
+    // via CSS rather than computing pixels per template.
+    let densityAttr = '';
+    let balanceAttr = '';
+    if (zoneMeta.type === 'content') {
+      const count   = blocksInZone(slide, zoneMeta.name).length;
+      const density = zoneDensity(count);
+      const balance = zoneBalance(slide, zoneMeta.name, contentZoneNames);
+      densityAttr = ` data-density="${density}"`;
+      balanceAttr = ` data-balance="${balance}"`;
+    }
 
     let inner;
     if (isAccent) {
@@ -190,13 +314,19 @@ export function renderSlide(slide, theme, accentColor) {
       zoneMeta.type === 'cta-block'      ||
       zoneMeta.type === 'overlay'
     ) {
-      inner = renderTitleBlock(slide, zoneMeta.type);
+      inner = renderTitleBlock(slide, zoneMeta.type, zoneMeta.name);
     } else {
-      // Plain content zone — render any blocks placed here
-      inner = renderContentZone(slide, zoneMeta.name, tone);
+      // Plain content zone — render any blocks placed here.
+      // For inline-title templates, prepend the title element to the first content zone.
+      const stackHtml = renderContentZone(slide, zoneMeta.name, tone);
+      if (inlineTitle && zoneMeta.name === firstContentZoneName) {
+        inner = renderInlineTitle(slide) + stackHtml;
+      } else {
+        inner = stackHtml;
+      }
     }
 
-    return `<div class="${cls}" data-zone="${esc(zoneMeta.name)}" data-zone-type="${esc(zoneMeta.type)}">${inner}</div>`;
+    return `<div class="${cls}" data-zone="${esc(zoneMeta.name)}" data-zone-type="${esc(zoneMeta.type)}"${densityAttr}${balanceAttr}>${inner}</div>`;
   }).join('');
 
   return `<div class="igs-slide" data-template="${esc(slide.templateId)}" data-slide-id="${esc(slide.id)}">${zonesHtml}</div>`;
@@ -242,14 +372,58 @@ const DECK_LAYOUT_CSS = `
   margin: 0 !important;
 }
 
-/* ── Block stack: vertical flex with computed gap ── */
+/* ── Block stack: vertical flex with computed gap ──
+   flex: 1 1 auto so it fills the remaining height after any inline title
+   above it (Phase 3A). Falls back to filling the whole content zone when
+   there's no title. ── */
 .igs-block-stack {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
 }
+
+/* ── Phase 6.5 — Adaptive Spacing ──
+   Density attributes set on .igs-zone-content drive padding and font scale.
+   Density attributes on .igs-block-stack drive the gap between stacked
+   diagrams. Light = 1 diagram, generous; standard = 2 diagrams; dense =
+   3 diagrams. ── */
+.igs-zone-content[data-density="light"] {
+  padding: 6% 8%;
+}
+.igs-zone-content[data-density="standard"] {
+  padding: 5% 5%;
+}
+.igs-zone-content[data-density="dense"] {
+  padding: 3% 3%;
+}
+.igs-zone-content[data-density="empty"] {
+  /* keep default 27px 48px so an empty zone still looks like a real zone */
+}
+/* Light density: bump diagram font scale up 2px via CSS variable.
+   Standard: baseline. Dense: -1px. Smart-layouts read no such variable, but
+   we apply font-size scaling to common text classes used by all variants
+   so the visual breathes appropriately. */
+.igs-zone-content[data-density="light"] .ig-page {
+  font-size: calc(1em + 2px);
+}
+.igs-zone-content[data-density="dense"] .ig-page {
+  font-size: calc(1em - 1px);
+}
+
+/* Auto-balance: when one zone in a multi-column template has a single
+   diagram and a sibling has more, vertically center the lighter zone's
+   stack so the slide doesn't look top-heavy. */
+.igs-zone-content[data-balance="center"] > .igs-block-stack {
+  justify-content: center;
+}
+
+/* Block stack gap by density (overrides the inline `gap` style only when
+   the inline value matches — kept on the element for SSR safety). */
+.igs-block-stack[data-density="light"]    { gap: 24px; }
+.igs-block-stack[data-density="standard"] { gap: 16px; }
+.igs-block-stack[data-density="dense"]    { gap: 12px; }
 .igs-block-slot {
   flex: 0 0 auto;
   min-height: 0;
