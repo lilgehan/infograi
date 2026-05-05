@@ -23,7 +23,7 @@
 
 import {
   createDeck, addSlide, removeSlide, duplicateSlide,
-  addBlock, removeBlock, updateBlock, getSlide, blocksInZone, withSlide,
+  addBlock, removeBlock, updateBlock, moveBlock, getSlide, blocksInZone, withSlide,
   changeSlideTemplate, updateSlide,
 } from './slide-deck.js';
 import { renderSlide, DECK_MODE_CSS } from './slide-renderer.js';
@@ -295,6 +295,394 @@ function _positionToolbarSmart(wrapper) {
   }
 }
 
+/* ─────────────────────────────────────────
+   PHASE F — DRAG-TO-REORDER
+   Mouse-down on .igs-grab-bar starts a drag. The wrapper follows the
+   cursor via inline transform. A blue insertion line shows the drop
+   target. Mouseup commits via slide-deck.moveBlock(). Cmd+Z restores
+   the pre-drag deck state (one history snapshot per drag, taken on
+   mousedown).
+───────────────────────────────────────── */
+
+let _dropLineEl = null;
+let _dropTarget = null; // { zone, index } | null
+
+function _startDrag(wrapper, e) {
+  if (!_state || !wrapper) return;
+  const blockId = wrapper.getAttribute('data-block-id');
+  if (!blockId) return;
+
+  const slide = wrapper.closest('.igs-slide');
+  if (!slide) return;
+  const slideRect = slide.getBoundingClientRect();
+  const scaleY = slideRect.height / 540;
+  const scaleX = slideRect.width  / 960;
+
+  // Snapshot history once at the start of the drag, so Cmd+Z restores
+  // the pre-drag arrangement (not intermediate frames).
+  _pushHistory();
+
+  setMode('dragging');
+  interactionState.dragStart = {
+    x: e.clientX,
+    y: e.clientY,
+    blockId,
+    wrapper,
+    scaleX,
+    scaleY,
+    slideRect,
+  };
+
+  wrapper.classList.add('igs-dragging');
+  // Hide the toolbar / hover outline during drag — let the user see what
+  // they're moving without UI clutter.
+  wrapper.classList.remove('igs-hover');
+  document.body.classList.add('igs-deck-dragging');
+
+  _dropTarget = null;
+  _ensureDropLine();
+}
+
+function _ensureDropLine() {
+  const wrap = byId('outputWrap');
+  if (!wrap) return;
+  if (!_dropLineEl) {
+    _dropLineEl = document.createElement('div');
+    _dropLineEl.className = 'igs-drop-line';
+    _dropLineEl.style.display = 'none';
+    wrap.appendChild(_dropLineEl);
+  }
+}
+
+function _hideDropLine() {
+  if (_dropLineEl) {
+    _dropLineEl.style.display = 'none';
+  }
+  _dropTarget = null;
+}
+
+function _updateDrag(e) {
+  const ds = interactionState.dragStart;
+  if (!ds) return;
+
+  // Visual: move the dragged wrapper with the cursor (transform in
+  // unscaled px because the wrapper is INSIDE the scaled slide).
+  const dxScaled = (e.clientX - ds.x) / ds.scaleX;
+  const dyScaled = (e.clientY - ds.y) / ds.scaleY;
+  ds.wrapper.style.transform = `translate(${dxScaled}px, ${dyScaled}px)`;
+
+  // Find drop target — the zone under the cursor + insertion index.
+  const target = _resolveDropTarget(e, ds.blockId);
+  if (target) {
+    _showDropLine(target);
+    _dropTarget = target;
+  } else {
+    _hideDropLine();
+  }
+}
+
+function _resolveDropTarget(e, draggedBlockId) {
+  const slide = byId('outputWrap') && byId('outputWrap').querySelector('.igs-slide');
+  if (!slide) return null;
+
+  // Find the content zone under the cursor. Walk every .igs-zone-content
+  // and check getBoundingClientRect against the cursor.
+  const zones = slide.querySelectorAll('.igs-zone-content[data-zone-type="content"]');
+  let targetZoneEl = null;
+  for (const z of zones) {
+    const r = z.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right &&
+        e.clientY >= r.top  && e.clientY <= r.bottom) {
+      targetZoneEl = z;
+      break;
+    }
+  }
+  if (!targetZoneEl) return null;
+
+  const targetZoneName = targetZoneEl.getAttribute('data-zone');
+  if (!targetZoneName) return null;
+
+  // Block dropping into a zone that already has 3 blocks (excluding the
+  // dragged block if it's coming from this zone). Section 12 Rule 3.
+  const wrappers = Array.from(targetZoneEl.querySelectorAll('.igs-block-wrapper'))
+    .filter(w => !w.classList.contains('igs-dragging'));
+
+  // Determine insertion index by comparing cursor Y to wrapper midpoints.
+  // 0 = above first; N = after Nth (0-based).
+  let insertIndex = wrappers.length;
+  for (let i = 0; i < wrappers.length; i++) {
+    const r = wrappers[i].getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) {
+      insertIndex = i;
+      break;
+    }
+  }
+
+  return {
+    zone:    targetZoneName,
+    index:   insertIndex,
+    zoneEl:  targetZoneEl,
+    full:    wrappers.length >= 3 && _isCrossZoneOrNewSlot(draggedBlockId, targetZoneName, insertIndex, wrappers),
+  };
+}
+
+function _isCrossZoneOrNewSlot(draggedBlockId, targetZone, insertIndex, wrappers) {
+  // The drop is "filling a new slot" if the dragged block isn't already
+  // in this zone OR if it is but it's leaving its current slot.
+  if (!_state) return false;
+  const slide = getSlide(_state.deck, _state.activeSlideId);
+  if (!slide) return false;
+  const block = slide.blocks.find(b => b.id === draggedBlockId);
+  if (!block) return false;
+  return (block.position && block.position.zone) !== targetZone;
+}
+
+function _showDropLine(target) {
+  if (!_dropLineEl) return;
+  const wrap = byId('outputWrap');
+  if (!wrap) return;
+  const wrapRect = wrap.getBoundingClientRect();
+
+  // Wrappers in the zone (excluding the dragged one).
+  const wrappers = Array.from(target.zoneEl.querySelectorAll('.igs-block-wrapper'))
+    .filter(w => !w.classList.contains('igs-dragging'));
+  const zoneRect = target.zoneEl.getBoundingClientRect();
+
+  let lineTop;
+  if (wrappers.length === 0) {
+    lineTop = zoneRect.top + 8;
+  } else if (target.index >= wrappers.length) {
+    const last = wrappers[wrappers.length - 1].getBoundingClientRect();
+    lineTop = last.bottom + 4;
+  } else {
+    const r = wrappers[target.index].getBoundingClientRect();
+    lineTop = r.top - 4;
+  }
+
+  // Position relative to #outputWrap (the line's offset parent).
+  _dropLineEl.style.display = 'block';
+  _dropLineEl.style.left   = (zoneRect.left  - wrapRect.left + 4) + 'px';
+  _dropLineEl.style.width  = (zoneRect.width - 8) + 'px';
+  _dropLineEl.style.top    = (lineTop - wrapRect.top) + 'px';
+  // Tint red when the target is full (drop will be rejected).
+  _dropLineEl.style.background = target.full ? 'rgba(220,38,38,0.85)' : '';
+}
+
+function _endDrag(e) {
+  const ds = interactionState.dragStart;
+  if (!ds) {
+    setMode('idle');
+    return;
+  }
+
+  ds.wrapper.style.transform = '';
+  ds.wrapper.classList.remove('igs-dragging');
+  document.body.classList.remove('igs-deck-dragging');
+  _hideDropLine();
+
+  const target = _dropTarget;
+  interactionState.dragStart = null;
+
+  if (!target || target.full) {
+    if (target && target.full) {
+      flashCanvasMessage('Zone is full — delete a diagram first or drop elsewhere.');
+    }
+    // Snap back: re-render to discard transform + restore data state.
+    setMode('selectedBlock');
+    setSelected(ds.blockId);
+    return;
+  }
+
+  // Commit the move via the data model.
+  const slideId = _state.activeSlideId;
+  _state.deck = withSlide(_state.deck, slideId, s =>
+    moveBlock(s, ds.blockId, target.zone, target.index)
+  );
+  setMode('idle');
+  rerenderEverything();
+  // Re-select the moved block in the new render so the toolbar follows.
+  setSelected(ds.blockId);
+}
+
+/* ─────────────────────────────────────────
+   PHASE G — RESIZE
+   Mouse-down on .igs-resize-handle starts a resize. The wrapper grows /
+   shrinks live via inline style. Constraints: min 240px width, max =
+   parent zone width, max height = available zone height (Rule 15-17).
+   Hitting a limit blocks that dimension's growth and red-flashes the
+   offending edge for 320ms. Cmd+Z restores the pre-resize state.
+───────────────────────────────────────── */
+
+const HANDLE_SIGNS = {
+  nw: { dx: -1, dy: -1 },
+  n:  { dx:  0, dy: -1 },
+  ne: { dx: +1, dy: -1 },
+  e:  { dx: +1, dy:  0 },
+  se: { dx: +1, dy: +1 },
+  s:  { dx:  0, dy: +1 },
+  sw: { dx: -1, dy: +1 },
+  w:  { dx: -1, dy:  0 },
+};
+const MIN_BLOCK_WIDTH_PX = 240; // ~25% of 960 (Section 5.2)
+
+function _startResize(wrapper, handleEl, e) {
+  if (!_state || !wrapper) return;
+  const blockId = wrapper.getAttribute('data-block-id');
+  if (!blockId) return;
+  const handle = handleEl.getAttribute('data-handle');
+  if (!handle || !HANDLE_SIGNS[handle]) return;
+
+  const slide = wrapper.closest('.igs-slide');
+  const zoneEl = wrapper.closest('.igs-zone-content');
+  if (!slide || !zoneEl) return;
+
+  const slideRect = slide.getBoundingClientRect();
+  const zoneRect  = zoneEl.getBoundingClientRect();
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const scaleX = slideRect.width  / 960;
+  const scaleY = slideRect.height / 540;
+  if (scaleX === 0 || scaleY === 0) return;
+
+  // Snapshot history once at the start of the resize.
+  _pushHistory();
+
+  setMode('resizing');
+  interactionState.resizeStart = {
+    x: e.clientX,
+    y: e.clientY,
+    blockId,
+    wrapper,
+    handle,
+    scaleX,
+    scaleY,
+    slideRect,
+    zoneRect,
+    // Original wrapper dimensions in slide-coord px.
+    startWidth:  wrapperRect.width  / scaleX,
+    startHeight: wrapperRect.height / scaleY,
+    // Available zone (in slide-coord px) for max-width / max-height calc.
+    zoneWidthPx:  zoneRect.width  / scaleX,
+    zoneHeightPx: zoneRect.height / scaleY,
+    // Sum of sibling block heights to compute available height.
+    siblingsHeightPx: (() => {
+      const sibs = Array.from(zoneEl.querySelectorAll('.igs-block-wrapper'))
+        .filter(w => w !== wrapper);
+      let sum = 0;
+      for (const s of sibs) sum += s.getBoundingClientRect().height / scaleY;
+      return sum;
+    })(),
+  };
+  interactionState.resizeHandle = handle;
+  document.body.classList.add('igs-deck-resizing');
+}
+
+function _updateResize(e) {
+  const rs = interactionState.resizeStart;
+  if (!rs) return;
+  const sign = HANDLE_SIGNS[rs.handle];
+  if (!sign) return;
+
+  const dxPx = (e.clientX - rs.x) / rs.scaleX;
+  const dyPx = (e.clientY - rs.y) / rs.scaleY;
+
+  // Compute requested new dimensions.
+  let newWidthPx  = rs.startWidth  + sign.dx * dxPx;
+  let newHeightPx = rs.startHeight + sign.dy * dyPx;
+
+  // Constraints — width.
+  let widthHitLimit = null;
+  if (sign.dx !== 0) {
+    const maxW = rs.zoneWidthPx; // zone owns its own padding; wrapper can fill it
+    if (newWidthPx > maxW) { newWidthPx = maxW; widthHitLimit = sign.dx > 0 ? 'e' : 'w'; }
+    if (newWidthPx < MIN_BLOCK_WIDTH_PX) { newWidthPx = MIN_BLOCK_WIDTH_PX; widthHitLimit = sign.dx > 0 ? 'e' : 'w'; }
+  }
+
+  // Constraints — height. Available = zone height minus sibling heights
+  // minus minimum padding-ish margin. Section 12.5 Rule 15-17.
+  let heightHitLimit = null;
+  if (sign.dy !== 0) {
+    const maxH = Math.max(60, rs.zoneHeightPx - rs.siblingsHeightPx - 8);
+    if (newHeightPx > maxH) { newHeightPx = maxH; heightHitLimit = sign.dy > 0 ? 's' : 'n'; }
+    if (newHeightPx < 40)   { newHeightPx = 40;   heightHitLimit = sign.dy > 0 ? 's' : 'n'; }
+  }
+
+  // Apply via inline style.
+  if (sign.dx !== 0) {
+    const widthPct = (newWidthPx / rs.zoneWidthPx) * 100;
+    rs.wrapper.style.width = `${widthPct}%`;
+  }
+  if (sign.dy !== 0) {
+    rs.wrapper.style.height = `${newHeightPx}px`;
+  }
+
+  // Edge flash — restart the animation when a limit is hit.
+  if (widthHitLimit)  _flashResizeLimit(rs.wrapper, widthHitLimit);
+  if (heightHitLimit) _flashResizeLimit(rs.wrapper, heightHitLimit);
+}
+
+function _flashResizeLimit(wrapper, edge) {
+  if (!wrapper || !edge) return;
+  const cls = `igs-resize-flash-${edge}`;
+  wrapper.classList.remove(cls);
+  // Force reflow to restart the CSS animation.
+  void wrapper.offsetWidth;
+  wrapper.classList.add(cls);
+  setTimeout(() => wrapper.classList.remove(cls), 380);
+}
+
+function _endResize(/* e */) {
+  const rs = interactionState.resizeStart;
+  document.body.classList.remove('igs-deck-resizing');
+  if (!rs) {
+    setMode('idle');
+    return;
+  }
+
+  // Read final dimensions from inline style (or computed if not set).
+  const wrapperRect = rs.wrapper.getBoundingClientRect();
+  const finalWidthPct  = (wrapperRect.width  / rs.scaleX) / rs.zoneWidthPx * 100;
+  const finalHeightPx  =  wrapperRect.height / rs.scaleY;
+
+  // Persist to data model.
+  const slideId = _state.activeSlideId;
+  const blockId = rs.blockId;
+  _state.deck = withSlide(_state.deck, slideId, s => {
+    const block = s.blocks.find(b => b.id === blockId);
+    if (!block) return s;
+    const sign = HANDLE_SIGNS[rs.handle] || {};
+    const newSize = { ...block.size };
+    if (sign.dx !== 0) newSize.widthPct  = Math.round(finalWidthPct * 10) / 10;
+    if (sign.dy !== 0) newSize.heightPct = Math.round(finalHeightPx);
+    return updateBlock(s, blockId, { size: newSize });
+  });
+
+  // Clear inline style — the renderer will re-apply from block.size.
+  rs.wrapper.style.width  = '';
+  rs.wrapper.style.height = '';
+  interactionState.resizeStart = null;
+  interactionState.resizeHandle = null;
+
+  setMode('idle');
+  rerenderEverything();
+  setSelected(blockId);
+}
+
+/* ─────────────────────────────────────────
+   PHASE F + G — GLOBAL MOUSEMOVE / MOUSEUP ROUTERS
+───────────────────────────────────────── */
+
+function handleGlobalMouseMove(e) {
+  if (!_state) return;
+  if (interactionState.mode === 'dragging')  _updateDrag(e);
+  else if (interactionState.mode === 'resizing') _updateResize(e);
+}
+
+function handleGlobalMouseUp(e) {
+  if (!_state) return;
+  if (interactionState.mode === 'dragging')  _endDrag(e);
+  else if (interactionState.mode === 'resizing') _endResize(e);
+}
+
 function clearSelection() {
   if (!interactionState.selectedBlockId) {
     if (_state && _state.replaceMode) {
@@ -547,6 +935,11 @@ export function enterSlideDeckMode(initialTopic, tone, accentColor) {
 
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('click',   _onDocumentClick, true);
+  // Phase F + G — global mousemove/mouseup drive drag-to-reorder and
+  // resize. They early-return when mode isn't 'dragging' or 'resizing',
+  // so they're cheap when idle.
+  window.addEventListener('mousemove', handleGlobalMouseMove);
+  window.addEventListener('mouseup',   handleGlobalMouseUp);
 }
 
 /**
@@ -558,6 +951,8 @@ export function exitSlideDeckMode() {
 
   document.removeEventListener('keydown', handleKeyDown);
   document.removeEventListener('click',   _onDocumentClick, true);
+  window.removeEventListener('mousemove', handleGlobalMouseMove);
+  window.removeEventListener('mouseup',   handleGlobalMouseUp);
 
   // Reset interaction state and re-arm the canvas wiring flag so re-entry
   // re-attaches handlers cleanly even if #outputWrap is replaced by app.js.
@@ -1947,12 +2342,21 @@ function handleCanvasMouseDown(e) {
     return;
   }
 
-  // (2) Grab bar — drag-to-reorder is wired in Phase F.
-  // (3) Resize handle — resize is wired in Phase G.
-  // For now, swallow the mousedown so it doesn't fall through to selection
-  // or text-edit. The buttons stay visible because their wrapper is selected.
-  if (t.closest('.igs-grab-bar') || t.closest('.igs-resize-handle')) {
+  // (2) Grab bar — start drag-to-reorder (Phase F).
+  const grabBar = t.closest('.igs-grab-bar');
+  if (grabBar) {
     e.preventDefault();
+    const wrapper = grabBar.closest('.igs-block-wrapper');
+    if (wrapper) _startDrag(wrapper, e);
+    return;
+  }
+
+  // (3) Resize handle — start resize (Phase G).
+  const resizeHandle = t.closest('.igs-resize-handle');
+  if (resizeHandle) {
+    e.preventDefault();
+    const wrapper = resizeHandle.closest('.igs-block-wrapper');
+    if (wrapper) _startResize(wrapper, resizeHandle, e);
     return;
   }
 

@@ -288,6 +288,77 @@ export function updateBlock(slide, blockId, changes) {
 }
 
 /**
+ * Phase F — Move a block to a different zone and/or position within a zone.
+ * Removes the block from its current zone, inserts it at `targetZone` at
+ * `targetIndex` (0 = top of zone), and renumbers `position.order` cleanly
+ * across both source and target zones (0, 1, 2 …) so subsequent inserts
+ * use predictable orders.
+ *
+ * Immutable — returns a new slide. No-op if the block doesn't exist.
+ *
+ * @param {object} slide
+ * @param {string} blockId
+ * @param {string} targetZone
+ * @param {number} targetIndex — 0-based slot index in the target zone
+ * @returns {object} new slide
+ */
+export function moveBlock(slide, blockId, targetZone, targetIndex) {
+  const block = slide.blocks.find(b => b.id === blockId);
+  if (!block) return slide;
+
+  const sourceZone = block.position && block.position.zone;
+
+  // Build the target zone's ordered list WITHOUT the moving block.
+  const targetList = slide.blocks
+    .filter(b => b.id !== blockId && b.position && b.position.zone === targetZone)
+    .sort((a, b) => (a.position.order || 0) - (b.position.order || 0));
+
+  // Clamp targetIndex into the target list's valid range.
+  const clampedIndex = Math.max(0, Math.min(targetIndex, targetList.length));
+
+  // Insert the moving block at clampedIndex in the target list.
+  const movedBlock = {
+    ...block,
+    position: { zone: targetZone, order: clampedIndex },
+  };
+  const newTargetList = targetList.slice();
+  newTargetList.splice(clampedIndex, 0, movedBlock);
+
+  // Build the source zone's ordered list (if different from target).
+  let newSourceList = null;
+  if (sourceZone && sourceZone !== targetZone) {
+    newSourceList = slide.blocks
+      .filter(b => b.id !== blockId && b.position && b.position.zone === sourceZone)
+      .sort((a, b) => (a.position.order || 0) - (b.position.order || 0));
+  }
+
+  // Renumber both lists 0, 1, 2 … for clean state.
+  const renumber = (list) => list.map((b, i) => ({
+    ...b,
+    position: { ...b.position, order: i },
+  }));
+  const renumberedTarget = renumber(newTargetList);
+  const renumberedSource = newSourceList ? renumber(newSourceList) : null;
+
+  // Reconstruct the full block list: keep blocks from other zones unchanged,
+  // replace blocks in the target zone (and source zone if separate) with the
+  // renumbered lists.
+  const otherBlocks = slide.blocks.filter(b => {
+    if (b.id === blockId) return false; // moving block already in target list
+    const z = b.position && b.position.zone;
+    if (z === targetZone) return false; // replaced by renumberedTarget
+    if (renumberedSource && z === sourceZone) return false; // replaced by renumberedSource
+    return true;
+  });
+
+  const nextBlocks = otherBlocks
+    .concat(renumberedTarget)
+    .concat(renumberedSource || []);
+
+  return { ...slide, blocks: nextBlocks };
+}
+
+/**
  * Compute the next stack-order number for a zone. Used when inserting
  * a block without an explicit order — places it at the bottom of the stack.
  */

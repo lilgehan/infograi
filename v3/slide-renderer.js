@@ -149,6 +149,24 @@ function renderBlock(block, tone) {
 
   const inner = renderSection(section, tone);
 
+  // Phase G — apply user resize state. block.size.widthPct (0-100) sets the
+  // wrapper width as a percentage of its slot. heightPct, when present, sets
+  // an explicit height in CSS px. Default widthPct=100, heightPct=null
+  // (auto-size to content).
+  const sizeStyle = (() => {
+    const sz = block.size || {};
+    const parts = [];
+    if (typeof sz.widthPct === 'number' && sz.widthPct < 100) {
+      parts.push(`width:${sz.widthPct}%`);
+    }
+    if (typeof sz.heightPct === 'number' && sz.heightPct > 0) {
+      // heightPct stores absolute slide-coord pixels (not a percent — name kept
+      // for back-compat with existing data). Phase G v1.
+      parts.push(`height:${sz.heightPct}px`);
+    }
+    return parts.length ? ` style="${parts.join(';')}"` : '';
+  })();
+
   // Phase 3 Unified Interaction — Section D of SLIDE-DECK-PHASE3-UNIFIED-PROMPT.
   // The wrapper has two children, exactly:
   //   .igs-block-content — holds ONLY the diagram. Text inside here is
@@ -159,7 +177,7 @@ function renderBlock(block, tone) {
   //                        contains contenteditable elements.
   // The toolbar lives inside the wrapper (not in document.body) so its
   // position scales with the slide and clicks on it never leave the block.
-  return `<div class="igs-block igs-block-wrapper" data-block-id="${esc(block.id)}">` +
+  return `<div class="igs-block igs-block-wrapper" data-block-id="${esc(block.id)}"${sizeStyle}>` +
            `<div class="igs-block-content"><div class="ig-page">${inner}</div></div>` +
            `<div class="igs-block-ui" aria-hidden="true">` +
              `<div class="igs-grab-bar" title="Drag to reorder">` +
@@ -549,6 +567,64 @@ const DECK_LAYOUT_CSS = `
 .igs-block-wrapper.igs-toolbar-below .igs-block-toolbar {
   top: auto;
   bottom: -52px;
+}
+
+/* ── Phase F — Drag state ──
+   The dragged wrapper follows the cursor via inline transform. We dim it
+   slightly and disable pointer events so the cursor passes through to
+   the insertion-target detection. The siblings stay in place. */
+.igs-block-wrapper.igs-dragging {
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 20;
+  cursor: grabbing;
+  transition: none !important;
+}
+body.igs-deck-dragging,
+body.igs-deck-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+/* Insertion line — 2px solid accent, full zone width. Created lazily
+   in JS and positioned via inline style during a drag. */
+.igs-drop-line {
+  position: absolute;
+  height: 2px;
+  background: var(--accent, #2563EB);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 19;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+  transition: none;
+}
+
+/* ── Phase G — Resize state ──
+   When a resize is in progress, the wrapper shows the limit-flash on
+   whichever edge hit a constraint. */
+.igs-block-wrapper.igs-resize-flash-e::after,
+.igs-block-wrapper.igs-resize-flash-w::after,
+.igs-block-wrapper.igs-resize-flash-n::after,
+.igs-block-wrapper.igs-resize-flash-s::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  background: rgba(220, 38, 38, 0.55);
+  animation: igs-resize-flash 320ms ease-out forwards;
+  z-index: 13;
+}
+.igs-block-wrapper.igs-resize-flash-e::after { top: -8px; bottom: -8px; right: -8px; width: 3px; }
+.igs-block-wrapper.igs-resize-flash-w::after { top: -8px; bottom: -8px; left: -8px;  width: 3px; }
+.igs-block-wrapper.igs-resize-flash-n::after { left: -8px; right: -8px; top: -8px;    height: 3px; }
+.igs-block-wrapper.igs-resize-flash-s::after { left: -8px; right: -8px; bottom: -8px; height: 3px; }
+@keyframes igs-resize-flash {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+body.igs-deck-resizing,
+body.igs-deck-resizing * {
+  user-select: none !important;
 }
 
 /* ── Slide boundary flash (Section 12.4 Rule 5) ──
