@@ -124,7 +124,9 @@ function renderBlock(block, tone) {
   // Text blocks (free-text, no variant) — Section 12 Rule 6.
   // Always contenteditable so clicks route to caret placement. NO visible
   // placeholder text — empty text blocks collapse to zero height via CSS
-  // and only show the browser's caret when focused.
+  // and only show the browser's caret when focused. Text blocks have no
+  // interaction UI layer (no grab bar, no resize handles, no toolbar) —
+  // they are edit-only.
   if (block.type === 'text') {
     const text = (block.items && block.items[0] && block.items[0].body) || '';
     return `<div class="igs-block igs-block-wrapper igs-text-block" ` +
@@ -146,26 +148,44 @@ function renderBlock(block, tone) {
   };
 
   const inner = renderSection(section, tone);
-  // Outer `.igs-block-wrapper` (also keeps `.igs-block` for back-compat with
-  // older selectors) hugs the diagram via inline-flex. Carries the block id
-  // for the Phase 3C cursor system. The drag handle sits above the outline,
-  // and 8 resize circles are absolutely positioned on the outline corners
-  // and edge midpoints — visible only when hovered/selected.
+
+  // Phase 3 Unified Interaction — Section D of SLIDE-DECK-PHASE3-UNIFIED-PROMPT.
+  // The wrapper has two children, exactly:
+  //   .igs-block-content — holds ONLY the diagram. Text inside here is
+  //                        contenteditable. No interaction UI mixed in.
+  //   .igs-block-ui      — holds ALL interaction UI (grab bar, 8 resize
+  //                        handles, toolbar). Shown/hidden as a unit via
+  //                        .igs-hover / .igs-selected on the wrapper. NEVER
+  //                        contains contenteditable elements.
+  // The toolbar lives inside the wrapper (not in document.body) so its
+  // position scales with the slide and clicks on it never leave the block.
   return `<div class="igs-block igs-block-wrapper" data-block-id="${esc(block.id)}">` +
-           `<div class="igs-block-handle" aria-hidden="true">` +
-             `<div class="igs-block-handle-line"></div>` +
-             `<div class="igs-block-handle-line"></div>` +
-             `<div class="igs-block-handle-line"></div>` +
+           `<div class="igs-block-content"><div class="ig-page">${inner}</div></div>` +
+           `<div class="igs-block-ui" aria-hidden="true">` +
+             `<div class="igs-grab-bar" title="Drag to reorder">` +
+               `<div class="igs-grab-bar-line"></div>` +
+               `<div class="igs-grab-bar-line"></div>` +
+               `<div class="igs-grab-bar-line"></div>` +
+             `</div>` +
+             `<div class="igs-resize-handle" data-handle="nw"></div>` +
+             `<div class="igs-resize-handle" data-handle="n"></div>` +
+             `<div class="igs-resize-handle" data-handle="ne"></div>` +
+             `<div class="igs-resize-handle" data-handle="e"></div>` +
+             `<div class="igs-resize-handle" data-handle="se"></div>` +
+             `<div class="igs-resize-handle" data-handle="s"></div>` +
+             `<div class="igs-resize-handle" data-handle="sw"></div>` +
+             `<div class="igs-resize-handle" data-handle="w"></div>` +
+             `<div class="igs-block-toolbar">` +
+               `<button type="button" data-action="replace" title="Replace with another diagram">` +
+                 `<svg viewBox="0 0 24 24"><path d="M7 7h10l-3-3M17 17H7l3 3"/></svg>` +
+                 `Replace` +
+               `</button>` +
+               `<button type="button" data-action="delete" title="Delete this diagram">` +
+                 `<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6"/></svg>` +
+                 `Delete` +
+               `</button>` +
+             `</div>` +
            `</div>` +
-           `<div class="igs-resize-handle is-tl" aria-hidden="true"></div>` +
-           `<div class="igs-resize-handle is-tm" aria-hidden="true"></div>` +
-           `<div class="igs-resize-handle is-tr" aria-hidden="true"></div>` +
-           `<div class="igs-resize-handle is-mr" aria-hidden="true"></div>` +
-           `<div class="igs-resize-handle is-br" aria-hidden="true"></div>` +
-           `<div class="igs-resize-handle is-bm" aria-hidden="true"></div>` +
-           `<div class="igs-resize-handle is-bl" aria-hidden="true"></div>` +
-           `<div class="igs-resize-handle is-ml" aria-hidden="true"></div>` +
-           `<div class="ig-page">${inner}</div>` +
          `</div>`;
 }
 
@@ -224,19 +244,48 @@ function renderTitleBlock(slide, zoneType, zoneName) {
     `;
   }
 
-  // Hero / special title blocks (A2, A3, A4, E1, E2, E6, A4 closing, etc.)
-  const title    = slide.title    || defaultTitleFor(zoneType);
-  const subtitle = slide.subtitle || defaultSubtitleFor(zoneType);
+  // Hero / special title blocks (A2, A3, A4, E1, E2, E6).
+  // Phase 3 Unified Interaction — every text element on every template is
+  // contenteditable. The hero H1, subtitle, and CTA button text all become
+  // editable here. Placeholder text is rendered via CSS attr() when empty.
+  // Defaults are applied only when slide.title / slide.subtitle / slide.ctaLabel
+  // are not set; once the user types, the real value lives in the data model.
+  const titleText    = (slide.title    !== undefined && slide.title    !== null) ? slide.title    : defaultTitleFor(zoneType);
+  const subtitleText = (slide.subtitle !== undefined && slide.subtitle !== null) ? slide.subtitle : defaultSubtitleFor(zoneType);
+  const titlePh      = defaultTitleFor(zoneType);
+  const subtitlePh   = defaultSubtitleFor(zoneType);
 
   let extras = '';
   if (zoneType === 'cta-block') {
-    const cta = slide.ctaLabel || 'Get Started';
-    extras = `<a class="igs-cta-button" href="#" onclick="return false;">${esc(cta)}</a>`;
+    const ctaText = (slide.ctaLabel !== undefined && slide.ctaLabel !== null) ? slide.ctaLabel : 'Get Started';
+    // The <a> element keeps its visual button styling but is NOT contenteditable
+    // itself (the spec says interaction UI elements must never be contenteditable).
+    // The text inside is contenteditable via a span wrapper, so clicks on the
+    // text place a caret while clicks on the button background still trigger
+    // the default link behavior.
+    extras = `<a class="igs-cta-button" href="#" onclick="return false;">` +
+               `<span class="igs-cta-text" ` +
+                     `contenteditable="true" ` +
+                     `data-edit-role="slide-cta" ` +
+                     `data-placeholder="Get Started">${esc(ctaText)}</span>` +
+             `</a>`;
   }
 
+  const titleHtml = `<h1 class="igs-slide-title" ` +
+                       `contenteditable="true" ` +
+                       `data-edit-role="slide-title" ` +
+                       `data-placeholder="${esc(titlePh)}">${esc(titleText)}</h1>`;
+
+  const subtitleHtml = (subtitlePh || subtitleText)
+    ? `<p class="igs-slide-subtitle" ` +
+          `contenteditable="true" ` +
+          `data-edit-role="slide-subtitle" ` +
+          `data-placeholder="${esc(subtitlePh || '')}">${esc(subtitleText)}</p>`
+    : '';
+
   return `
-    <h1 class="igs-slide-title">${esc(title)}</h1>
-    ${subtitle ? `<p class="igs-slide-subtitle">${esc(subtitle)}</p>` : ''}
+    ${titleHtml}
+    ${subtitleHtml}
     ${extras}
   `;
 }
@@ -464,6 +513,37 @@ const DECK_LAYOUT_CSS = `
 }
 .igs-block .ig-page {
   width: 100%;
+}
+
+/* ── Phase 3 Unified Interaction — block content wrapper ──
+   The diagram lives inside .igs-block-content. The interaction UI lives in
+   a sibling .igs-block-ui layer. This separation guarantees that every
+   contenteditable element is inside .igs-block-content and every grab bar /
+   resize handle / toolbar is inside .igs-block-ui — they never overlap in
+   the DOM tree, so clicks unambiguously route to the right handler. ── */
+.igs-block-content {
+  width: 100%;
+  display: block;
+  min-width: 0;
+  /* No padding, no margin — the diagram inside owns its own spacing. */
+}
+
+/* ── Slide boundary flash (Section 12.4 Rule 5) ──
+   Triggered when an Enter keystroke would push content past the slide
+   bottom edge. The handler adds .igs-boundary-flash to the slide element
+   for ~400ms; this overlay paints a 3px red border along the bottom. ── */
+.igs-slide.igs-boundary-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-bottom: 3px solid rgba(220, 38, 38, 0.65);
+  border-radius: 4px;
+  pointer-events: none;
+  animation: igs-boundary-fade 420ms ease-out forwards;
+}
+@keyframes igs-boundary-fade {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* ── Text block ── */

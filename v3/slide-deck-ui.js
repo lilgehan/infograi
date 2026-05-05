@@ -190,6 +190,122 @@ function placeholderItems(variant) {
 ───────────────────────────────────────── */
 
 let _state = null;
+
+/* ─────────────────────────────────────────
+   PHASE 3 UNIFIED INTERACTION STATE
+   Single source of truth for every canvas interaction. Every handler
+   reads/writes this object — no handler decides on its own.
+   Reference: SLIDE-DECK-PHASE3-UNIFIED-PROMPT.md Section A.
+───────────────────────────────────────── */
+
+const interactionState = {
+  // 'idle' | 'hovering' | 'editingText' | 'selectedBlock'
+  // | 'dragging' | 'resizing' | 'thumbnailFocused'
+  // (dragging / resizing are wired in Phase F-G — currently unreachable.)
+  mode:            'idle',
+  hoveredBlockId:  null,
+  selectedBlockId: null,
+  activeTextEl:    null,
+  // Drag/resize fields kept in shape for the deferred phases.
+  dragStart:       null,
+  resizeStart:     null,
+  resizeHandle:    null,
+};
+
+function setMode(newMode) {
+  if (interactionState.mode === newMode) return;
+  // Cleanup when leaving editingText so a stale activeTextEl reference
+  // doesn't survive a click on a different block.
+  if (interactionState.mode === 'editingText' && newMode !== 'editingText') {
+    interactionState.activeTextEl = null;
+  }
+  interactionState.mode = newMode;
+}
+
+function setHovered(blockId) {
+  if (interactionState.hoveredBlockId === blockId) return;
+  const wrap = byId('outputWrap');
+  if (wrap) {
+    if (interactionState.hoveredBlockId) {
+      const prev = wrap.querySelector(
+        `.igs-block-wrapper[data-block-id="${cssEscape(interactionState.hoveredBlockId)}"]`
+      );
+      if (prev) prev.classList.remove('igs-hover');
+    }
+    if (blockId) {
+      const next = wrap.querySelector(
+        `.igs-block-wrapper[data-block-id="${cssEscape(blockId)}"]`
+      );
+      if (next) next.classList.add('igs-hover');
+    }
+  }
+  interactionState.hoveredBlockId = blockId;
+}
+
+function setSelected(blockId) {
+  if (interactionState.selectedBlockId === blockId) {
+    // Same block already selected — make sure mode is right.
+    setMode('selectedBlock');
+    return;
+  }
+  const wrap = byId('outputWrap');
+  if (wrap && interactionState.selectedBlockId) {
+    const prev = wrap.querySelector(
+      `.igs-block-wrapper[data-block-id="${cssEscape(interactionState.selectedBlockId)}"]`
+    );
+    if (prev) prev.classList.remove('igs-selected');
+  }
+  interactionState.selectedBlockId = blockId;
+  if (wrap && blockId) {
+    const next = wrap.querySelector(
+      `.igs-block-wrapper[data-block-id="${cssEscape(blockId)}"]`
+    );
+    if (next) next.classList.add('igs-selected');
+  }
+  setMode(blockId ? 'selectedBlock' : 'idle');
+}
+
+function clearSelection() {
+  if (!interactionState.selectedBlockId) {
+    if (_state && _state.replaceMode) {
+      _state.replaceMode = null;
+      _flashReplaceModeEnd();
+    }
+    return;
+  }
+  const wrap = byId('outputWrap');
+  if (wrap) {
+    wrap.querySelectorAll('.igs-block-wrapper.igs-selected').forEach(el =>
+      el.classList.remove('igs-selected')
+    );
+  }
+  interactionState.selectedBlockId = null;
+  if (_state && _state.replaceMode) {
+    _state.replaceMode = null;
+    _flashReplaceModeEnd();
+  }
+}
+
+function clearHover() {
+  if (!interactionState.hoveredBlockId) return;
+  const wrap = byId('outputWrap');
+  if (wrap) {
+    wrap.querySelectorAll('.igs-block-wrapper.igs-hover').forEach(el =>
+      el.classList.remove('igs-hover')
+    );
+  }
+  interactionState.hoveredBlockId = null;
+}
+
+/**
+ * Minimal CSS.escape polyfill — safer than string interpolation when block IDs
+ * could contain unusual characters. Block IDs come from genId() and are normally
+ * alphanumeric+underscore, but this is a defense in depth.
+ */
+function cssEscape(value) {
+  if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(value);
+  return String(value).replace(/([^A-Za-z0-9_-])/g, '\\$1');
+}
 /* shape:
    {
      deck: { ... },
@@ -273,7 +389,7 @@ export function enterSlideDeckMode(initialTopic, tone, accentColor) {
     });
   }
 
-  document.addEventListener('keydown', _onKeyDown);
+  document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('click',   _onDocumentClick, true);
 }
 
@@ -284,8 +400,16 @@ export function enterSlideDeckMode(initialTopic, tone, accentColor) {
 export function exitSlideDeckMode() {
   if (!_state) return;
 
-  document.removeEventListener('keydown', _onKeyDown);
+  document.removeEventListener('keydown', handleKeyDown);
   document.removeEventListener('click',   _onDocumentClick, true);
+
+  // Reset interaction state and re-arm the canvas wiring flag so re-entry
+  // re-attaches handlers cleanly even if #outputWrap is replaced by app.js.
+  setHovered(null);
+  clearSelection();
+  setMode('idle');
+  interactionState.activeTextEl = null;
+  _canvasInputWired = false;
 
   hidePopover();
   hideContextMenu();
@@ -534,12 +658,29 @@ function renderThumbnailPanel() {
 
   panel.innerHTML = items.join('');
 
-  // Wire thumbnail clicks
+  // Wire thumbnail clicks. tabindex="0" is set in renderThumb so each cell
+  // can receive keyboard focus; focus + blur put the panel into / out of
+  // 'thumbnailFocused' mode so the keydown router can route Delete to slide
+  // deletion (Section C of the spec).
   panel.querySelectorAll('.igs-thumb-wrap').forEach(el => {
-    el.addEventListener('click', () => setActiveSlide(el.dataset.slideId));
+    el.addEventListener('click', () => {
+      setActiveSlide(el.dataset.slideId);
+      // Click also gives the cell focus → enters thumbnailFocused mode.
+      try { el.focus({ preventScroll: false }); } catch {}
+    });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       showSlideContextMenu(el.dataset.slideId, e.clientX, e.clientY);
+    });
+    el.addEventListener('focus', () => {
+      if (interactionState.mode !== 'editingText') {
+        setMode('thumbnailFocused');
+      }
+    });
+    el.addEventListener('blur', () => {
+      if (interactionState.mode === 'thumbnailFocused') {
+        setMode('idle');
+      }
     });
   });
 
@@ -555,7 +696,7 @@ function renderThumb(slide, idx) {
   const isActive = slide.id === _state.activeSlideId;
   const inner = renderSlide(slide, _state.tone, _state.accentColor);
   return `
-    <div class="igs-thumb-wrap ${isActive ? 'is-active' : ''}" data-slide-id="${slide.id}" title="Slide ${idx + 1}">
+    <div class="igs-thumb-wrap ${isActive ? 'is-active' : ''}" data-slide-id="${slide.id}" tabindex="0" role="button" aria-label="Slide ${idx + 1}" title="Slide ${idx + 1}">
       <div class="igs-thumb-label">${idx + 1}</div>
       <div class="igs-thumb-inner">${inner}</div>
     </div>
@@ -787,13 +928,17 @@ function renderActiveSlide() {
   fitSlideStage();
   ensureCanvasResizeObserver();
 
-  // Phase 3C — invisible editing: every text node is contenteditable from
-  // render time, and the canvas-level input handler is wired exactly once.
-  wireCanvasEditingOnce();
+  // Phase 3 Unified Interaction — wire mousemove / mousedown / click /
+  // input handlers exactly once. Event delegation survives renderActiveSlide
+  // replacing the inner HTML.
+  wireUnifiedInteractionOnce();
   makeSlideTextEditable();
-  // Drop any block selection from a prior render
-  _hideBlockToolbar();
-  if (_state) _state.selected = null;
+  // Drop any block selection / hover from a prior render. The toolbar is
+  // now part of the rendered DOM, so it disappears with the old slide
+  // automatically — no separate hide call needed.
+  setHovered(null);
+  clearSelection();
+  if (interactionState.mode === 'selectedBlock') setMode('idle');
 
   updateSlideNav();
 }
@@ -1163,11 +1308,109 @@ function hideContextMenu() {
    GLOBAL EVENT HANDLERS
 ───────────────────────────────────────── */
 
-function _onKeyDown(e) {
+/**
+ * Phase 3 Unified Interaction — keyboard router (Section C of the spec).
+ * Branches by interactionState.mode so each context handles keys correctly:
+ *
+ *   editingText       → Enter is boundary-checked; Escape blurs; Delete is
+ *                       a normal text-character delete (browser default).
+ *   selectedBlock     → Delete/Backspace removes the block; Escape deselects.
+ *                       Arrows still navigate slides for keyboard users.
+ *   thumbnailFocused  → Delete/Backspace removes the focused slide (min 1
+ *                       slide); Arrows navigate thumbnails; Escape returns.
+ *   idle              → Arrows navigate slides; Escape closes overlays.
+ */
+function handleKeyDown(e) {
   if (!_state) return;
-  // Don't capture arrows when typing in an input/textarea
   const tag = (e.target && e.target.tagName) || '';
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+  // Always let regular form fields handle their own keys (API key input, etc.).
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  switch (interactionState.mode) {
+    case 'editingText':       handleKeyDownInTextEdit(e);    return;
+    case 'selectedBlock':     handleKeyDownOnSelectedBlock(e); return;
+    case 'thumbnailFocused':  handleKeyDownOnThumbnail(e);   return;
+    default:                  handleKeyDownIdle(e);          return;
+  }
+}
+
+function handleKeyDownInTextEdit(e) {
+  if (e.key === 'Escape') {
+    if (interactionState.activeTextEl) {
+      try { interactionState.activeTextEl.blur(); } catch {}
+    }
+    interactionState.activeTextEl = null;
+    setMode('idle');
+    e.preventDefault();
+    return;
+  }
+  if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    // Section 12.4 Rule 5 — block Enter at slide bottom. Adding a line that
+    // would push content past the slide boundary is rejected silently with
+    // a red flash. Nothing moves.
+    if (wouldEnterPushPastBoundary(e.target)) {
+      e.preventDefault();
+      flashSlideBoundary();
+      return;
+    }
+    // Otherwise let the browser insert the newline.
+  }
+  // Delete / Backspace / character keys: let the browser handle text editing.
+}
+
+function handleKeyDownOnSelectedBlock(e) {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    _deleteSelectedBlock();
+    return;
+  }
+  if (e.key === 'Escape') {
+    clearSelection();
+    setMode('idle');
+    e.preventDefault();
+    return;
+  }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    navigateSlide(-1);
+  } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    navigateSlide(+1);
+  }
+}
+
+function handleKeyDownOnThumbnail(e) {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (_state && _state.deck.slides.length > 1) {
+      e.preventDefault();
+      deleteActiveSlide();
+    } else {
+      // Last slide — block deletion silently.
+      e.preventDefault();
+    }
+    return;
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+    e.preventDefault();
+    navigateSlide(-1);
+    _focusActiveThumbnail();
+  } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    navigateSlide(+1);
+    _focusActiveThumbnail();
+  } else if (e.key === 'Escape') {
+    setMode('idle');
+    const wrap = byId('outputWrap');
+    if (wrap) {
+      try { wrap.focus(); } catch {}
+    }
+  }
+}
+
+function handleKeyDownIdle(e) {
+  // Don't capture arrows while a regular contenteditable has focus that we
+  // didn't explicitly enter via mousedown (rare path — defensive).
+  if (e.target && e.target.isContentEditable) return;
 
   if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
     navigateSlide(-1);
@@ -1179,7 +1422,79 @@ function _onKeyDown(e) {
     hidePopover();
     hideContextMenu();
     closeGalleryOverlay();
+    if (interactionState.selectedBlockId) clearSelection();
   }
+}
+
+/**
+ * Move keyboard focus to the active thumbnail. Called after arrow-key
+ * navigation while in thumbnailFocused mode so the focus follows the
+ * selection.
+ */
+function _focusActiveThumbnail() {
+  if (!_state) return;
+  const panel = byId('igsThumbPanel');
+  if (!panel) return;
+  const cell = panel.querySelector(
+    `.igs-thumb-wrap[data-slide-id="${cssEscape(_state.activeSlideId)}"]`
+  );
+  if (cell) {
+    try { cell.focus({ preventScroll: false }); } catch {}
+  }
+}
+
+/* ─────────────────────────────────────────
+   ENTER BOUNDARY DETECTION (Section 12.4 Rule 5)
+   Uses getBoundingClientRect() so the math works under the canvas's
+   CSS transform: scale(...). Computed line-height is in unscaled px;
+   we multiply by the slide's scale factor to compare against screen-space
+   rect coordinates. Per the user's instruction, accuracy over micro-perf.
+───────────────────────────────────────── */
+
+function wouldEnterPushPastBoundary(textEl) {
+  if (!textEl || !textEl.getBoundingClientRect) return false;
+  const slideEl = textEl.closest('.igs-slide');
+  if (!slideEl) return false;
+
+  const slideRect = slideEl.getBoundingClientRect();
+  const textRect  = textEl.getBoundingClientRect();
+  if (slideRect.height === 0) return false;
+
+  // The slide is rendered at 540px native and CSS-scaled. Use the rendered
+  // height to derive the actual scale factor, not a hardcoded constant.
+  const scaleY = slideRect.height / 540;
+
+  const cs = window.getComputedStyle(textEl);
+  let lineHeight = parseFloat(cs.lineHeight);
+  if (!isFinite(lineHeight) || isNaN(lineHeight)) {
+    const fontSize = parseFloat(cs.fontSize) || 16;
+    lineHeight = fontSize * 1.5;
+  }
+  // lineHeight from getComputedStyle is in unscaled px (the element is INSIDE
+  // the scaled .igs-slide so its computed style is pre-transform).
+  const visualDelta = lineHeight * scaleY;
+
+  // Slide content area excludes the 5% bottom padding (per spec).
+  const slidePadBottom = slideRect.height * 0.05;
+  const slideBoundary  = slideRect.bottom - slidePadBottom;
+
+  // Project: caret at textRect.bottom; one new line below puts the bottom
+  // edge at textRect.bottom + visualDelta. If that crosses the slide
+  // boundary, the Enter is blocked.
+  const projectedBottom = textRect.bottom + visualDelta;
+  return projectedBottom > slideBoundary;
+}
+
+function flashSlideBoundary() {
+  const wrap = byId('outputWrap');
+  if (!wrap) return;
+  const slide = wrap.querySelector('.igs-slide');
+  if (!slide) return;
+  slide.classList.remove('igs-boundary-flash');
+  // Force a reflow so removing+adding restarts the CSS animation.
+  void slide.offsetWidth;
+  slide.classList.add('igs-boundary-flash');
+  setTimeout(() => slide.classList.remove('igs-boundary-flash'), 480);
 }
 
 function _onDocumentClick(e) {
@@ -1374,71 +1689,217 @@ function makeSlideTextEditable() {
 }
 
 /**
- * Wire the canvas-level input/click handlers exactly once. The handlers
+ * Wire the canvas-level interaction handlers exactly once. The handlers
  * use event delegation, so they survive renderActiveSlide() replacing the
  * inner HTML.
+ *
+ * Phase 3 Unified Interaction — Section B of the spec. Six listeners only:
+ *   canvas:  mousemove / mousedown / click / input
+ *   document: keydown   (already attached in enterSlideDeckMode)
+ * Window-level mousemove + mouseup are reserved for drag/resize (Phase F-G,
+ * deferred). All hover detection goes through mousemove + closest() — there
+ * are NO mouseenter/mouseleave/mouseover/mouseout listeners on blocks.
  */
-function wireCanvasEditingOnce() {
+function wireUnifiedInteractionOnce() {
   if (_canvasInputWired) return;
   const wrap = byId('outputWrap');
   if (!wrap) return;
   _canvasInputWired = true;
 
-  // Debounced save on every keystroke inside an editable text element
-  wrap.addEventListener('input', _onCanvasInput);
-  // Detect blank-zone clicks → create free-text element
-  wrap.addEventListener('click',  _onCanvasClick);
-  // Sanitize empty contenteditable elements so :empty CSS placeholder works
-  wrap.addEventListener('input',  _sanitizeEmptyOnInput);
-  // Phase 3D — hover state (outline + handle) on diagram blocks
-  // mouseover/mouseout bubble (mouseenter/mouseleave do not), so we use
-  // them with relatedTarget checks for clean enter/leave semantics.
-  wrap.addEventListener('mouseover', _onCanvasMouseOver);
-  wrap.addEventListener('mouseout',  _onCanvasMouseOut);
+  wrap.addEventListener('mousemove', handleCanvasMouseMove);
+  wrap.addEventListener('mousedown', handleCanvasMouseDown);
+  wrap.addEventListener('click',     handleCanvasClick);
+  wrap.addEventListener('input',     handleCanvasInput);
+  // Sanitize lone <br> in contenteditable elements so :empty placeholder works.
+  wrap.addEventListener('input',     _sanitizeEmptyOnInput);
 }
 
-function _onCanvasMouseOver(e) {
-  const block = e.target && e.target.closest && e.target.closest('.igs-block-wrapper');
-  if (!block) return;
-  // Don't highlight text blocks (they aren't selectable diagrams)
-  if (block.classList.contains('igs-text-block')) return;
-  block.classList.add('igs-block-hover');
-}
+/* ─────────────────────────────────────────
+   PHASE 3 UNIFIED — CANVAS HANDLERS
+───────────────────────────────────────── */
 
-function _onCanvasMouseOut(e) {
-  const block = e.target && e.target.closest && e.target.closest('.igs-block-wrapper');
-  if (!block) return;
-  // Only remove hover when the pointer truly leaves the block. The handle
-  // and resize handles peek outside the wrapper bounds via outline-offset,
-  // so we also count them as "still inside" when relatedTarget is one.
-  const to = e.relatedTarget;
-  if (to && (block.contains(to) || (to.closest && (to.closest('.igs-block-handle') || to.closest('.igs-resize-handle'))))) {
+/**
+ * Hover detection — Section C of the spec. Resolves the nearest
+ * `[data-block-id]` ancestor and toggles `.igs-hover` only when the resolved
+ * id actually changes. This eliminates the flicker that mouseover/mouseout
+ * delegation produced when the cursor moved between text inside the diagram,
+ * the diagram background, the grab bar, and the resize handles.
+ */
+function handleCanvasMouseMove(e) {
+  if (!_state) return;
+  // Don't update hover during text edit / drag / resize.
+  if (interactionState.mode === 'editingText' ||
+      interactionState.mode === 'dragging'    ||
+      interactionState.mode === 'resizing') {
     return;
   }
-  block.classList.remove('igs-block-hover');
+  const t = e.target;
+  if (!t || !t.closest) return;
+
+  const wrapper = t.closest('.igs-block-wrapper');
+  // Treat text blocks (free-text) as non-hoverable diagrams — they have no UI layer.
+  const blockId = (wrapper && !wrapper.classList.contains('igs-text-block'))
+    ? wrapper.getAttribute('data-block-id')
+    : null;
+
+  setHovered(blockId);
 }
 
-function _onCanvasInput(e) {
+/**
+ * Primary interaction dispatcher — Section C of the spec. Every canvas
+ * mousedown is routed here, in this exact order:
+ *   1. Toolbar button   → swallow (the click event runs the action)
+ *   2. Grab bar         → DRAG (deferred to Phase F)
+ *   3. Resize handle    → RESIZE (deferred to Phase G)
+ *   4. Contenteditable  → enter editingText
+ *   5. Block wrapper    → select the block
+ *   6. Nothing matched  → deselect, mode = idle
+ */
+function handleCanvasMouseDown(e) {
+  if (!_state) return;
+  const t = e.target;
+  if (!t || !t.closest) return;
+
+  // (1) Toolbar buttons — let the click event deliver the action. Don't
+  // change selection or trigger any other dispatch path.
+  if (t.closest('.igs-block-toolbar')) {
+    return;
+  }
+
+  // (2) Grab bar — drag-to-reorder is wired in Phase F.
+  // (3) Resize handle — resize is wired in Phase G.
+  // For now, swallow the mousedown so it doesn't fall through to selection
+  // or text-edit. The buttons stay visible because their wrapper is selected.
+  if (t.closest('.igs-grab-bar') || t.closest('.igs-resize-handle')) {
+    e.preventDefault();
+    return;
+  }
+
+  // (4) Contenteditable text — Section 12 Rule 21. Edit, don't select.
+  // The browser handles caret placement; we just record the active element.
+  const editableEl = t.closest('[contenteditable="true"]');
+  if (editableEl) {
+    if (interactionState.selectedBlockId) clearSelection();
+    interactionState.activeTextEl = editableEl;
+    setMode('editingText');
+    // Don't preventDefault — let the browser place the caret naturally.
+    return;
+  }
+
+  // (5) Block — Rule 19. Select on mousedown so the toolbar appears
+  // immediately (no waiting for click). Text blocks (free-text) are
+  // edit-only and don't get a selection state.
+  const wrapper = t.closest('.igs-block-wrapper');
+  if (wrapper) {
+    if (wrapper.classList.contains('igs-text-block')) {
+      // Text block clicked outside its contenteditable area (rare —
+      // text blocks ARE the contenteditable element). Treat as text edit.
+      if (interactionState.selectedBlockId) clearSelection();
+      interactionState.activeTextEl = wrapper;
+      setMode('editingText');
+      return;
+    }
+    const blockId = wrapper.getAttribute('data-block-id');
+    if (blockId) {
+      setSelected(blockId);
+      // Note: do NOT preventDefault — clicking on a diagram should still
+      // place a caret if the click lands on a text node (handled by case 4
+      // before we get here, but this guard is defense in depth).
+    }
+    return;
+  }
+
+  // (6) Nothing matched — deselect any current selection, return to idle.
+  // Section 12 Rule 20. The click event will then handle free-text creation
+  // if the click landed in a content zone's blank area.
+  if (interactionState.selectedBlockId) {
+    clearSelection();
+  }
+  if (interactionState.mode !== 'idle') {
+    setMode('idle');
+  }
+}
+
+/**
+ * Canvas click — runs after mousedown + mouseup. The mousedown dispatcher
+ * has already handled selection and text-edit transitions. The click handler
+ * is responsible for two things only:
+ *   1. Toolbar button actions (delete / replace).
+ *   2. Free-text creation when the click lands on a content zone's blank
+ *      area (Section 12 Rule 6).
+ */
+function handleCanvasClick(e) {
+  if (!_state) return;
+  const t = e.target;
+  if (!t || !t.closest) return;
+
+  // (1) Toolbar buttons — execute the action. The toolbar lives inside the
+  // selected wrapper, so we already have a valid selection.
+  const tbBtn = t.closest('.igs-block-toolbar button');
+  if (tbBtn) {
+    const action = tbBtn.getAttribute('data-action');
+    if (action === 'delete') {
+      _deleteSelectedBlock();
+    } else if (action === 'replace') {
+      _enterReplaceMode();
+    }
+    e.stopPropagation();
+    return;
+  }
+
+  // (2) Free-text creation — only when the user just clicked an empty zone.
+  // Skip when we're now editing text or holding a selection — those are not
+  // free-text-creation contexts.
+  if (interactionState.mode === 'editingText') return;
+  if (interactionState.mode === 'selectedBlock') return;
+
+  if (t.closest('.igs-accent-placeholder')) return;
+  if (t.closest('.igs-block-wrapper')) return;
+  if (t.closest('[contenteditable="true"]')) return;
+
+  const zoneEl = t.closest('.igs-zone-content');
+  if (zoneEl && zoneEl.getAttribute('data-zone-type') !== 'title-block') {
+    _createFreeText(zoneEl, e);
+  }
+}
+
+/**
+ * Canvas input dispatcher — debounced save on every keystroke inside an
+ * editable text element. Routes by element role:
+ *   - hero / compact slide title (H1 or H2 with data-edit-role="slide-title")
+ *   - hero subtitle (data-edit-role="slide-subtitle")
+ *   - hero CTA span (data-edit-role="slide-cta")
+ *   - any diagram text class (SLIDE_TEXT_SEL)
+ *   - free-text temp element
+ *   - committed text block
+ */
+function handleCanvasInput(e) {
   if (!_state) return;
   const el = e.target;
   if (!el || !el.matches) return;
 
-  // Slide-title edits (H2 with data-edit-role="slide-title")
-  if (el.matches('h2.igs-slide-title[data-edit-role="slide-title"]')) {
+  // Slide-title edits — match by data-edit-role so this works for both
+  // compact title rows (H2) and hero/special title slides (H1).
+  if (el.matches('[data-edit-role="slide-title"]')) {
     _scheduleSave(el, () => _commitSlideTitle(el));
     return;
   }
-  // Diagram text edits — match any of SLIDE_TEXT_SEL
+  if (el.matches('[data-edit-role="slide-subtitle"]')) {
+    _scheduleSave(el, () => _commitSlideSubtitle(el));
+    return;
+  }
+  if (el.matches('[data-edit-role="slide-cta"]')) {
+    _scheduleSave(el, () => _commitSlideCta(el));
+    return;
+  }
   if (el.matches(SLIDE_TEXT_SEL)) {
     _scheduleSave(el, () => _commitDiagramText(el));
     return;
   }
-  // Free-text element (created on blank-zone click)
   if (el.matches('.igs-free-text-temp')) {
     _scheduleSave(el, () => _commitFreeText(el));
     return;
   }
-  // Committed text block (rendered from data model, has data-block-id)
   if (el.matches('.igs-text-block')) {
     _scheduleSave(el, () => _commitTextBlock(el));
     return;
@@ -1501,6 +1962,38 @@ function _commitSlideTitle(el) {
   _state.deck = updateSlide(_state.deck, slideId, { title: newTitle });
   // Refresh ONLY the thumbnail for this slide — don't re-render the active
   // slide canvas (would interrupt the user's caret).
+  refreshThumbnail(slideId);
+}
+
+/**
+ * Commit edits to the hero subtitle (A2 / A3 / A4 / E1 / E2 / E6).
+ * Phase 3 Unified Interaction — every text element on every template is
+ * now editable, so subtitle edits flow back to the data model the same way
+ * title edits do.
+ */
+function _commitSlideSubtitle(el) {
+  if (!_state) return;
+  const slideEl = el.closest('.igs-slide');
+  if (!slideEl) return;
+  const slideId = slideEl.getAttribute('data-slide-id');
+  if (!slideId) return;
+  const newSubtitle = (el.textContent || '').trim();
+  _state.deck = updateSlide(_state.deck, slideId, { subtitle: newSubtitle });
+  refreshThumbnail(slideId);
+}
+
+/**
+ * Commit edits to the CTA button text on E6 (Call to Action). The data
+ * model field is `ctaLabel`.
+ */
+function _commitSlideCta(el) {
+  if (!_state) return;
+  const slideEl = el.closest('.igs-slide');
+  if (!slideEl) return;
+  const slideId = slideEl.getAttribute('data-slide-id');
+  if (!slideId) return;
+  const newCta = (el.textContent || '').trim();
+  _state.deck = updateSlide(_state.deck, slideId, { ctaLabel: newCta });
   refreshThumbnail(slideId);
 }
 
@@ -1638,46 +2131,11 @@ function _isNumberFamilyText(el) {
   return false;
 }
 
-/* ── Free-text creation on blank-zone click ─ */
-
-function _onCanvasClick(e) {
-  if (!_state) return;
-  const target = e.target;
-  if (!target || !target.matches) return;
-
-  const inEditable     = target.closest && target.closest('[contenteditable="true"]');
-  const inBlock        = target.closest && target.closest('.igs-block-wrapper');
-  const inResizeHandle = target.closest && target.closest('.igs-resize-handle');
-  const inHandle       = target.closest && target.closest('.igs-block-handle');
-
-  // Section 12 Rule 20 — Deselection. Click outside a block, its toolbar,
-  // or a resize handle clears any selection. Toolbar lives in document.body
-  // so its clicks never reach this listener.
-  if (_state.selected && !inBlock && !inResizeHandle) {
-    _deselectBlock();
-  }
-
-  // Click on a resize handle — drag wiring is deferred, but consume the
-  // click so it doesn't fall through to free-text creation.
-  if (inResizeHandle) return;
-  // Click on the drag handle — same: let it consume clicks; selection
-  // will fall through via the wrapper match below.
-  // Click inside contenteditable text — Section 12 Rule 21: edit, don't select.
-  if (inEditable) return;
-  // Click on accent placeholder — ignore.
-  if (target.closest && target.closest('.igs-accent-placeholder')) return;
-  // Click on a diagram block (background, SVG, padding) — select it.
-  if (inBlock) {
-    _selectBlock(inBlock);
-    return;
-  }
-  // Click on a content zone's blank area → text cursor (Rule 6).
-  const zoneEl = target.closest && target.closest('.igs-zone-content');
-  if (zoneEl && zoneEl.getAttribute('data-zone-type') !== 'title-block') {
-    _createFreeText(zoneEl, e);
-    return;
-  }
-}
+/* ── Free-text creation on blank-zone click ─
+   The legacy `_onCanvasClick` was replaced in Phase 3 Unified Interaction
+   by `handleCanvasMouseDown` (selection / text-edit dispatcher) and
+   `handleCanvasClick` (toolbar buttons + free-text creation only).
+   Free-text creation itself lives in `_createFreeText` below. */
 
 function _createFreeText(zoneEl, evt) {
   if (!_state) return;
@@ -1702,6 +2160,8 @@ function _createFreeText(zoneEl, evt) {
     if (existing.contentEditable !== 'true') existing.contentEditable = 'true';
     existing.focus();
     _placeCaretAtEnd(existing);
+    interactionState.activeTextEl = existing;
+    setMode('editingText');
     return;
   }
 
@@ -1732,6 +2192,8 @@ function _createFreeText(zoneEl, evt) {
   ft.contentEditable = 'true';
   stack.appendChild(ft);
   ft.focus();
+  interactionState.activeTextEl = ft;
+  setMode('editingText');
 }
 
 /**
@@ -1753,104 +2215,49 @@ function _placeCaretAtEnd(el) {
    PHASE 3D — DIAGRAM SELECTION + DELETE + REPLACE
 ───────────────────────────────────────── */
 
+/**
+ * Phase 3 Unified Interaction — selection helpers.
+ * The toolbar is part of the rendered DOM (inside .igs-block-ui), so its
+ * visibility is class-driven via CSS — there's no DOM manipulation needed
+ * here beyond delegating to setSelected/clearSelection. Kept as thin
+ * wrappers so call sites remain readable.
+ */
 function _selectBlock(blockEl) {
-  if (!_state) return;
-  // Text blocks are always edit-on-click — never select them as diagrams.
+  if (!_state || !blockEl) return;
   if (blockEl.classList.contains('igs-text-block')) return;
-
-  const slideEl = blockEl.closest('.igs-slide');
-  if (!slideEl) return;
-  const slideId = slideEl.getAttribute('data-slide-id');
   const blockId = blockEl.getAttribute('data-block-id');
-  if (!slideId || !blockId) return;
-
-  // If clicking the already-selected block, no-op
-  if (_state.selected &&
-      _state.selected.blockId === blockId &&
-      _state.selected.slideId === slideId) {
-    return;
-  }
-
-  _deselectBlock();
-  _state.selected = { blockId, slideId };
-  blockEl.classList.add('igs-block-selected');
-  _showBlockToolbar(blockEl);
+  if (!blockId) return;
+  setSelected(blockId);
 }
 
 function _deselectBlock() {
-  if (!_state || !_state.selected) return;
-  const wrap = byId('outputWrap');
-  if (wrap) {
-    wrap.querySelectorAll('.igs-block-wrapper.igs-block-selected').forEach(el =>
-      el.classList.remove('igs-block-selected')
-    );
-  }
-  _hideBlockToolbar();
-  _state.selected = null;
-  // Cancel any pending replace mode if user clicked away
-  if (_state.replaceMode) {
-    _state.replaceMode = null;
-    _flashReplaceModeEnd();
-  }
+  clearSelection();
+  if (interactionState.mode === 'selectedBlock') setMode('idle');
 }
 
-function _showBlockToolbar(blockEl) {
-  _hideBlockToolbar();
-  const tb = document.createElement('div');
-  tb.className = 'igs-block-toolbar';
-  // Replace icon: two arrows in opposite directions (swap)
-  // Delete icon: trash can
-  tb.innerHTML = `
-    <button data-action="replace" title="Replace with another diagram">
-      <svg viewBox="0 0 24 24"><path d="M7 7h10l-3-3M17 17H7l3 3"/></svg>
-      Replace
-    </button>
-    <button data-action="delete" title="Delete this diagram">
-      <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6"/></svg>
-      Delete
-    </button>
-  `;
-  const rect = blockEl.getBoundingClientRect();
-  tb.style.cssText = `
-    position: fixed;
-    left: ${Math.round(rect.left)}px;
-    top: ${Math.round(Math.max(8, rect.top - 40))}px;
-    z-index: 9999;
-  `;
-  document.body.appendChild(tb);
-  tb.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    _deleteSelectedBlock();
-  });
-  tb.querySelector('[data-action="replace"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    _enterReplaceMode();
-  });
-  _state.blockToolbar = tb;
-}
-
-function _hideBlockToolbar() {
-  if (_state && _state.blockToolbar) {
-    _state.blockToolbar.remove();
-    _state.blockToolbar = null;
-  }
-}
+/** Toolbar visibility is now class-driven (.igs-selected on the wrapper). */
+function _showBlockToolbar(/* blockEl */) { /* no-op — kept for backward compat */ }
+function _hideBlockToolbar()              { /* no-op — kept for backward compat */ }
 
 function _deleteSelectedBlock() {
-  if (!_state || !_state.selected) return;
-  const { slideId, blockId } = _state.selected;
+  if (!_state) return;
+  const blockId = interactionState.selectedBlockId;
+  if (!blockId) return;
+  const slideId = _state.activeSlideId;
+  if (!slideId) return;
   _state.deck = withSlide(_state.deck, slideId, s => removeBlock(s, blockId));
-  _state.selected = null;
-  _hideBlockToolbar();
+  clearSelection();
+  setMode('idle');
   rerenderEverything();
 }
 
 function _enterReplaceMode() {
-  if (!_state || !_state.selected) return;
-  _state.replaceMode = { ..._state.selected };
-  _hideBlockToolbar();
+  if (!_state) return;
+  const blockId = interactionState.selectedBlockId;
+  if (!blockId) return;
+  _state.replaceMode = { blockId, slideId: _state.activeSlideId };
   flashCanvasMessage('Replace mode — pick a diagram from the gallery to swap.');
-  // Open the gallery overlay scrolled to diagrams
+  // Open the gallery overlay scrolled to diagrams.
   toggleGalleryOverlay('diagrams');
 }
 
@@ -1886,7 +2293,8 @@ function _replaceSelectedBlockVariant(variant, family) {
     })
   );
   _state.replaceMode = null;
-  _state.selected   = null;
+  clearSelection();
+  setMode('idle');
   closeGalleryOverlay();
   rerenderEverything();
   return true;
@@ -2351,34 +2759,60 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   cursor: not-allowed;
 }
 
-/* ── Phase 3D + Section 12.6 — Diagram hover, handle, selection, resize ──
+/* ── Phase 3 Unified Interaction — block wrapper, hover, selection ──
    The block wrapper hugs its diagram via inline-flex column. Hover and
    selected states use outline + outline-offset:8px so there's 8px of
    breathing room between the diagram and the visible border. The slot
-   wrapper is overflow:visible so handles peek outside cleanly. ── */
+   wrapper is overflow:visible so handles peek outside cleanly.
+
+   Class hierarchy on the wrapper:
+     .igs-block-wrapper                 — base
+     .igs-block-wrapper.igs-hover       — pointer is over this block
+     .igs-block-wrapper.igs-selected    — block is selected (mouse-released)
+   Grab bar shows in BOTH states. Resize handles + toolbar show only when
+   selected. Section 12.6 Rules 18 + 19 + 22. ── */
 .igs-block-wrapper {
   display: inline-flex;
   flex-direction: column;
   width: 100%;
   position: relative;
 }
-.igs-block-wrapper.igs-block-hover {
+.igs-block-wrapper.igs-hover {
   outline: 2px solid rgba(37, 99, 235, 0.30);
   outline-offset: 8px;
   border-radius: 4px;
 }
-.igs-block-wrapper.igs-block-selected {
+.igs-block-wrapper.igs-selected {
   outline: 2px solid #2563EB;
   outline-offset: 8px;
   border-radius: 4px;
 }
 
-/* ── Drag handle (Rule 18) ──
+/* ── Interaction UI layer ──
+   Holds grab bar + 8 resize handles + toolbar. Hidden by default; shown
+   as a unit on hover and selection. NEVER contains contenteditable
+   elements — clicking anything in here triggers selection/drag/resize,
+   never text editing. The layer itself is pointer-events:none so it
+   doesn't block clicks from reaching the diagram content underneath;
+   each visible UI element re-enables pointer-events on itself. ── */
+.igs-block-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+/* Hover shows grab bar only. Selected shows everything in the UI layer. */
+.igs-block-wrapper.igs-hover     .igs-grab-bar,
+.igs-block-wrapper.igs-selected  .igs-grab-bar { display: flex; }
+.igs-block-wrapper.igs-selected  .igs-resize-handle,
+.igs-block-wrapper.igs-selected  .igs-block-toolbar { display: flex; }
+
+/* ── Grab bar (Rule 18) ──
    40x16 tab above the diagram, 24px above the wrapper edge so it sits
    above the outline. Grip texture is 3 white horizontal lines. cursor:grab
-   on hover, cursor:grabbing on mousedown — the affordance is visible
-   even though drag-to-reorder logic isn't wired yet. ── */
-.igs-block-handle {
+   on hover, cursor:grabbing on mousedown. Drag-to-reorder is wired in
+   Phase F (deferred). ── */
+.igs-grab-bar {
   position: absolute;
   top: -24px;
   left: 50%;
@@ -2387,7 +2821,7 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   height: 16px;
   border-radius: 4px;
   background: var(--accent, #2563EB);
-  z-index: 11;
+  z-index: 13;
   display: none;
   pointer-events: auto;
   cursor: grab;
@@ -2397,24 +2831,21 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   gap: 2px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.18);
 }
-.igs-block-handle:active { cursor: grabbing; }
-.igs-block-handle-line {
+.igs-grab-bar:active { cursor: grabbing; }
+.igs-grab-bar-line {
   width: 18px;
   height: 1.5px;
   border-radius: 1px;
   background: rgba(255,255,255,0.9);
   pointer-events: none;
 }
-.igs-block-wrapper.igs-block-hover .igs-block-handle,
-.igs-block-wrapper.igs-block-selected .igs-block-handle {
-  display: flex;
-}
 
 /* ── Resize handles (Rule 22) ──
    Eight 8px circles positioned on the selection outline (8px outside the
    diagram edge): 4 corners + 4 edge midpoints. Each circle has its own
    cursor for the grow direction it represents — exactly like PPT/Figma.
-   Visible only when the diagram is selected. Drag wiring is deferred. ── */
+   Visible only when the diagram is selected. Drag wiring is deferred to
+   Phase G. ── */
 .igs-resize-handle {
   position: absolute;
   width: 8px;
@@ -2427,33 +2858,42 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   pointer-events: auto;
   box-sizing: border-box;
 }
-.igs-block-wrapper.igs-block-selected .igs-resize-handle {
-  display: block;
-}
 /* corners */
-.igs-resize-handle.is-tl { top: -12px; left: -12px;       cursor: nwse-resize; }
-.igs-resize-handle.is-tr { top: -12px; right: -12px;      cursor: nesw-resize; }
-.igs-resize-handle.is-br { bottom: -12px; right: -12px;   cursor: nwse-resize; }
-.igs-resize-handle.is-bl { bottom: -12px; left: -12px;    cursor: nesw-resize; }
+.igs-resize-handle[data-handle="nw"] { top: -12px;     left: -12px;                                cursor: nwse-resize; }
+.igs-resize-handle[data-handle="ne"] { top: -12px;     right: -12px;                               cursor: nesw-resize; }
+.igs-resize-handle[data-handle="se"] { bottom: -12px;  right: -12px;                               cursor: nwse-resize; }
+.igs-resize-handle[data-handle="sw"] { bottom: -12px;  left: -12px;                                cursor: nesw-resize; }
 /* edge midpoints */
-.igs-resize-handle.is-tm { top: -12px; left: 50%;          transform: translateX(-50%); cursor: ns-resize; }
-.igs-resize-handle.is-bm { bottom: -12px; left: 50%;       transform: translateX(-50%); cursor: ns-resize; }
-.igs-resize-handle.is-ml { top: 50%; left: -12px;          transform: translateY(-50%); cursor: ew-resize; }
-.igs-resize-handle.is-mr { top: 50%; right: -12px;         transform: translateY(-50%); cursor: ew-resize; }
+.igs-resize-handle[data-handle="n"]  { top: -12px;     left: 50%;   transform: translateX(-50%);  cursor: ns-resize; }
+.igs-resize-handle[data-handle="s"]  { bottom: -12px;  left: 50%;   transform: translateX(-50%);  cursor: ns-resize; }
+.igs-resize-handle[data-handle="w"]  { top: 50%;       left: -12px; transform: translateY(-50%);  cursor: ew-resize; }
+.igs-resize-handle[data-handle="e"]  { top: 50%;       right: -12px;transform: translateY(-50%);  cursor: ew-resize; }
 
-/* Text blocks aren't "diagrams" — no hover/select affordance */
-.igs-block-wrapper.igs-text-block .igs-block-handle,
-.igs-block-wrapper.igs-text-block .igs-resize-handle {
+/* Text blocks are edit-only — no hover, selection, or interaction UI */
+.igs-block-wrapper.igs-text-block .igs-block-ui,
+.igs-block-wrapper.igs-text-block .igs-grab-bar,
+.igs-block-wrapper.igs-text-block .igs-resize-handle,
+.igs-block-wrapper.igs-text-block .igs-block-toolbar {
   display: none !important;
 }
-.igs-block-wrapper.igs-text-block.igs-block-hover,
-.igs-block-wrapper.igs-text-block.igs-block-selected {
+.igs-block-wrapper.igs-text-block.igs-hover,
+.igs-block-wrapper.igs-text-block.igs-selected {
   outline: none;
 }
 
-/* Floating toolbar above the selected diagram */
+/* ── Toolbar (Section 12.6 Rule 19) ──
+   Positioned 64px above the wrapper top so it clears the grab bar (top:-24,
+   height:16, padding:4 ≈ ~32px tall toolbar → bottom edge at -32, leaving
+   an 8px gap above the grab bar's top edge at -24). Test scenario 8:
+   "Grab bar is always visible and never covered by toolbar". Lives inside
+   .igs-block-ui so it scales with the slide and clicks on it stay inside
+   the wrapper (don't trigger deselection). ── */
 .igs-block-toolbar {
-  display: flex;
+  position: absolute;
+  top: -64px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
   gap: 2px;
   background: var(--accent, #2563EB);
   color: #fff;
@@ -2461,6 +2901,9 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   padding: 4px;
   box-shadow: 0 6px 16px rgba(0,0,0,0.18);
   font-family: 'Plus Jakarta Sans', sans-serif;
+  white-space: nowrap;
+  z-index: 14;
+  pointer-events: auto;
 }
 .igs-block-toolbar button {
   background: transparent;
