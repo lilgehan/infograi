@@ -419,7 +419,7 @@ const DECK_LAYOUT_CSS = `
   justify-content: center;
 }
 
-/* Block stack gap by density (overrides the inline `gap` style only when
+/* Block stack gap by density (overrides the inline gap style only when
    the inline value matches — kept on the element for SSR safety). */
 .igs-block-stack[data-density="light"]    { gap: 24px; }
 .igs-block-stack[data-density="standard"] { gap: 16px; }

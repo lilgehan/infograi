@@ -192,19 +192,40 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 window.addEventListener('load', () => {
   // initRenderer is now a no-op — all rendering is programmatic via smart-layouts
 
+  // Restore the saved API key on page load
   const k = localStorage.getItem('infograi_key');
-  if (k) { $('apiKey').value = k; $('apiDot').className = 'api-dot ok'; }
+  if (k) {
+    $('apiKey').value = k;
+    $('apiDot').className = 'api-dot ok';
+    STATE.apiKey = k;
+  }
 
-  $('apiKey').addEventListener('input', (e) => {
-    const v = e.target.value.trim();
-    if (v.startsWith('sk-ant') && v.length > 20) {
-      $('apiDot').className = 'api-dot ok';
-      localStorage.setItem('infograi_key', v);
-    } else {
+  // Persist on any change. Three rules:
+  //   1. Field empty   → clear localStorage (user explicitly removed it)
+  //   2. Field valid   → save to localStorage, dot green
+  //   3. Field invalid → dot grey, but DO NOT clear localStorage — the
+  //      previously-saved good key stays so a typo or partial paste can't
+  //      wipe it. Pasting a fresh valid key replaces the stored one.
+  function persistApiKey(v) {
+    const trimmed = (v || '').trim();
+    if (trimmed === '') {
       $('apiDot').className = 'api-dot';
       localStorage.removeItem('infograi_key');
+      STATE.apiKey = '';
+      return;
     }
-  });
+    if (trimmed.startsWith('sk-ant') && trimmed.length > 20) {
+      $('apiDot').className = 'api-dot ok';
+      localStorage.setItem('infograi_key', trimmed);
+      STATE.apiKey = trimmed;
+    } else {
+      $('apiDot').className = 'api-dot';
+      // Intentional: do not remove the stored key
+    }
+  }
+  $('apiKey').addEventListener('input',  (e) => persistApiKey(e.target.value));
+  $('apiKey').addEventListener('change', (e) => persistApiKey(e.target.value));
+  $('apiKey').addEventListener('blur',   (e) => persistApiKey(e.target.value));
 
   renderLayoutPicker();
 
