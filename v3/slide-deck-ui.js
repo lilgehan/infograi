@@ -960,8 +960,25 @@ function insertBlockOnActiveSlide(variant, family) {
       break;
     }
   }
+
+  // Section 12.4 Rule 11 — Page overflow.
+  // When all content zones are full, auto-create a new slide with the
+  // same template and place the new diagram on it. Existing content on
+  // the current slide stays put (Rule 14: new slide has no pre-filled
+  // title — placeholder shows). The new slide becomes the active one
+  // so the user sees the diagram they just added.
   if (!targetZone) {
-    flashCanvasMessage('All content zones are full — insert a new slide for more diagrams.');
+    const oldSlideId = slide.id;
+    _state.deck = addSlide(_state.deck, slide.templateId, oldSlideId);
+    const newIdx = _state.deck.slides.findIndex(s => s.id === oldSlideId) + 1;
+    const newSlide = _state.deck.slides[newIdx];
+    if (newSlide) {
+      _state.activeSlideId = newSlide.id;
+      flashCanvasMessage('Slide was full — added a new slide for the diagram.');
+      // Recursive call now lands on the empty new slide → first content zone wins
+      return insertBlockOnActiveSlide(variant, family);
+    }
+    flashCanvasMessage('Could not auto-create overflow slide.');
     return;
   }
 
@@ -1381,7 +1398,7 @@ function wireCanvasEditingOnce() {
 }
 
 function _onCanvasMouseOver(e) {
-  const block = e.target && e.target.closest && e.target.closest('.igs-block');
+  const block = e.target && e.target.closest && e.target.closest('.igs-block-wrapper');
   if (!block) return;
   // Don't highlight text blocks (they aren't selectable diagrams)
   if (block.classList.contains('igs-text-block')) return;
@@ -1389,13 +1406,15 @@ function _onCanvasMouseOver(e) {
 }
 
 function _onCanvasMouseOut(e) {
-  const block = e.target && e.target.closest && e.target.closest('.igs-block');
+  const block = e.target && e.target.closest && e.target.closest('.igs-block-wrapper');
   if (!block) return;
-  // Only remove hover when the pointer truly leaves the block (relatedTarget
-  // is the element pointer is moving to — if it's still inside the block,
-  // do nothing).
+  // Only remove hover when the pointer truly leaves the block. The handle
+  // and resize handles peek outside the wrapper bounds via outline-offset,
+  // so we also count them as "still inside" when relatedTarget is one.
   const to = e.relatedTarget;
-  if (to && block.contains(to)) return;
+  if (to && (block.contains(to) || (to.closest && (to.closest('.igs-block-handle') || to.closest('.igs-resize-handle'))))) {
+    return;
+  }
   block.classList.remove('igs-block-hover');
 }
 
@@ -1626,27 +1645,33 @@ function _onCanvasClick(e) {
   const target = e.target;
   if (!target || !target.matches) return;
 
-  const inEditable = target.closest && target.closest('[contenteditable="true"]');
-  const inBlock    = target.closest && target.closest('.igs-block');
+  const inEditable     = target.closest && target.closest('[contenteditable="true"]');
+  const inBlock        = target.closest && target.closest('.igs-block-wrapper');
+  const inResizeHandle = target.closest && target.closest('.igs-resize-handle');
+  const inHandle       = target.closest && target.closest('.igs-block-handle');
 
-  // Universal "click outside a block → deselect" rule. Runs BEFORE the
-  // free-text/edit handlers so clicks on blank zone area, accent zones, or
-  // anywhere not inside a diagram clear the selection. Toolbar buttons are
-  // outside #outputWrap (in document.body) so they don't trigger this.
-  if (_state.selected && !inBlock) {
+  // Section 12 Rule 20 — Deselection. Click outside a block, its toolbar,
+  // or a resize handle clears any selection. Toolbar lives in document.body
+  // so its clicks never reach this listener.
+  if (_state.selected && !inBlock && !inResizeHandle) {
     _deselectBlock();
   }
 
-  // Click inside a contenteditable element — let the browser handle caret
+  // Click on a resize handle — drag wiring is deferred, but consume the
+  // click so it doesn't fall through to free-text creation.
+  if (inResizeHandle) return;
+  // Click on the drag handle — same: let it consume clicks; selection
+  // will fall through via the wrapper match below.
+  // Click inside contenteditable text — Section 12 Rule 21: edit, don't select.
   if (inEditable) return;
-  // Click on accent placeholder or interactive UI — ignore
+  // Click on accent placeholder — ignore.
   if (target.closest && target.closest('.igs-accent-placeholder')) return;
-  // Click on a diagram block — Phase 3D selection
+  // Click on a diagram block (background, SVG, padding) — select it.
   if (inBlock) {
     _selectBlock(inBlock);
     return;
   }
-  // Click on a content zone's blank area → free-text creation/focus
+  // Click on a content zone's blank area → text cursor (Rule 6).
   const zoneEl = target.closest && target.closest('.igs-zone-content');
   if (zoneEl && zoneEl.getAttribute('data-zone-type') !== 'title-block') {
     _createFreeText(zoneEl, e);
@@ -1699,10 +1724,12 @@ function _createFreeText(zoneEl, evt) {
     stack.setAttribute('data-density', 'light');
     zoneEl.appendChild(stack);
   }
+  // Section 12 Rule 6 — invisible cursor: zero-height contenteditable
+  // becomes visible only when focused. No visible placeholder text. The
+  // browser's native caret indicates the editing position.
   const ft = document.createElement('div');
   ft.className = 'igs-free-text-temp';
   ft.contentEditable = 'true';
-  ft.setAttribute('data-placeholder', 'Type here');
   stack.appendChild(ft);
   ft.focus();
 }
@@ -1754,7 +1781,7 @@ function _deselectBlock() {
   if (!_state || !_state.selected) return;
   const wrap = byId('outputWrap');
   if (wrap) {
-    wrap.querySelectorAll('.igs-block.igs-block-selected').forEach(el =>
+    wrap.querySelectorAll('.igs-block-wrapper.igs-block-selected').forEach(el =>
       el.classList.remove('igs-block-selected')
     );
   }
@@ -2324,39 +2351,43 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   cursor: not-allowed;
 }
 
-/* ── Phase 3D — Diagram hover, handle, selection ──
-   Block sizes to its content (flex: 0 0 auto in slide-renderer.js), so
-   the outline hugs the diagram tightly. outline-offset:8px gives the
-   8px breathing room the spec calls for. Outline is not clipped by
-   overflow:hidden anywhere because the slot is now overflow:visible. ── */
-.igs-block {
+/* ── Phase 3D + Section 12.6 — Diagram hover, handle, selection, resize ──
+   The block wrapper hugs its diagram via inline-flex column. Hover and
+   selected states use outline + outline-offset:8px so there's 8px of
+   breathing room between the diagram and the visible border. The slot
+   wrapper is overflow:visible so handles peek outside cleanly. ── */
+.igs-block-wrapper {
+  display: inline-flex;
+  flex-direction: column;
+  width: 100%;
   position: relative;
 }
-.igs-block.igs-block-hover {
-  outline: 1px solid rgba(37, 99, 235, 0.35);
+.igs-block-wrapper.igs-block-hover {
+  outline: 2px solid rgba(37, 99, 235, 0.30);
   outline-offset: 8px;
   border-radius: 4px;
 }
-.igs-block.igs-block-selected {
+.igs-block-wrapper.igs-block-selected {
   outline: 2px solid #2563EB;
   outline-offset: 8px;
   border-radius: 4px;
 }
 
-/* ── Drag handle ──
-   40x16px tab centered above the block, peeking 8px above the outline.
-   3 white horizontal lines for grip texture. cursor:grab/grabbing
-   gives the affordance even before drag is implemented. ── */
+/* ── Drag handle (Rule 18) ──
+   40x16 tab above the diagram, 24px above the wrapper edge so it sits
+   above the outline. Grip texture is 3 white horizontal lines. cursor:grab
+   on hover, cursor:grabbing on mousedown — the affordance is visible
+   even though drag-to-reorder logic isn't wired yet. ── */
 .igs-block-handle {
   position: absolute;
-  top: -16px;
+  top: -24px;
   left: 50%;
   transform: translateX(-50%);
   width: 40px;
   height: 16px;
   border-radius: 4px;
   background: var(--accent, #2563EB);
-  z-index: 10;
+  z-index: 11;
   display: none;
   pointer-events: auto;
   cursor: grab;
@@ -2371,55 +2402,52 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   width: 18px;
   height: 1.5px;
   border-radius: 1px;
-  background: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.9);
   pointer-events: none;
 }
-.igs-block.igs-block-hover .igs-block-handle,
-.igs-block.igs-block-selected .igs-block-handle {
+.igs-block-wrapper.igs-block-hover .igs-block-handle,
+.igs-block-wrapper.igs-block-selected .igs-block-handle {
   display: flex;
 }
 
-/* ── Resize edge zones (Phase 3.5 affordance, no drag wired yet) ──
-   8px wide invisible hit zones on left/right edges. cursor:ew-resize on
-   hover. A thin vertical bar shows on hover to indicate grabability. ── */
-.igs-block-resize-zone {
+/* ── Resize handles (Rule 22) ──
+   Eight 8px circles positioned on the selection outline (8px outside the
+   diagram edge): 4 corners + 4 edge midpoints. Each circle has its own
+   cursor for the grow direction it represents — exactly like PPT/Figma.
+   Visible only when the diagram is selected. Drag wiring is deferred. ── */
+.igs-resize-handle {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 12px;
-  z-index: 8;
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  border: 1px solid #2563EB;
+  border-radius: 50%;
+  z-index: 12;
   display: none;
   pointer-events: auto;
-  cursor: ew-resize;
+  box-sizing: border-box;
 }
-.igs-block-resize-zone.is-left  { left: -6px; }
-.igs-block-resize-zone.is-right { right: -6px; }
-.igs-block-resize-zone::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 4px;
-  height: 28px;
-  border-radius: 2px;
-  background: rgba(37, 99, 235, 0.7);
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.igs-block-resize-zone:hover::before { opacity: 1; }
-.igs-block.igs-block-hover .igs-block-resize-zone,
-.igs-block.igs-block-selected .igs-block-resize-zone {
+.igs-block-wrapper.igs-block-selected .igs-resize-handle {
   display: block;
 }
+/* corners */
+.igs-resize-handle.is-tl { top: -12px; left: -12px;       cursor: nwse-resize; }
+.igs-resize-handle.is-tr { top: -12px; right: -12px;      cursor: nesw-resize; }
+.igs-resize-handle.is-br { bottom: -12px; right: -12px;   cursor: nwse-resize; }
+.igs-resize-handle.is-bl { bottom: -12px; left: -12px;    cursor: nesw-resize; }
+/* edge midpoints */
+.igs-resize-handle.is-tm { top: -12px; left: 50%;          transform: translateX(-50%); cursor: ns-resize; }
+.igs-resize-handle.is-bm { bottom: -12px; left: 50%;       transform: translateX(-50%); cursor: ns-resize; }
+.igs-resize-handle.is-ml { top: 50%; left: -12px;          transform: translateY(-50%); cursor: ew-resize; }
+.igs-resize-handle.is-mr { top: 50%; right: -12px;         transform: translateY(-50%); cursor: ew-resize; }
 
-/* Text blocks aren't "diagrams" — no hover affordance, no handles */
-.igs-block.igs-text-block .igs-block-handle,
-.igs-block.igs-text-block .igs-block-resize-zone {
+/* Text blocks aren't "diagrams" — no hover/select affordance */
+.igs-block-wrapper.igs-text-block .igs-block-handle,
+.igs-block-wrapper.igs-text-block .igs-resize-handle {
   display: none !important;
 }
-.igs-block.igs-text-block.igs-block-hover,
-.igs-block.igs-text-block.igs-block-selected {
+.igs-block-wrapper.igs-text-block.igs-block-hover,
+.igs-block-wrapper.igs-text-block.igs-block-selected {
   outline: none;
 }
 

@@ -62,10 +62,10 @@ function zoneStackHeights(count) {
   return ['31%', '31%', '31%'];
 }
 
-function zoneStackGap(count) {
-  if (count <= 1) return '0px';
-  if (count === 2) return '16px';   // standard
-  return '12px';                    // dense
+function zoneStackGap(/* count */) {
+  // Section 12.2 Rule 1 — diagrams sit flush. No default gaps. Space
+  // between diagrams only appears when the user drags one to create it.
+  return '0px';
 }
 
 /**
@@ -121,14 +121,14 @@ function zoneBalance(slide, zoneName, contentZoneNames) {
 function renderBlock(block, tone) {
   if (!block) return '';
 
-  // Text blocks (free-text, no variant) — Phase 3C.
-  // Always contenteditable so clicks route straight to caret placement, no
-  // mode toggle. The CSS `[data-placeholder]:empty::before` shows a hint
-  // when the block is empty (zero space when empty).
+  // Text blocks (free-text, no variant) — Section 12 Rule 6.
+  // Always contenteditable so clicks route to caret placement. NO visible
+  // placeholder text — empty text blocks collapse to zero height via CSS
+  // and only show the browser's caret when focused.
   if (block.type === 'text') {
     const text = (block.items && block.items[0] && block.items[0].body) || '';
-    return `<div class="igs-block igs-text-block" data-block-id="${esc(block.id)}"
-                 contenteditable="true" data-placeholder="Type here">${esc(text)}</div>`;
+    return `<div class="igs-block igs-block-wrapper igs-text-block" ` +
+           `data-block-id="${esc(block.id)}" contenteditable="true">${esc(text)}</div>`;
   }
 
   // Diagrams without a variant can't render
@@ -146,17 +146,25 @@ function renderBlock(block, tone) {
   };
 
   const inner = renderSection(section, tone);
-  // Wrap in .ig-page so existing `.ig-page .igs-* / .igd-*` CSS applies.
-  // Outer .igs-block carries the block id used by the Phase 3C cursor
-  // system. CSS shows the handle + resize zones only on hover/select.
-  return `<div class="igs-block" data-block-id="${esc(block.id)}">` +
+  // Outer `.igs-block-wrapper` (also keeps `.igs-block` for back-compat with
+  // older selectors) hugs the diagram via inline-flex. Carries the block id
+  // for the Phase 3C cursor system. The drag handle sits above the outline,
+  // and 8 resize circles are absolutely positioned on the outline corners
+  // and edge midpoints — visible only when hovered/selected.
+  return `<div class="igs-block igs-block-wrapper" data-block-id="${esc(block.id)}">` +
            `<div class="igs-block-handle" aria-hidden="true">` +
              `<div class="igs-block-handle-line"></div>` +
              `<div class="igs-block-handle-line"></div>` +
              `<div class="igs-block-handle-line"></div>` +
            `</div>` +
-           `<div class="igs-block-resize-zone is-left"  aria-hidden="true"></div>` +
-           `<div class="igs-block-resize-zone is-right" aria-hidden="true"></div>` +
+           `<div class="igs-resize-handle is-tl" aria-hidden="true"></div>` +
+           `<div class="igs-resize-handle is-tm" aria-hidden="true"></div>` +
+           `<div class="igs-resize-handle is-tr" aria-hidden="true"></div>` +
+           `<div class="igs-resize-handle is-mr" aria-hidden="true"></div>` +
+           `<div class="igs-resize-handle is-br" aria-hidden="true"></div>` +
+           `<div class="igs-resize-handle is-bm" aria-hidden="true"></div>` +
+           `<div class="igs-resize-handle is-bl" aria-hidden="true"></div>` +
+           `<div class="igs-resize-handle is-ml" aria-hidden="true"></div>` +
            `<div class="ig-page">${inner}</div>` +
          `</div>`;
 }
@@ -435,11 +443,11 @@ const DECK_LAYOUT_CSS = `
   justify-content: center;
 }
 
-/* Block stack gap by density (overrides the inline gap style only when
-   the inline value matches — kept on the element for SSR safety). */
-.igs-block-stack[data-density="light"]    { gap: 24px; }
-.igs-block-stack[data-density="standard"] { gap: 16px; }
-.igs-block-stack[data-density="dense"]    { gap: 12px; }
+/* Section 12.2 Rule 1 — flush stacking. All density tiers stack with
+   zero gap by default. Gaps appear only via user drag (Phase 3.5). */
+.igs-block-stack[data-density="light"]    { gap: 0; }
+.igs-block-stack[data-density="standard"] { gap: 0; }
+.igs-block-stack[data-density="dense"]    { gap: 0; }
 .igs-block-slot {
   flex: 0 0 auto;
   min-height: 0;

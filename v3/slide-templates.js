@@ -245,7 +245,9 @@ export const TEMPLATE_CSS = `
 .igs-zone-title {
   flex: 0 0 auto;
   width: 100%;
-  margin-bottom: 12px;
+  /* Section 12.2 Rule 1 — the only default gap on a slide is the 16px
+     below the title zone. Diagrams below stack flush against this. */
+  margin-bottom: 16px;
 }
 .igs-zone .igs-slide-title {
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
@@ -269,9 +271,11 @@ export const TEMPLATE_CSS = `
   opacity: 0.75;
   pointer-events: none;
 }
-/* Free-text blocks and text blocks behave differently: they take ZERO
-   space in layout when empty and unfocused. Click the empty zone area
-   to focus and start typing — at that point the placeholder reveals. */
+/* Section 12 Rule 6 + Fix 1 — Free-text and text blocks have NO visible
+   placeholder text. When empty AND unfocused: zero-height, takes no
+   space. When empty AND focused: just enough height to show the caret.
+   When non-empty: natural content height. The user sees their typing
+   appear directly with no "Type here" widget. */
 .igs-slide .igs-free-text-temp:empty:not(:focus),
 .igs-slide .igs-text-block:empty:not(:focus) {
   height: 0;
@@ -279,13 +283,9 @@ export const TEMPLATE_CSS = `
   margin: 0;
   overflow: hidden;
 }
-.igs-slide .igs-free-text-temp:empty:focus::before,
-.igs-slide .igs-text-block:empty:focus::before {
-  content: attr(data-placeholder);
-  color: #9aa3ad;
-  font-style: italic;
-  opacity: 0.65;
-  pointer-events: none;
+.igs-slide .igs-free-text-temp:empty:focus,
+.igs-slide .igs-text-block:empty:focus {
+  min-height: 1.5em;
 }
 /* Diagram-internal editable text (igs-* / igd-* classes inside .ig-page)
    uses the placeholder pattern when AI-generated content is missing. */
