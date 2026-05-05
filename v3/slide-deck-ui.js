@@ -1373,7 +1373,30 @@ function wireCanvasEditingOnce() {
   wrap.addEventListener('click',  _onCanvasClick);
   // Sanitize empty contenteditable elements so :empty CSS placeholder works
   wrap.addEventListener('input',  _sanitizeEmptyOnInput);
-  // Block selection (Phase 3D) — happens on click, dispatched in _onCanvasClick
+  // Phase 3D — hover state (outline + handle) on diagram blocks
+  // mouseover/mouseout bubble (mouseenter/mouseleave do not), so we use
+  // them with relatedTarget checks for clean enter/leave semantics.
+  wrap.addEventListener('mouseover', _onCanvasMouseOver);
+  wrap.addEventListener('mouseout',  _onCanvasMouseOut);
+}
+
+function _onCanvasMouseOver(e) {
+  const block = e.target && e.target.closest && e.target.closest('.igs-block');
+  if (!block) return;
+  // Don't highlight text blocks (they aren't selectable diagrams)
+  if (block.classList.contains('igs-text-block')) return;
+  block.classList.add('igs-block-hover');
+}
+
+function _onCanvasMouseOut(e) {
+  const block = e.target && e.target.closest && e.target.closest('.igs-block');
+  if (!block) return;
+  // Only remove hover when the pointer truly leaves the block (relatedTarget
+  // is the element pointer is moving to — if it's still inside the block,
+  // do nothing).
+  const to = e.relatedTarget;
+  if (to && block.contains(to)) return;
+  block.classList.remove('igs-block-hover');
 }
 
 function _onCanvasInput(e) {
@@ -1394,6 +1417,11 @@ function _onCanvasInput(e) {
   // Free-text element (created on blank-zone click)
   if (el.matches('.igs-free-text-temp')) {
     _scheduleSave(el, () => _commitFreeText(el));
+    return;
+  }
+  // Committed text block (rendered from data model, has data-block-id)
+  if (el.matches('.igs-text-block')) {
+    _scheduleSave(el, () => _commitTextBlock(el));
     return;
   }
 }
@@ -1491,6 +1519,20 @@ function _commitDiagramText(el) {
   if (window.IgReactiveVisuals && _isNumberFamilyText(el)) {
     try { window.IgReactiveVisuals.updateVisualAfterEdit(el); } catch (err) {}
   }
+}
+
+function _commitTextBlock(el) {
+  if (!_state) return;
+  const slideEl = el.closest('.igs-slide');
+  if (!slideEl) return;
+  const slideId = slideEl.getAttribute('data-slide-id');
+  const blockId = el.getAttribute('data-block-id');
+  if (!slideId || !blockId) return;
+  const newText = (el.textContent || '').trim();
+  _state.deck = withSlide(_state.deck, slideId, s =>
+    updateBlock(s, blockId, { items: [{ title: '', body: newText }] })
+  );
+  refreshThumbnail(slideId);
 }
 
 function _commitFreeText(el) {
@@ -1605,23 +1647,48 @@ function _onCanvasClick(e) {
 }
 
 function _createFreeText(zoneEl, evt) {
-  // Don't create a free text if user clicked something interactive
-  if (evt.target !== zoneEl &&
-      evt.target !== zoneEl.querySelector('.igs-block-stack')) {
+  if (!_state) return;
+
+  // Only respond to clicks on the zone background or its block-stack — never
+  // on a child element (block, accent placeholder, etc.).
+  const stackEl = zoneEl.querySelector('.igs-block-stack');
+  if (evt.target !== zoneEl && evt.target !== stackEl) return;
+
+  const slideEl  = zoneEl.closest('.igs-slide');
+  if (!slideEl) return;
+  const slideId  = slideEl.getAttribute('data-slide-id');
+  const zoneName = zoneEl.getAttribute('data-zone');
+  if (!slideId || !zoneName) return;
+
+  // Rule 1 — at most one free-text per zone. If the zone already has a
+  // free-text element (whether the temp draft or an already-committed text
+  // block), focus the existing one and place caret at the end. Never create
+  // a second.
+  const existing = zoneEl.querySelector('.igs-free-text-temp, .igs-text-block');
+  if (existing) {
+    if (existing.contentEditable !== 'true') existing.contentEditable = 'true';
+    existing.focus();
+    _placeCaretAtEnd(existing);
     return;
   }
-  // Append a contenteditable element. It becomes a real text block on first
-  // input via _commitFreeText.
-  let stack = zoneEl.querySelector('.igs-block-stack');
+
+  // Rule 2 — zone capacity. If the zone already holds 3 blocks (the visible
+  // cap enforced in slide-renderer), don't add a free text — the zone is
+  // full and the free text would push diagrams off the slide.
+  const slide = getSlide(_state.deck, slideId);
+  if (!slide) return;
+  if (blocksInZone(slide, zoneName).length >= 3) {
+    flashCanvasMessage('This zone is full — insert a new slide or delete a diagram first.');
+    return;
+  }
+
+  // Rule 3 — create exactly one free-text element. Becomes a real text
+  // block in the data model on first input via _commitFreeText.
+  let stack = stackEl;
   if (!stack) {
-    // Empty zone — create a stack on the fly so the new text sits in it
-    const slideEl = zoneEl.closest('.igs-slide');
-    const tplId = slideEl ? slideEl.getAttribute('data-template') : '';
-    const blockCount = 0;
-    const density = blockCount === 0 ? 'light' : 'standard';
     stack = document.createElement('div');
     stack.className = 'igs-block-stack';
-    stack.setAttribute('data-density', density);
+    stack.setAttribute('data-density', 'light');
     zoneEl.appendChild(stack);
   }
   const ft = document.createElement('div');
@@ -1632,12 +1699,30 @@ function _createFreeText(zoneEl, evt) {
   ft.focus();
 }
 
+/**
+ * Place the caret at the end of the given contenteditable element.
+ */
+function _placeCaretAtEnd(el) {
+  if (!el) return;
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch (e) {}
+}
+
 /* ─────────────────────────────────────────
    PHASE 3D — DIAGRAM SELECTION + DELETE + REPLACE
 ───────────────────────────────────────── */
 
 function _selectBlock(blockEl) {
   if (!_state) return;
+  // Text blocks are always edit-on-click — never select them as diagrams.
+  if (blockEl.classList.contains('igs-text-block')) return;
+
   const slideEl = blockEl.closest('.igs-slide');
   if (!slideEl) return;
   const slideId = slideEl.getAttribute('data-slide-id');
@@ -1653,7 +1738,7 @@ function _selectBlock(blockEl) {
 
   _deselectBlock();
   _state.selected = { blockId, slideId };
-  blockEl.classList.add('igs-selected');
+  blockEl.classList.add('igs-block-selected');
   _showBlockToolbar(blockEl);
 }
 
@@ -1661,8 +1746,8 @@ function _deselectBlock() {
   if (!_state || !_state.selected) return;
   const wrap = byId('outputWrap');
   if (wrap) {
-    wrap.querySelectorAll('.igs-block.igs-selected').forEach(el =>
-      el.classList.remove('igs-selected')
+    wrap.querySelectorAll('.igs-block.igs-block-selected').forEach(el =>
+      el.classList.remove('igs-block-selected')
     );
   }
   _hideBlockToolbar();
@@ -1678,16 +1763,23 @@ function _showBlockToolbar(blockEl) {
   _hideBlockToolbar();
   const tb = document.createElement('div');
   tb.className = 'igs-block-toolbar';
+  // Replace icon: two arrows in opposite directions (swap)
+  // Delete icon: trash can
   tb.innerHTML = `
-    <button data-action="replace" title="Replace with another diagram">Replace</button>
-    <button data-action="delete"  title="Delete this diagram">Delete</button>
+    <button data-action="replace" title="Replace with another diagram">
+      <svg viewBox="0 0 24 24"><path d="M7 7h10l-3-3M17 17H7l3 3"/></svg>
+      Replace
+    </button>
+    <button data-action="delete" title="Delete this diagram">
+      <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6"/></svg>
+      Delete
+    </button>
   `;
-  // Position above the block
   const rect = blockEl.getBoundingClientRect();
   tb.style.cssText = `
     position: fixed;
     left: ${Math.round(rect.left)}px;
-    top: ${Math.round(Math.max(8, rect.top - 36))}px;
+    top: ${Math.round(Math.max(8, rect.top - 40))}px;
     z-index: 9999;
   `;
   document.body.appendChild(tb);
@@ -2224,15 +2316,50 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   cursor: not-allowed;
 }
 
-/* ── Phase 3D — Diagram selection ── */
-.igs-block.igs-selected {
+/* ── Phase 3D — Diagram hover, handle, selection ──
+   Outline (not box-shadow / border) for hover and selected states because
+   outline isn't clipped by the block's overflow:hidden. The drag handle
+   sits at the top-center INSIDE the block (top: 4px) so overflow:hidden
+   doesn't clip it. ── */
+.igs-block {
+  position: relative;          /* anchor the handle */
+}
+.igs-block.igs-block-hover {
+  outline: 1px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 0;
+}
+.igs-block.igs-block-selected {
   outline: 2px solid var(--accent, #2563EB);
-  outline-offset: 2px;
+  outline-offset: 0;
   border-radius: 2px;
 }
+.igs-block-handle {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(37, 99, 235, 0.45);
+  z-index: 5;
+  display: none;
+  pointer-events: none;
+  cursor: grab;
+}
+.igs-block.igs-block-hover .igs-block-handle,
+.igs-block.igs-block-selected .igs-block-handle {
+  display: block;
+}
+/* Text blocks aren't "diagrams" — no hover affordance, no handle */
+.igs-block.igs-text-block .igs-block-handle { display: none !important; }
+.igs-block.igs-text-block.igs-block-hover { outline: none; }
+.igs-block.igs-text-block.igs-block-selected { outline: none; }
+
+/* Floating toolbar above the selected diagram */
 .igs-block-toolbar {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   background: var(--accent, #2563EB);
   color: #fff;
   border-radius: 6px;
@@ -2247,18 +2374,33 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 4px;
   cursor: pointer;
   letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .igs-block-toolbar button:hover {
   background: rgba(255,255,255,0.18);
 }
+.igs-block-toolbar svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 /* ── Phase 3C — Free-text temp element ──
    Created on blank-zone click. On first input it becomes a real text
-   block in the data model. ── */
+   block in the data model. Takes zero space when empty (the placeholder
+   appears via the shared [data-placeholder]:empty::before rule and is
+   itself zero-width as a CSS pseudo). When non-empty, sizes to its
+   content. Never pushes diagrams or titles off the slide. ── */
 .igs-free-text-temp {
   font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
   font-size: 16px;
@@ -2266,7 +2408,6 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   color: var(--text-primary, #1A1A2E);
   outline: none;
   cursor: text;
-  min-height: 1.55em;
   width: 100%;
 }
 

@@ -121,10 +121,14 @@ function zoneBalance(slide, zoneName, contentZoneNames) {
 function renderBlock(block, tone) {
   if (!block) return '';
 
-  // Text blocks (free-text, no variant) — Phase 3C
+  // Text blocks (free-text, no variant) — Phase 3C.
+  // Always contenteditable so clicks route straight to caret placement, no
+  // mode toggle. The CSS `[data-placeholder]:empty::before` shows a hint
+  // when the block is empty (zero space when empty).
   if (block.type === 'text') {
     const text = (block.items && block.items[0] && block.items[0].body) || '';
-    return `<div class="igs-block igs-text-block" data-block-id="${esc(block.id)}">${esc(text)}</div>`;
+    return `<div class="igs-block igs-text-block" data-block-id="${esc(block.id)}"
+                 contenteditable="true" data-placeholder="Type here">${esc(text)}</div>`;
   }
 
   // Diagrams without a variant can't render
@@ -145,7 +149,12 @@ function renderBlock(block, tone) {
   // Wrap in .ig-page so existing `.ig-page .igs-* / .igd-*` CSS applies.
   // Outer .igs-block carries the height assignment + the block id used by
   // the Phase 3C cursor system to map text edits back to the data model.
-  return `<div class="igs-block" data-block-id="${esc(block.id)}"><div class="ig-page">${inner}</div></div>`;
+  // The `.igs-block-handle` is hidden by default; CSS shows it on hover and
+  // selection so the user gets a Gamma-style move affordance.
+  return `<div class="igs-block" data-block-id="${esc(block.id)}">` +
+           `<div class="igs-block-handle" aria-hidden="true"></div>` +
+           `<div class="ig-page">${inner}</div>` +
+         `</div>`;
 }
 
 /**
