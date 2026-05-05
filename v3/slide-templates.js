@@ -259,7 +259,8 @@ export const TEMPLATE_CSS = `
 }
 /* Phase 3C — Invisible editing: placeholder via CSS attr(). The H2 is always
    contenteditable; when empty, this :empty::before injects the placeholder
-   text. Disappears the moment the user types, with no JS bookkeeping. */
+   text. Disappears the moment the user types, with no JS bookkeeping.
+   Slide titles SHOW the placeholder always (encourages interaction). */
 .igs-slide-title[data-placeholder]:empty::before {
   content: attr(data-placeholder);
   color: #9aa3ad;
@@ -268,8 +269,27 @@ export const TEMPLATE_CSS = `
   opacity: 0.75;
   pointer-events: none;
 }
-/* Same placeholder pattern for diagram text and free text — invisible editing. */
-.igs-slide [data-placeholder]:empty::before {
+/* Free-text blocks and text blocks behave differently: they take ZERO
+   space in layout when empty and unfocused. Click the empty zone area
+   to focus and start typing — at that point the placeholder reveals. */
+.igs-slide .igs-free-text-temp:empty:not(:focus),
+.igs-slide .igs-text-block:empty:not(:focus) {
+  height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+.igs-slide .igs-free-text-temp:empty:focus::before,
+.igs-slide .igs-text-block:empty:focus::before {
+  content: attr(data-placeholder);
+  color: #9aa3ad;
+  font-style: italic;
+  opacity: 0.65;
+  pointer-events: none;
+}
+/* Diagram-internal editable text (igs-* / igd-* classes inside .ig-page)
+   uses the placeholder pattern when AI-generated content is missing. */
+.igs-slide .ig-page [data-placeholder]:empty::before {
   content: attr(data-placeholder);
   color: #9aa3ad;
   font-style: italic;

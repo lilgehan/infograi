@@ -147,12 +147,16 @@ function renderBlock(block, tone) {
 
   const inner = renderSection(section, tone);
   // Wrap in .ig-page so existing `.ig-page .igs-* / .igd-*` CSS applies.
-  // Outer .igs-block carries the height assignment + the block id used by
-  // the Phase 3C cursor system to map text edits back to the data model.
-  // The `.igs-block-handle` is hidden by default; CSS shows it on hover and
-  // selection so the user gets a Gamma-style move affordance.
+  // Outer .igs-block carries the block id used by the Phase 3C cursor
+  // system. CSS shows the handle + resize zones only on hover/select.
   return `<div class="igs-block" data-block-id="${esc(block.id)}">` +
-           `<div class="igs-block-handle" aria-hidden="true"></div>` +
+           `<div class="igs-block-handle" aria-hidden="true">` +
+             `<div class="igs-block-handle-line"></div>` +
+             `<div class="igs-block-handle-line"></div>` +
+             `<div class="igs-block-handle-line"></div>` +
+           `</div>` +
+           `<div class="igs-block-resize-zone is-left"  aria-hidden="true"></div>` +
+           `<div class="igs-block-resize-zone is-right" aria-hidden="true"></div>` +
            `<div class="ig-page">${inner}</div>` +
          `</div>`;
 }
@@ -173,8 +177,11 @@ function renderContentZone(slide, zoneName, tone) {
   const gap     = zoneStackGap(blocks.length);
   const density = zoneDensity(blocks.length);
 
-  const items = blocks.map((b, i) =>
-    `<div class="igs-block-slot" style="height:${heights[i]};">${renderBlock(b, tone)}</div>`
+  // Phase 3 bug fix — slots no longer get fixed height percentages. Blocks
+  // size to their natural content height (flex: 0 0 auto), so the selection
+  // outline hugs the diagram tightly with no empty space below.
+  const items = blocks.map((b) =>
+    `<div class="igs-block-slot">${renderBlock(b, tone)}</div>`
   ).join('');
 
   return `<div class="igs-block-stack" data-density="${density}" style="gap:${gap};">${items}</div>`;
@@ -436,15 +443,16 @@ const DECK_LAYOUT_CSS = `
 .igs-block-slot {
   flex: 0 0 auto;
   min-height: 0;
-  overflow: hidden;
   display: flex;
+  /* overflow:visible so the drag handle (top:-12px) and selection outline
+     (outline-offset:8px) are not clipped. The block itself owns its own
+     overflow:hidden when needed. */
+  overflow: visible;
 }
 .igs-block {
-  flex: 1 1 auto;
+  flex: 0 0 auto;          /* hug content, no extra empty space below */
   width: 100%;
   min-width: 0;
-  min-height: 0;
-  overflow: hidden;
 }
 .igs-block .ig-page {
   width: 100%;
