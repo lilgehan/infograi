@@ -241,9 +241,21 @@ export function enterSlideDeckMode(initialTopic, tone, accentColor) {
   renderActiveSlide();
 
   // Show panels and slide nav
-  const tp = byId('igsThumbPanel');   if (tp) tp.style.display = '';
-  const gp = byId('igsGalleryPanel'); if (gp) gp.style.display = '';
-  const sn = byId('igsSlideNav');     if (sn) sn.style.display = '';
+  const tp = byId('igsThumbPanel');     if (tp) tp.style.display = '';
+  const gp = byId('igsGalleryPanel');   if (gp) gp.style.display = '';
+  const sn = byId('igsSlideNav');       if (sn) sn.style.display = '';
+  const gt = byId('igsGalleryToggles'); if (gt) gt.style.display = 'flex';
+
+  // Wire gallery toggle buttons (one-time per session)
+  if (gt && !gt.dataset.wired) {
+    gt.dataset.wired = '1';
+    gt.querySelectorAll('.igs-gallery-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleGalleryOverlay(btn.dataset.show);
+      });
+    });
+  }
 
   document.addEventListener('keydown', _onKeyDown);
   document.addEventListener('click',   _onDocumentClick, true);
@@ -261,10 +273,14 @@ export function exitSlideDeckMode() {
 
   hidePopover();
   hideContextMenu();
+  closeGalleryOverlay();
+  teardownCanvasResizeObserver();
 
   const tp = byId('igsThumbPanel');   if (tp) { tp.innerHTML = ''; tp.style.display = 'none'; }
-  const gp = byId('igsGalleryPanel'); if (gp) { gp.innerHTML = ''; gp.style.display = 'none'; }
+  const gp = byId('igsGalleryPanel');
+  if (gp) { gp.innerHTML = ''; gp.style.display = 'none'; gp.classList.remove('is-open'); }
   const sn = byId('igsSlideNav');     if (sn) sn.style.display = 'none';
+  const gt = byId('igsGalleryToggles'); if (gt) gt.style.display = 'none';
 
   // Reset the output wrap so app.js can put the empty state or single-page render back
   const wrap = byId('outputWrap');
@@ -663,6 +679,53 @@ function renderDiagramsSection() {
   `;
 }
 
+/* ── Gallery overlay open/close ──
+   Opens the right-side gallery panel as a sliding overlay. `which` controls
+   which major section ('templates' or 'diagrams') is opened and scrolled into
+   view. Clicking the same toggle a second time closes the overlay. ── */
+
+function toggleGalleryOverlay(which) {
+  if (!_state) return;
+  const gp = byId('igsGalleryPanel');
+  const gt = byId('igsGalleryToggles');
+  if (!gp || !gt) return;
+
+  const allBtns   = gt.querySelectorAll('.igs-gallery-toggle-btn');
+  const targetBtn = gt.querySelector(`.igs-gallery-toggle-btn[data-show="${which}"]`);
+
+  const alreadyOpen = gp.classList.contains('is-open');
+  const sameButton  = targetBtn && targetBtn.classList.contains('is-active');
+
+  if (alreadyOpen && sameButton) {
+    // Same button clicked twice → close
+    closeGalleryOverlay();
+    return;
+  }
+
+  // Open + activate target button + open the matching major section
+  gp.classList.add('is-open');
+  document.body.dataset.deckOverlay = 'open';
+  allBtns.forEach(b => b.classList.toggle('is-active', b === targetBtn));
+
+  if (which === 'templates') {
+    _state.templatesOpen = true;
+    _state.diagramsOpen  = false;
+  } else if (which === 'diagrams') {
+    _state.templatesOpen = false;
+    _state.diagramsOpen  = true;
+  }
+  renderGalleryPanel();
+  gp.scrollTop = 0;
+}
+
+function closeGalleryOverlay() {
+  const gp = byId('igsGalleryPanel');
+  const gt = byId('igsGalleryToggles');
+  if (gp) gp.classList.remove('is-open');
+  if (gt) gt.querySelectorAll('.igs-gallery-toggle-btn').forEach(b => b.classList.remove('is-active'));
+  delete document.body.dataset.deckOverlay;
+}
+
 /* ── Apply a template to the current slide ───────────────── */
 
 function applyTemplateToActiveSlide(templateId) {
@@ -689,7 +752,7 @@ function renderActiveSlide() {
   if (!wrap || !_state) return;
 
   // Clear any inline sizing from single-page mode
-  wrap.style.cssText = 'width:100%;height:100%;background:transparent;overflow:auto;display:flex;align-items:center;justify-content:center;';
+  wrap.style.cssText = 'width:100%;height:100%;background:transparent;overflow:hidden;';
 
   const slide = getSlide(_state.deck, _state.activeSlideId);
   if (!slide) {
@@ -697,10 +760,66 @@ function renderActiveSlide() {
     return;
   }
 
+  // Wrap the slide in a .igs-slide-stage. The stage's width/height are sized
+  // to fit the canvas while preserving 16:9; the slide inside is rendered at
+  // native 960×540 (so all internal pixel CSS works) but visually scaled via
+  // CSS transform to fill the stage exactly.
   const slideHtml = renderSlide(slide, _state.tone, _state.accentColor);
-  wrap.innerHTML = `<div class="igs-canvas-wrap">${slideHtml}</div>`;
+  wrap.innerHTML = `<div class="igs-canvas-wrap"><div class="igs-slide-stage">${slideHtml}</div></div>`;
+
+  fitSlideStage();
+  ensureCanvasResizeObserver();
 
   updateSlideNav();
+}
+
+/* ─────────────────────────────────────────
+   CANVAS FIT — keep slide at 16:9, scale to available space
+───────────────────────────────────────── */
+
+const SLIDE_W = 960;
+const SLIDE_H = 540;
+const STAGE_PADDING = 24;  // breathing room around the slide
+let _canvasResizeObserver = null;
+
+function fitSlideStage() {
+  const wrap  = byId('outputWrap');
+  if (!wrap) return;
+  const stage = wrap.querySelector('.igs-slide-stage');
+  const slide = wrap.querySelector('.igs-canvas-wrap .igs-slide');
+  if (!stage || !slide) return;
+
+  const availW = Math.max(0, wrap.clientWidth  - STAGE_PADDING * 2);
+  const availH = Math.max(0, wrap.clientHeight - STAGE_PADDING * 2);
+  if (availW === 0 || availH === 0) return;
+
+  const scale = Math.min(availW / SLIDE_W, availH / SLIDE_H);
+  const w = SLIDE_W * scale;
+  const h = SLIDE_H * scale;
+
+  stage.style.width  = w + 'px';
+  stage.style.height = h + 'px';
+  slide.style.transform = `scale(${scale})`;
+  slide.style.transformOrigin = 'top left';
+}
+
+function ensureCanvasResizeObserver() {
+  if (_canvasResizeObserver) return;
+  if (typeof ResizeObserver === 'undefined') return;
+  const wrap = byId('outputWrap');
+  if (!wrap) return;
+  _canvasResizeObserver = new ResizeObserver(() => fitSlideStage());
+  _canvasResizeObserver.observe(wrap);
+  // Also re-fit on window resize (covers some edge cases)
+  window.addEventListener('resize', fitSlideStage);
+}
+
+function teardownCanvasResizeObserver() {
+  if (_canvasResizeObserver) {
+    _canvasResizeObserver.disconnect();
+    _canvasResizeObserver = null;
+  }
+  window.removeEventListener('resize', fitSlideStage);
 }
 
 function updateSlideNav() {
@@ -948,19 +1067,30 @@ function _onKeyDown(e) {
   } else if (e.key === 'Escape') {
     hidePopover();
     hideContextMenu();
+    closeGalleryOverlay();
   }
 }
 
 function _onDocumentClick(e) {
+  if (!_state) return;
   // Close popover/context menu when clicking outside
-  if (_state && _state.popover && !_state.popover.contains(e.target)) {
+  if (_state.popover && !_state.popover.contains(e.target)) {
     // But not if user clicked the "+" bar that opened it (that handler runs first)
     if (!e.target.classList || !e.target.classList.contains('igs-add-slide-bar')) {
       hidePopover();
     }
   }
-  if (_state && _state.contextMenu && !_state.contextMenu.contains(e.target)) {
+  if (_state.contextMenu && !_state.contextMenu.contains(e.target)) {
     hideContextMenu();
+  }
+  // Close the gallery overlay if the click landed outside both the panel and
+  // its toggle buttons. Lets the user dismiss it the same way as Gamma.
+  const gp = byId('igsGalleryPanel');
+  const gt = byId('igsGalleryToggles');
+  if (gp && gp.classList.contains('is-open')) {
+    const inPanel  = gp.contains(e.target);
+    const inToggle = gt && gt.contains(e.target);
+    if (!inPanel && !inToggle) closeGalleryOverlay();
   }
 }
 
@@ -996,11 +1126,11 @@ function flashCanvasMessage(msg) {
 ───────────────────────────────────────── */
 
 const GALLERY_PANEL_CSS = `
-/* ── Thumbnail panel ── */
+/* ── Thumbnail panel (slim, 60px wide) ── */
 #igsThumbPanel {
   background: #F5F6F8;
   border-right: 1px solid #E2E5EA;
-  padding: 12px 8px;
+  padding: 8px 4px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1008,17 +1138,17 @@ const GALLERY_PANEL_CSS = `
   gap: 0;
 }
 .igs-add-slide-bar {
-  width: 120px;
-  height: 14px;
-  margin: 2px 0;
+  width: 50px;
+  height: 12px;
+  margin: 1px 0;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #9aa3ad;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: 2px;
   user-select: none;
   transition: background 0.15s;
 }
@@ -1026,17 +1156,81 @@ const GALLERY_PANEL_CSS = `
   background: var(--accent-soft, rgba(37,99,235,0.10));
   color: var(--accent, #2563EB);
 }
-.igs-thumb-wrap {
-  margin: 2px 0;
-}
+.igs-thumb-wrap { margin: 2px 0; }
 
-/* ── Gallery panel ── */
+/* ── Right gallery — fixed sliding overlay ──
+   Default: translateX(100%) (off-screen to the right).
+   .is-open: translateX(0) — slides in from the right edge of the viewport. ── */
 #igsGalleryPanel {
+  position: fixed;
+  top: 52px;            /* below .app-header */
+  right: 0;
+  bottom: 0;
+  width: 280px;
+  z-index: 100;
   background: #FAFBFC;
   border-left: 1px solid #E2E5EA;
   padding: 0 0 24px;
   overflow-y: auto;
   font-family: 'Plus Jakarta Sans', sans-serif;
+  transform: translateX(100%);
+  transition: transform 0.22s ease-out;
+  box-shadow: -8px 0 24px rgba(0,0,0,0.08);
+}
+#igsGalleryPanel.is-open {
+  transform: translateX(0);
+}
+
+/* ── Gallery toggle buttons — stacked on the right edge.
+   When the gallery overlay is open, the buttons slide left so they remain
+   visible at the panel's left edge. ── */
+#igsGalleryToggles {
+  position: fixed;
+  top: 88px;
+  right: 8px;
+  z-index: 110;     /* above the panel so they stay clickable */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: auto;
+  transition: right 0.22s ease-out;
+}
+body[data-deck-overlay="open"] #igsGalleryToggles {
+  right: 288px;     /* panel width 280 + 8px breathing room */
+}
+.igs-gallery-toggle-btn {
+  width: 36px;
+  height: 36px;
+  background: #fff;
+  border: 1px solid #E2E5EA;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1A1A2E;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  transition: all 0.15s;
+  padding: 0;
+}
+.igs-gallery-toggle-btn:hover {
+  border-color: var(--accent, #2563EB);
+  color: var(--accent, #2563EB);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.10);
+}
+.igs-gallery-toggle-btn.is-active {
+  background: var(--accent, #2563EB);
+  border-color: var(--accent, #2563EB);
+  color: #fff;
+}
+.igs-gallery-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .igs-gallery-major {
   width: 100%;

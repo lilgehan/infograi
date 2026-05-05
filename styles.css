@@ -77,9 +77,10 @@ body {
   height: calc(100vh - 52px);
 }
 
-/* ── Slide Deck mode: 4-column layout (panel + thumbs + canvas + gallery) ── */
+/* ── Slide Deck mode: 3-column layout (slim panel + slim thumbs + canvas).
+       The gallery panel becomes a fixed sliding overlay (not a grid column). ── */
 body[data-mode="deck"] .app {
-  grid-template-columns: 320px 144px 1fr 248px;
+  grid-template-columns: 80px 60px 1fr;
 }
 
 /* ── Mode toggle row (Single Page / Slide Deck) ── */
@@ -107,12 +108,74 @@ body[data-mode="deck"] .app {
   color: #fff;
 }
 
-/* Hide single-page UI elements when in deck mode.
-   The Generate button stays visible (.panel-bot is NOT hidden) — in deck mode
-   it triggers the demo-deck builder via app.js → generateDemoDeck(). */
-body[data-mode="deck"] .layout-sec {
+/* ════════════════════════════════════════════════════════════
+   SLIM LEFT PANEL (deck mode) — 80px sidebar with compact controls
+   The panel is "set up once, then ignored" so all controls are tiny.
+   ════════════════════════════════════════════════════════════ */
+
+/* Hide entirely: layout picker (irrelevant in deck mode) + size selector
+   (deck is locked to 16:9) + the API note (no room to wrap text) */
+body[data-mode="deck"] .layout-sec,
+body[data-mode="deck"] .sec:has(#sizeRow),
+body[data-mode="deck"] .api-note {
   display: none;
 }
+
+/* Tighten section padding */
+body[data-mode="deck"] .panel { overflow: hidden; }
+body[data-mode="deck"] .sec   { padding: 8px 6px; }
+body[data-mode="deck"] .lbl   {
+  font-size: 8px;
+  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+/* Mode toggle: stack vertically, two compact buttons */
+body[data-mode="deck"] .mode-row { flex-direction: column; gap: 3px; }
+body[data-mode="deck"] .mode-btn {
+  font-size: 9px;
+  padding: 5px 4px;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* API key: shrink input, hide all the chrome */
+body[data-mode="deck"] .api-in {
+  font-size: 9px;
+  padding: 4px 16px 4px 4px;
+}
+body[data-mode="deck"] .api-dot {
+  right: 4px;
+  width: 6px;
+  height: 6px;
+}
+
+/* Topic textarea: keep full panel width, slightly smaller font */
+body[data-mode="deck"] .prompt-in {
+  font-size: 11px;
+  padding: 6px;
+  line-height: 1.4;
+  min-height: 80px;
+}
+
+/* Tone chips: 2x2 grid, very compact */
+body[data-mode="deck"] .chip-row { flex-wrap: wrap; gap: 3px; }
+body[data-mode="deck"] .chip {
+  flex: 1 1 calc(50% - 3px);
+  min-width: 0;
+  padding: 4px 0;
+  font-size: 9px;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+/* Generate button stays prominent — full panel width, slightly smaller text */
+body[data-mode="deck"] .gen-btn {
+  font-size: 11px;
+  padding: 8px 6px;
+}
+body[data-mode="deck"] .panel-bot { padding: 8px 6px; }
 
 /* Hide deck-only DOM in single-page mode (defensive — JS already toggles display) */
 body[data-mode="single"] #igsThumbPanel,

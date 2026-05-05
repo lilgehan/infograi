@@ -208,8 +208,18 @@
 
   </main>
 
-  <!-- Slide Deck mode: diagram gallery panel (hidden in single-page mode) -->
+  <!-- Slide Deck mode: gallery panel — fixed sliding overlay (hidden in single-page mode) -->
   <aside class="igs-gallery-panel" id="igsGalleryPanel" style="display:none"></aside>
+
+  <!-- Slide Deck mode: gallery toggle buttons — stacked on the right edge -->
+  <div id="igsGalleryToggles" style="display:none">
+    <button class="igs-gallery-toggle-btn" data-show="templates" type="button" title="Templates">
+      <svg viewBox="0 0 24 24"><rect x="3"  y="3"  width="7" height="7" rx="1"/><rect x="14" y="3"  width="7" height="7" rx="1"/><rect x="3"  y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    </button>
+    <button class="igs-gallery-toggle-btn" data-show="diagrams" type="button" title="Diagrams">
+      <svg viewBox="0 0 24 24"><circle cx="6" cy="9" r="3"/><rect x="13" y="3" width="8" height="8" rx="1"/><polygon points="3,21 12,21 7.5,13"/><circle cx="17" cy="17" r="4"/></svg>
+    </button>
+  </div>
 
 </div>
 

@@ -279,13 +279,14 @@ const DECK_LAYOUT_CSS = `
 /* ── Thumbnail container & gallery panel base styles ──
    These belong in styles.css too, but live here as a single source of truth
    for the deck mode visual contract. ── */
+/* ── Thumbnail panel cells (slim — sized for ~60px panel) ── */
 .igs-thumb-wrap {
-  width: 120px;
-  height: 67.5px;
+  width: 50px;
+  height: 28px;
   position: relative;
   overflow: hidden;
   border: 2px solid transparent;
-  border-radius: 4px;
+  border-radius: 3px;
   background: #ffffff;
   cursor: pointer;
   flex-shrink: 0;
@@ -300,7 +301,7 @@ const DECK_LAYOUT_CSS = `
   left: 0;
   width: 960px;
   height: 540px;
-  transform: scale(0.125);
+  transform: scale(0.052);   /* 50 / 960 */
   transform-origin: top left;
   pointer-events: none;
 }
@@ -309,18 +310,23 @@ const DECK_LAYOUT_CSS = `
 }
 .igs-thumb-label {
   position: absolute;
-  left: 4px;
-  top: 4px;
+  left: 2px;
+  top: 2px;
   background: rgba(0,0,0,0.6);
   color: #fff;
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 3px;
+  font-size: 8px;
+  padding: 0 4px;
+  border-radius: 2px;
   font-weight: 600;
   pointer-events: none;
+  line-height: 1.4;
 }
 
-/* ── Slide canvas wrapper (centers the slide in #editCanvas) ── */
+/* ── Slide canvas wrapper + stage ──
+   .igs-canvas-wrap fills the entire #outputWrap area and centers the stage.
+   .igs-slide-stage has its width/height set in JS to match the available
+   canvas at 16:9. The slide inside is at native 960×540 and is visually
+   scaled via CSS transform to fit the stage exactly. ── */
 .igs-canvas-wrap {
   display: flex;
   align-items: center;
@@ -328,12 +334,24 @@ const DECK_LAYOUT_CSS = `
   width: 100%;
   height: 100%;
   background: #E6E9EF;
-  padding: 32px;
   box-sizing: border-box;
+  overflow: hidden;
+}
+.igs-slide-stage {
+  position: relative;
+  flex-shrink: 0;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06);
+  /* width / height are set inline by fitSlideStage() in slide-deck-ui.js */
 }
 .igs-canvas-wrap .igs-slide {
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-  border-radius: 4px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 960px;   /* native — JS sets transform: scale(...) on this element */
+  height: 540px;
+  transform-origin: top left;
 }
 `;
 
