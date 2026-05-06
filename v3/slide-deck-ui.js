@@ -314,6 +314,16 @@ function _startDrag(wrapper, e) {
 
   const slide = wrapper.closest('.igs-slide');
   if (!slide) return;
+
+  // Phase 4 v2 safety net — even if the grab bar somehow rendered on a
+  // slide where reorder is meaningless (single block in single zone),
+  // bail out so the user doesn't get a drag that does nothing.
+  const allWrappers = slide.querySelectorAll('.igs-block-wrapper:not(.igs-text-block)');
+  const allZones    = slide.querySelectorAll('.igs-zone-content[data-zone-type="content"]');
+  if (allWrappers.length <= 1 && allZones.length <= 1) {
+    return;
+  }
+
   const slideRect = slide.getBoundingClientRect();
   const scaleY = slideRect.height / 540;
   const scaleX = slideRect.width  / 960;
@@ -354,10 +364,20 @@ function _ensureDropLine() {
   }
 }
 
-function _hideDropLine() {
+/** Hide the drop line visually WITHOUT clearing _dropTarget. Phase 4 v2
+ *  drop-target persistence — keep the last valid target alive until
+ *  release, so the user doesn't have to perfectly land inside a zone at
+ *  the millisecond of mouseup. */
+function _hideDropLineVisually() {
   if (_dropLineEl) {
     _dropLineEl.style.display = 'none';
   }
+}
+
+/** Clear both the visual drop line AND the logical drop target. Called
+ *  on cancel paths (escape, window blur) or during cleanup at release. */
+function _hideDropLine() {
+  _hideDropLineVisually();
   _dropTarget = null;
 }
 
@@ -372,12 +392,16 @@ function _updateDrag(e) {
   ds.wrapper.style.transform = `translate(${dxScaled}px, ${dyScaled}px)`;
 
   // Find drop target — the zone under the cursor + insertion index.
+  // Phase 4 v2: when the cursor is outside any content zone, KEEP the
+  // last valid target instead of clearing. Only hide the visual line.
+  // Replace _dropTarget only when a NEW valid target is found.
   const target = _resolveDropTarget(e, ds.blockId);
   if (target) {
     _showDropLine(target);
     _dropTarget = target;
   } else {
-    _hideDropLine();
+    _hideDropLineVisually();
+    // _dropTarget stays whatever it was — last valid target.
   }
 }
 
@@ -475,12 +499,16 @@ function _endDrag(e) {
     return;
   }
 
+  // Capture the persisted drop target BEFORE _hideDropLine clears it.
+  // Phase 4 v2 fix — previous version read _dropTarget AFTER clearing,
+  // so target was always null and every drag snapped back.
+  const target = _dropTarget;
+
   ds.wrapper.style.transform = '';
   ds.wrapper.classList.remove('igs-dragging');
   document.body.classList.remove('igs-deck-dragging');
   _hideDropLine();
 
-  const target = _dropTarget;
   interactionState.dragStart = null;
 
   if (!target || target.full) {
@@ -532,12 +560,12 @@ function _startResize(wrapper, handleEl, e) {
   const handle = handleEl.getAttribute('data-handle');
   if (!handle || !HANDLE_SIGNS[handle]) return;
 
-  const slide = wrapper.closest('.igs-slide');
-  const zoneEl = wrapper.closest('.igs-zone-content');
-  if (!slide || !zoneEl) return;
+  const slide  = wrapper.closest('.igs-slide');
+  const slotEl = wrapper.parentElement; // .igs-block-slot — the percentage CSS context
+  if (!slide || !slotEl) return;
 
-  const slideRect = slide.getBoundingClientRect();
-  const zoneRect  = zoneEl.getBoundingClientRect();
+  const slideRect   = slide.getBoundingClientRect();
+  const slotRect    = slotEl.getBoundingClientRect();
   const wrapperRect = wrapper.getBoundingClientRect();
   const scaleX = slideRect.width  / 960;
   const scaleY = slideRect.height / 540;
@@ -556,21 +584,17 @@ function _startResize(wrapper, handleEl, e) {
     scaleX,
     scaleY,
     slideRect,
-    zoneRect,
-    // Original wrapper dimensions in slide-coord px.
+    // Wrapper start dimensions in slide-coord px.
     startWidth:  wrapperRect.width  / scaleX,
     startHeight: wrapperRect.height / scaleY,
-    // Available zone (in slide-coord px) for max-width / max-height calc.
-    zoneWidthPx:  zoneRect.width  / scaleX,
-    zoneHeightPx: zoneRect.height / scaleY,
-    // Sum of sibling block heights to compute available height.
-    siblingsHeightPx: (() => {
-      const sibs = Array.from(zoneEl.querySelectorAll('.igs-block-wrapper'))
-        .filter(w => w !== wrapper);
-      let sum = 0;
-      for (const s of sibs) sum += s.getBoundingClientRect().height / scaleY;
-      return sum;
-    })(),
+    // Slot rect — the wrapper's containing block. CSS interprets `width: X%`
+    // as X% of the slot's content box, so widthPct math must use slotWidthPx
+    // as the denominator. Phase 4 v2 fix for the 1.5–2 cm jump bug.
+    slotWidthPx: slotRect.width  / scaleX,
+    // Wrapper top in slide-coord px (used for slide-edge clamp).
+    wrapperTopInSlidePx: (wrapperRect.top - slideRect.top) / scaleY,
+    // Wrapper left in slide-coord px (used for slide-edge clamp).
+    wrapperLeftInSlidePx: (wrapperRect.left - slideRect.left) / scaleX,
   };
   interactionState.resizeHandle = handle;
   document.body.classList.add('igs-deck-resizing');
@@ -589,45 +613,34 @@ function _updateResize(e) {
   let newWidthPx  = rs.startWidth  + sign.dx * dxPx;
   let newHeightPx = rs.startHeight + sign.dy * dyPx;
 
-  // Constraints — width.
-  let widthHitLimit = null;
+  // Phase 4 v2 — slide-edge max clamps. Slide is 960 × 540 in design coords;
+  // safe area is 5% inset on every side. The wrapper's left/top are fixed by
+  // the flex layout (only east/south handles are exposed in v2, so growth
+  // is always rightward/downward), so max width = slide right edge − 5%
+  // − wrapper left; max height = slide bottom edge − 5% − wrapper top.
+  // Silent clamping per Lily's request — no red flash UI.
   if (sign.dx !== 0) {
-    const maxW = rs.zoneWidthPx; // zone owns its own padding; wrapper can fill it
-    if (newWidthPx > maxW) { newWidthPx = maxW; widthHitLimit = sign.dx > 0 ? 'e' : 'w'; }
-    if (newWidthPx < MIN_BLOCK_WIDTH_PX) { newWidthPx = MIN_BLOCK_WIDTH_PX; widthHitLimit = sign.dx > 0 ? 'e' : 'w'; }
+    const SLIDE_PAD_X = 960 * 0.05;
+    const maxW = 960 - SLIDE_PAD_X - rs.wrapperLeftInSlidePx;
+    if (newWidthPx > maxW)  newWidthPx = maxW;
+    if (newWidthPx < MIN_BLOCK_WIDTH_PX) newWidthPx = MIN_BLOCK_WIDTH_PX;
   }
-
-  // Constraints — height. Available = zone height minus sibling heights
-  // minus minimum padding-ish margin. Section 12.5 Rule 15-17.
-  let heightHitLimit = null;
   if (sign.dy !== 0) {
-    const maxH = Math.max(60, rs.zoneHeightPx - rs.siblingsHeightPx - 8);
-    if (newHeightPx > maxH) { newHeightPx = maxH; heightHitLimit = sign.dy > 0 ? 's' : 'n'; }
-    if (newHeightPx < 40)   { newHeightPx = 40;   heightHitLimit = sign.dy > 0 ? 's' : 'n'; }
+    const SLIDE_PAD_Y = 540 * 0.05;
+    const maxH = 540 - SLIDE_PAD_Y - rs.wrapperTopInSlidePx;
+    if (newHeightPx > maxH) newHeightPx = maxH;
+    if (newHeightPx < 40)   newHeightPx = 40;
   }
 
-  // Apply via inline style.
+  // Apply via inline style. Width as % of SLOT (the wrapper's containing
+  // block) — matches how CSS interprets % so there's no jump at grab.
   if (sign.dx !== 0) {
-    const widthPct = (newWidthPx / rs.zoneWidthPx) * 100;
+    const widthPct = (newWidthPx / rs.slotWidthPx) * 100;
     rs.wrapper.style.width = `${widthPct}%`;
   }
   if (sign.dy !== 0) {
     rs.wrapper.style.height = `${newHeightPx}px`;
   }
-
-  // Edge flash — restart the animation when a limit is hit.
-  if (widthHitLimit)  _flashResizeLimit(rs.wrapper, widthHitLimit);
-  if (heightHitLimit) _flashResizeLimit(rs.wrapper, heightHitLimit);
-}
-
-function _flashResizeLimit(wrapper, edge) {
-  if (!wrapper || !edge) return;
-  const cls = `igs-resize-flash-${edge}`;
-  wrapper.classList.remove(cls);
-  // Force reflow to restart the CSS animation.
-  void wrapper.offsetWidth;
-  wrapper.classList.add(cls);
-  setTimeout(() => wrapper.classList.remove(cls), 380);
 }
 
 function _endResize(/* e */) {
@@ -638,9 +651,9 @@ function _endResize(/* e */) {
     return;
   }
 
-  // Read final dimensions from inline style (or computed if not set).
+  // Read final dimensions from the live wrapper rect, in slide-coord px.
   const wrapperRect = rs.wrapper.getBoundingClientRect();
-  const finalWidthPct  = (wrapperRect.width  / rs.scaleX) / rs.zoneWidthPx * 100;
+  const finalWidthPct  = (wrapperRect.width  / rs.scaleX) / rs.slotWidthPx * 100;
   const finalHeightPx  =  wrapperRect.height / rs.scaleY;
 
   // Persist to data model.
@@ -3475,6 +3488,21 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
 .igs-resize-handle[data-handle="s"]  { bottom: -12px;  left: 50%;   transform: translateX(-50%);  cursor: ns-resize; }
 .igs-resize-handle[data-handle="w"]  { top: 50%;       left: -12px; transform: translateY(-50%);  cursor: ew-resize; }
 .igs-resize-handle[data-handle="e"]  { top: 50%;       right: -12px;transform: translateY(-50%);  cursor: ew-resize; }
+
+/* ── Phase 4 v2 — only 3 handles work in the current flex layout ──
+   The wrapper is anchored top-left in a flex column. Handles that move the
+   left or top edge fight that anchor (mirrored / inverted behavior). For
+   v2 we expose only e (right edge), s (bottom edge), and se (bottom-right
+   corner) — those grow the wrapper in directions the layout naturally
+   allows. The 5 hidden handles will return in Phase 6 once Phase 5's
+   absolute positioning is in. */
+.igs-resize-handle[data-handle="nw"],
+.igs-resize-handle[data-handle="n"],
+.igs-resize-handle[data-handle="ne"],
+.igs-resize-handle[data-handle="w"],
+.igs-resize-handle[data-handle="sw"] {
+  display: none !important;
+}
 
 /* Text blocks are edit-only — no hover, selection, or interaction UI */
 .igs-block-wrapper.igs-text-block .igs-block-ui,

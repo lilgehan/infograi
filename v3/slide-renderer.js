@@ -118,8 +118,10 @@ function zoneBalance(slide, zoneName, contentZoneNames) {
  * @param {string} tone
  * @returns {string}
  */
-function renderBlock(block, tone) {
+function renderBlock(block, tone, reorderMeaningful) {
   if (!block) return '';
+  // Default to true — preserve old behavior when callers don't pass the flag.
+  if (reorderMeaningful === undefined) reorderMeaningful = true;
 
   // Text blocks (free-text, no variant) — Section 12 Rule 6.
   // Always contenteditable so clicks route to caret placement. NO visible
@@ -177,14 +179,25 @@ function renderBlock(block, tone) {
   //                        contains contenteditable elements.
   // The toolbar lives inside the wrapper (not in document.body) so its
   // position scales with the slide and clicks on it never leave the block.
+  // Phase 4 v2 — hide the grab bar when reorder would be meaningless. The
+  // bar is shown only when there is somewhere TO drop (≥ 2 blocks across
+  // all content zones on the slide, OR ≥ 2 content zones — meaning the
+  // user can move this block to a different zone). Slides with one block
+  // in one content zone (B1 etc.) hide the bar so the user isn't promised
+  // a reorder that produces no visible change. The flag is set in
+  // renderSlide() when it iterates all blocks.
+  const grabBarHtml = reorderMeaningful
+    ? `<div class="igs-grab-bar" title="Drag to reorder">` +
+        `<div class="igs-grab-bar-line"></div>` +
+        `<div class="igs-grab-bar-line"></div>` +
+        `<div class="igs-grab-bar-line"></div>` +
+      `</div>`
+    : '';
+
   return `<div class="igs-block igs-block-wrapper" data-block-id="${esc(block.id)}"${sizeStyle}>` +
            `<div class="igs-block-content"><div class="ig-page">${inner}</div></div>` +
            `<div class="igs-block-ui" aria-hidden="true">` +
-             `<div class="igs-grab-bar" title="Drag to reorder">` +
-               `<div class="igs-grab-bar-line"></div>` +
-               `<div class="igs-grab-bar-line"></div>` +
-               `<div class="igs-grab-bar-line"></div>` +
-             `</div>` +
+             grabBarHtml +
              `<div class="igs-resize-handle" data-handle="nw"></div>` +
              `<div class="igs-resize-handle" data-handle="n"></div>` +
              `<div class="igs-resize-handle" data-handle="ne"></div>` +
@@ -215,7 +228,7 @@ function renderBlock(block, tone) {
  * DECK_LAYOUT_CSS can tighten the gap, padding, and font sizes per
  * Section 6.5.
  */
-function renderContentZone(slide, zoneName, tone) {
+function renderContentZone(slide, zoneName, tone, reorderMeaningful) {
   const blocks = blocksInZone(slide, zoneName).slice(0, 3);
   if (blocks.length === 0) return '';
 
@@ -227,7 +240,7 @@ function renderContentZone(slide, zoneName, tone) {
   // size to their natural content height (flex: 0 0 auto), so the selection
   // outline hugs the diagram tightly with no empty space below.
   const items = blocks.map((b) =>
-    `<div class="igs-block-slot">${renderBlock(b, tone)}</div>`
+    `<div class="igs-block-slot">${renderBlock(b, tone, reorderMeaningful)}</div>`
   ).join('');
 
   return `<div class="igs-block-stack" data-density="${density}" style="gap:${gap};">${items}</div>`;
@@ -378,6 +391,17 @@ export function renderSlide(slide, theme, accentColor) {
     .filter(z => z.type === 'content')
     .map(z => z.name);
 
+  // Phase 4 v2 — flag whether drag-to-reorder is meaningful on this slide.
+  // Reorder is meaningful when there's somewhere TO drop:
+  //   • multiple content zones (cross-zone drop possible), OR
+  //   • multiple blocks in the same zone (intra-zone reorder possible).
+  // Slides with one block in one zone get no grab bar. The flag is read
+  // by renderBlock to suppress the .igs-grab-bar element.
+  const totalBlocks = slide.blocks.filter(b =>
+    contentZoneNames.includes(b.position && b.position.zone)
+  ).length;
+  const reorderMeaningful = (contentZoneNames.length > 1) || (totalBlocks > 1);
+
   const zonesHtml = tpl.zones.map(zoneMeta => {
     const isAccent = zoneMeta.type === 'accent';
     const cls = isAccent ? 'igs-zone igs-zone-accent' : 'igs-zone igs-zone-content';
@@ -409,7 +433,7 @@ export function renderSlide(slide, theme, accentColor) {
     } else {
       // Plain content zone — render any blocks placed here.
       // For inline-title templates, prepend the title element to the first content zone.
-      const stackHtml = renderContentZone(slide, zoneMeta.name, tone);
+      const stackHtml = renderContentZone(slide, zoneMeta.name, tone, reorderMeaningful);
       if (inlineTitle && zoneMeta.name === firstContentZoneName) {
         inner = renderInlineTitle(slide) + stackHtml;
       } else {
@@ -600,28 +624,8 @@ body.igs-deck-dragging * {
 }
 
 /* ── Phase G — Resize state ──
-   When a resize is in progress, the wrapper shows the limit-flash on
-   whichever edge hit a constraint. */
-.igs-block-wrapper.igs-resize-flash-e::after,
-.igs-block-wrapper.igs-resize-flash-w::after,
-.igs-block-wrapper.igs-resize-flash-n::after,
-.igs-block-wrapper.igs-resize-flash-s::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-  background: rgba(220, 38, 38, 0.55);
-  animation: igs-resize-flash 320ms ease-out forwards;
-  z-index: 13;
-}
-.igs-block-wrapper.igs-resize-flash-e::after { top: -8px; bottom: -8px; right: -8px; width: 3px; }
-.igs-block-wrapper.igs-resize-flash-w::after { top: -8px; bottom: -8px; left: -8px;  width: 3px; }
-.igs-block-wrapper.igs-resize-flash-n::after { left: -8px; right: -8px; top: -8px;    height: 3px; }
-.igs-block-wrapper.igs-resize-flash-s::after { left: -8px; right: -8px; bottom: -8px; height: 3px; }
-@keyframes igs-resize-flash {
-  0%   { opacity: 1; }
-  100% { opacity: 0; }
-}
-
+   Phase 4 v2 silently clamps at slide-edge limits — no red flash UI.
+   Body class blocks text selection during resize. */
 body.igs-deck-resizing,
 body.igs-deck-resizing * {
   user-select: none !important;
