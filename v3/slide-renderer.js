@@ -118,10 +118,8 @@ function zoneBalance(slide, zoneName, contentZoneNames) {
  * @param {string} tone
  * @returns {string}
  */
-function renderBlock(block, tone, reorderMeaningful) {
+function renderBlock(block, tone) {
   if (!block) return '';
-  // Default to true — preserve old behavior when callers don't pass the flag.
-  if (reorderMeaningful === undefined) reorderMeaningful = true;
 
   // Text blocks (free-text, no variant) — Section 12 Rule 6.
   // Always contenteditable so clicks route to caret placement. NO visible
@@ -179,25 +177,20 @@ function renderBlock(block, tone, reorderMeaningful) {
   //                        contains contenteditable elements.
   // The toolbar lives inside the wrapper (not in document.body) so its
   // position scales with the slide and clicks on it never leave the block.
-  // Phase 4 v2 — hide the grab bar when reorder would be meaningless. The
-  // bar is shown only when there is somewhere TO drop (≥ 2 blocks across
-  // all content zones on the slide, OR ≥ 2 content zones — meaning the
-  // user can move this block to a different zone). Slides with one block
-  // in one content zone (B1 etc.) hide the bar so the user isn't promised
-  // a reorder that produces no visible change. The flag is set in
-  // renderSlide() when it iterates all blocks.
-  const grabBarHtml = reorderMeaningful
-    ? `<div class="igs-grab-bar" title="Drag to reorder">` +
-        `<div class="igs-grab-bar-line"></div>` +
-        `<div class="igs-grab-bar-line"></div>` +
-        `<div class="igs-grab-bar-line"></div>` +
-      `</div>`
-    : '';
-
+  // Phase 4 v2.1 — grab bar always renders. Even on single-block slides,
+  // drag is meaningful via cross-slide drop (drag >50% past slide top/
+  // bottom moves the block to the previous/next slide). The bar's vertical
+  // position is smart-flipped via .igs-grab-bar-below (added by
+  // _positionGrabBarSmart in slide-deck-ui.js) when the wrapper is within
+  // 24px of the slide's top edge.
   return `<div class="igs-block igs-block-wrapper" data-block-id="${esc(block.id)}"${sizeStyle}>` +
            `<div class="igs-block-content"><div class="ig-page">${inner}</div></div>` +
            `<div class="igs-block-ui" aria-hidden="true">` +
-             grabBarHtml +
+             `<div class="igs-grab-bar" title="Drag to reorder">` +
+               `<div class="igs-grab-bar-line"></div>` +
+               `<div class="igs-grab-bar-line"></div>` +
+               `<div class="igs-grab-bar-line"></div>` +
+             `</div>` +
              `<div class="igs-resize-handle" data-handle="nw"></div>` +
              `<div class="igs-resize-handle" data-handle="n"></div>` +
              `<div class="igs-resize-handle" data-handle="ne"></div>` +
@@ -228,7 +221,7 @@ function renderBlock(block, tone, reorderMeaningful) {
  * DECK_LAYOUT_CSS can tighten the gap, padding, and font sizes per
  * Section 6.5.
  */
-function renderContentZone(slide, zoneName, tone, reorderMeaningful) {
+function renderContentZone(slide, zoneName, tone) {
   const blocks = blocksInZone(slide, zoneName).slice(0, 3);
   if (blocks.length === 0) return '';
 
@@ -240,7 +233,7 @@ function renderContentZone(slide, zoneName, tone, reorderMeaningful) {
   // size to their natural content height (flex: 0 0 auto), so the selection
   // outline hugs the diagram tightly with no empty space below.
   const items = blocks.map((b) =>
-    `<div class="igs-block-slot">${renderBlock(b, tone, reorderMeaningful)}</div>`
+    `<div class="igs-block-slot">${renderBlock(b, tone)}</div>`
   ).join('');
 
   return `<div class="igs-block-stack" data-density="${density}" style="gap:${gap};">${items}</div>`;
@@ -391,16 +384,8 @@ export function renderSlide(slide, theme, accentColor) {
     .filter(z => z.type === 'content')
     .map(z => z.name);
 
-  // Phase 4 v2 — flag whether drag-to-reorder is meaningful on this slide.
-  // Reorder is meaningful when there's somewhere TO drop:
-  //   • multiple content zones (cross-zone drop possible), OR
-  //   • multiple blocks in the same zone (intra-zone reorder possible).
-  // Slides with one block in one zone get no grab bar. The flag is read
-  // by renderBlock to suppress the .igs-grab-bar element.
-  const totalBlocks = slide.blocks.filter(b =>
-    contentZoneNames.includes(b.position && b.position.zone)
-  ).length;
-  const reorderMeaningful = (contentZoneNames.length > 1) || (totalBlocks > 1);
+  // Phase 4 v2.1 — drag is always meaningful (cross-slide drop on any
+  // slide), so reorderMeaningful flag was removed. Grab bar always renders.
 
   const zonesHtml = tpl.zones.map(zoneMeta => {
     const isAccent = zoneMeta.type === 'accent';
@@ -433,7 +418,7 @@ export function renderSlide(slide, theme, accentColor) {
     } else {
       // Plain content zone — render any blocks placed here.
       // For inline-title templates, prepend the title element to the first content zone.
-      const stackHtml = renderContentZone(slide, zoneMeta.name, tone, reorderMeaningful);
+      const stackHtml = renderContentZone(slide, zoneMeta.name, tone);
       if (inlineTitle && zoneMeta.name === firstContentZoneName) {
         inner = renderInlineTitle(slide) + stackHtml;
       } else {
@@ -568,6 +553,11 @@ const DECK_LAYOUT_CSS = `
   display: block;
   min-width: 0;
   /* No padding, no margin — the diagram inside owns its own spacing. */
+  /* Phase 4 v2.1 — clip overflow so resizing the wrapper smaller than
+     the natural diagram size produces a clean visual edge instead of
+     content floating past the wrapper. True per-variant content
+     reflow (Section 5.3) lands in Phase 6. */
+  overflow: hidden;
 }
 
 /* ── Toolbar visibility fix (Phase 3 Unified Interaction follow-up) ──

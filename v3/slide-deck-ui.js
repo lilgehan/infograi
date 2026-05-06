@@ -24,7 +24,7 @@
 import {
   createDeck, addSlide, removeSlide, duplicateSlide,
   addBlock, removeBlock, updateBlock, moveBlock, getSlide, blocksInZone, withSlide,
-  changeSlideTemplate, updateSlide,
+  changeSlideTemplate, updateSlide, nextBlockOrder,
 } from './slide-deck.js';
 import { renderSlide, DECK_MODE_CSS } from './slide-renderer.js';
 import { TEMPLATES, getTemplateZones, renderSlideTemplate } from './slide-templates.js';
@@ -236,7 +236,10 @@ function setHovered(blockId) {
       const next = wrap.querySelector(
         `.igs-block-wrapper[data-block-id="${cssEscape(blockId)}"]`
       );
-      if (next) next.classList.add('igs-hover');
+      if (next) {
+        next.classList.add('igs-hover');
+        _positionGrabBarSmart(next);
+      }
     }
   }
   interactionState.hoveredBlockId = blockId;
@@ -266,6 +269,7 @@ function setSelected(blockId) {
     if (next) {
       next.classList.add('igs-selected');
       _positionToolbarSmart(next);
+      _positionGrabBarSmart(next);
     }
   }
   setMode(blockId ? 'selectedBlock' : 'idle');
@@ -295,6 +299,30 @@ function _positionToolbarSmart(wrapper) {
   }
 }
 
+/**
+ * Phase 4 v2.1 — Grab bar smart positioning. Default position is
+ * `top: -24px` from the wrapper. When the wrapper is within 24px of the
+ * slide's top edge (in slide-coord px), the grab bar would clip outside
+ * the slide. In that case, add `.igs-grab-bar-below` so CSS flips the
+ * bar to `bottom: -24px` instead. Same pattern as `_positionToolbarSmart`.
+ */
+function _positionGrabBarSmart(wrapper) {
+  if (!wrapper) return;
+  const slide = wrapper.closest('.igs-slide');
+  if (!slide) return;
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const slideRect   = slide.getBoundingClientRect();
+  if (slideRect.height === 0) return;
+  const scaleY = slideRect.height / 540;
+  const GRAB_BAR_NEEDED_ABOVE = 28; // 24px bar offset + 4px cushion
+  const availableAbove = (wrapperRect.top - slideRect.top) / scaleY;
+  if (availableAbove < GRAB_BAR_NEEDED_ABOVE) {
+    wrapper.classList.add('igs-grab-bar-below');
+  } else {
+    wrapper.classList.remove('igs-grab-bar-below');
+  }
+}
+
 /* ─────────────────────────────────────────
    PHASE F — DRAG-TO-REORDER
    Mouse-down on .igs-grab-bar starts a drag. The wrapper follows the
@@ -315,18 +343,21 @@ function _startDrag(wrapper, e) {
   const slide = wrapper.closest('.igs-slide');
   if (!slide) return;
 
-  // Phase 4 v2 safety net — even if the grab bar somehow rendered on a
-  // slide where reorder is meaningless (single block in single zone),
-  // bail out so the user doesn't get a drag that does nothing.
-  const allWrappers = slide.querySelectorAll('.igs-block-wrapper:not(.igs-text-block)');
-  const allZones    = slide.querySelectorAll('.igs-zone-content[data-zone-type="content"]');
-  if (allWrappers.length <= 1 && allZones.length <= 1) {
-    return;
-  }
+  // Phase 4 v2.1 — drag is now meaningful on every slide via cross-slide
+  // drop (>50% past slide top/bottom moves to prev/next slide). Removed
+  // the v2 single-block-single-zone early-return.
 
   const slideRect = slide.getBoundingClientRect();
   const scaleY = slideRect.height / 540;
   const scaleX = slideRect.width  / 960;
+
+  // Capture the wrapper's LAYOUT position (no transform applied yet) so
+  // the horizontal clamp in _updateDrag doesn't drift across frames.
+  const wrapperRectAtStart = wrapper.getBoundingClientRect();
+  const layoutLeftSlidePx     = (wrapperRectAtStart.left - slideRect.left) / scaleX;
+  const layoutTopSlidePx      = (wrapperRectAtStart.top  - slideRect.top)  / scaleY;
+  const wrapperWidthSlidePx   = wrapperRectAtStart.width  / scaleX;
+  const wrapperHeightSlidePx  = wrapperRectAtStart.height / scaleY;
 
   // Snapshot history once at the start of the drag, so Cmd+Z restores
   // the pre-drag arrangement (not intermediate frames).
@@ -341,6 +372,10 @@ function _startDrag(wrapper, e) {
     scaleX,
     scaleY,
     slideRect,
+    layoutLeftSlidePx,
+    layoutTopSlidePx,
+    wrapperWidthSlidePx,
+    wrapperHeightSlidePx,
   };
 
   wrapper.classList.add('igs-dragging');
@@ -387,8 +422,19 @@ function _updateDrag(e) {
 
   // Visual: move the dragged wrapper with the cursor (transform in
   // unscaled px because the wrapper is INSIDE the scaled slide).
-  const dxScaled = (e.clientX - ds.x) / ds.scaleX;
+  let dxScaled = (e.clientX - ds.x) / ds.scaleX;
   const dyScaled = (e.clientY - ds.y) / ds.scaleY;
+
+  // Phase 4 v2.1 — clamp horizontal movement to slide bounds. Vertical is
+  // not clamped here because cross-slide drop (in _endDrag) needs the
+  // wrapper to be able to extend past the slide's top/bottom by >50% of
+  // its own height. The visual left after applying the transform is
+  // layoutLeft + dxScaled — bound that within [0, 960 - wrapperWidth].
+  const minDx = 0                                      - ds.layoutLeftSlidePx;
+  const maxDx = (960 - ds.wrapperWidthSlidePx)         - ds.layoutLeftSlidePx;
+  if (dxScaled < minDx) dxScaled = minDx;
+  if (dxScaled > maxDx) dxScaled = maxDx;
+
   ds.wrapper.style.transform = `translate(${dxScaled}px, ${dyScaled}px)`;
 
   // Find drop target — the zone under the cursor + insertion index.
@@ -504,12 +550,42 @@ function _endDrag(e) {
   // so target was always null and every drag snapped back.
   const target = _dropTarget;
 
+  // Phase 4 v2.1 — cross-slide drop detection. If the dragged wrapper is
+  // more than 50% of its own height past the slide's top or bottom edge,
+  // attempt to move the block to the previous / next slide.
+  const wrapperFinalRect = ds.wrapper.getBoundingClientRect();
+  const slide = ds.wrapper.closest('.igs-slide');
+  const slideRect = slide ? slide.getBoundingClientRect() : null;
+  let crossSlideDirection = null;
+  if (slideRect) {
+    const halfH = wrapperFinalRect.height / 2;
+    const pastTop    = slideRect.top    - wrapperFinalRect.top;
+    const pastBottom = wrapperFinalRect.bottom - slideRect.bottom;
+    if (pastTop    > halfH) crossSlideDirection = 'prev';
+    else if (pastBottom > halfH) crossSlideDirection = 'next';
+  }
+
   ds.wrapper.style.transform = '';
   ds.wrapper.classList.remove('igs-dragging');
   document.body.classList.remove('igs-deck-dragging');
   _hideDropLine();
 
   interactionState.dragStart = null;
+
+  // Cross-slide drop attempt takes priority over intra-slide reorder.
+  if (crossSlideDirection) {
+    if (_attemptCrossSlideDrop(ds.blockId, crossSlideDirection)) {
+      return; // success — _attemptCrossSlideDrop handles state + render
+    }
+    // Cross-slide failed (no neighbouring slide, or target slide has no
+    // content zone, or target zone is full). Snap back with a hint.
+    flashCanvasMessage(crossSlideDirection === 'prev'
+      ? 'No previous slide with available space.'
+      : 'No next slide with available space.');
+    setMode('selectedBlock');
+    setSelected(ds.blockId);
+    return;
+  }
 
   if (!target || target.full) {
     if (target && target.full) {
@@ -521,7 +597,7 @@ function _endDrag(e) {
     return;
   }
 
-  // Commit the move via the data model.
+  // Commit the intra-slide move via the data model.
   const slideId = _state.activeSlideId;
   _state.deck = withSlide(_state.deck, slideId, s =>
     moveBlock(s, ds.blockId, target.zone, target.index)
@@ -530,6 +606,66 @@ function _endDrag(e) {
   rerenderEverything();
   // Re-select the moved block in the new render so the toolbar follows.
   setSelected(ds.blockId);
+}
+
+/**
+ * Phase 4 v2.1 — Cross-slide drop. When the user drags a block more than
+ * 50% past the slide's top or bottom edge, try to move it to the prev /
+ * next slide's first content zone. Returns true on success, false if the
+ * caller should fall back to snap-back.
+ *
+ * Failure cases (return false):
+ *   • no neighbouring slide in that direction
+ *   • target slide has no content-typed zone
+ *   • all content zones on the target slide are full (3 blocks each)
+ */
+function _attemptCrossSlideDrop(blockId, direction) {
+  if (!_state) return false;
+  const slides = _state.deck.slides;
+  const currentIdx = slides.findIndex(s => s.id === _state.activeSlideId);
+  if (currentIdx === -1) return false;
+
+  const targetIdx = direction === 'prev' ? currentIdx - 1 : currentIdx + 1;
+  if (targetIdx < 0 || targetIdx >= slides.length) return false;
+  const targetSlide = slides[targetIdx];
+
+  const targetTpl = TEMPLATES[targetSlide.templateId];
+  if (!targetTpl) return false;
+
+  // First content-typed zone with < 3 blocks.
+  const contentZones = targetTpl.zones.filter(z => z.type === 'content');
+  if (contentZones.length === 0) return false;
+  let targetZone = null;
+  for (const z of contentZones) {
+    if (blocksInZone(targetSlide, z.name).length < 3) {
+      targetZone = z;
+      break;
+    }
+  }
+  if (!targetZone) return false;
+
+  // Get the block from the current slide.
+  const currentSlide = getSlide(_state.deck, _state.activeSlideId);
+  if (!currentSlide) return false;
+  const block = currentSlide.blocks.find(b => b.id === blockId);
+  if (!block) return false;
+
+  // Remove from current slide.
+  _state.deck = withSlide(_state.deck, _state.activeSlideId, s => removeBlock(s, blockId));
+  // Add to target slide's first content zone (end of stack — addBlock
+  // computes nextBlockOrder when no order is given).
+  const newBlockDef = {
+    ...block,
+    position: { zone: targetZone.name },
+  };
+  _state.deck = withSlide(_state.deck, targetSlide.id, s => addBlock(s, newBlockDef));
+
+  // Switch to the target slide.
+  _state.activeSlideId = targetSlide.id;
+  setMode('idle');
+  rerenderEverything();
+  setSelected(blockId);
+  return true;
 }
 
 /* ─────────────────────────────────────────
@@ -3458,6 +3594,14 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   border-radius: 1px;
   background: rgba(255,255,255,0.9);
   pointer-events: none;
+}
+
+/* Phase 4 v2.1 — smart grab-bar position. When the wrapper is within
+   ~24px of the slide top (no room for the bar above), JS adds
+   .igs-grab-bar-below to flip the bar below the wrapper instead. */
+.igs-block-wrapper.igs-grab-bar-below .igs-grab-bar {
+  top: auto;
+  bottom: -24px;
 }
 
 /* ── Resize handles (Rule 22) ──
