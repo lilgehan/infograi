@@ -238,6 +238,15 @@ export function addBlock(slide, blockDef) {
       ? blockDef.position.order
       : nextBlockOrder(slide, zone);
 
+  // Phase 5A — free positioning. Optional fields:
+  //   position.mode = 'flow' (default) | 'free'
+  //   position.x / .y = slide-coord px (used only in 'free' mode)
+  //   size.widthPx / .heightPx = slide-coord px (used only in 'free' mode)
+  // Flow mode keeps the legacy widthPct (% of slot) + heightPct (px).
+  const posMode = (blockDef.position && blockDef.position.mode) || 'flow';
+  const posX    = (blockDef.position && typeof blockDef.position.x === 'number') ? blockDef.position.x : null;
+  const posY    = (blockDef.position && typeof blockDef.position.y === 'number') ? blockDef.position.y : null;
+
   const newBlock = {
     id:       blockDef.id || genId('block'),
     type:     blockDef.type     || 'diagram',
@@ -246,10 +255,12 @@ export function addBlock(slide, blockDef) {
     items:    Array.isArray(blockDef.items) ? blockDef.items.slice() : [],
     columns:  blockDef.columns  || 3,
     density:  blockDef.density  || 'standard',
-    position: { zone, order },
+    position: { zone, order, mode: posMode, x: posX, y: posY },
     size:     {
       widthPct:  (blockDef.size && blockDef.size.widthPct)  || 100,
       heightPct: (blockDef.size && blockDef.size.heightPct) || null,
+      widthPx:   (blockDef.size && typeof blockDef.size.widthPx  === 'number') ? blockDef.size.widthPx  : null,
+      heightPx:  (blockDef.size && typeof blockDef.size.heightPx === 'number') ? blockDef.size.heightPx : null,
     },
   };
 
@@ -375,11 +386,26 @@ export function nextBlockOrder(slide, zoneName) {
 /**
  * Convenience: blocks in a zone, sorted by order. Returns a new array
  * (does not mutate the slide's block list).
+ *
+ * Phase 5A — free-positioned blocks (mode='free') are NOT in any zone for
+ * layout purposes. They render as direct children of the slide root via
+ * absolute positioning. blocksInZone filters them out so flow rendering
+ * doesn't accidentally include them in a zone's stack.
  */
 export function blocksInZone(slide, zoneName) {
   return slide.blocks
-    .filter(b => b.position && b.position.zone === zoneName)
+    .filter(b => b.position
+                  && b.position.zone === zoneName
+                  && b.position.mode !== 'free')
     .sort((a, b) => (a.position.order || 0) - (b.position.order || 0));
+}
+
+/**
+ * Phase 5A — convenience: free-positioned blocks on a slide. Returns a
+ * new array.
+ */
+export function freeBlocks(slide) {
+  return (slide.blocks || []).filter(b => b.position && b.position.mode === 'free');
 }
 
 /* ─────────────────────────────────────────

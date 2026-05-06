@@ -437,18 +437,9 @@ function _updateDrag(e) {
 
   ds.wrapper.style.transform = `translate(${dxScaled}px, ${dyScaled}px)`;
 
-  // Find drop target — the zone under the cursor + insertion index.
-  // Phase 4 v2: when the cursor is outside any content zone, KEEP the
-  // last valid target instead of clearing. Only hide the visual line.
-  // Replace _dropTarget only when a NEW valid target is found.
-  const target = _resolveDropTarget(e, ds.blockId);
-  if (target) {
-    _showDropLine(target);
-    _dropTarget = target;
-  } else {
-    _hideDropLineVisually();
-    // _dropTarget stays whatever it was — last valid target.
-  }
+  // Phase 5A — drop-target / insertion-line machinery is no longer needed.
+  // Drag commits as free position at the wrapper's final visual location
+  // (in _endDrag). The wrapper following the cursor is the visual feedback.
 }
 
 function _resolveDropTarget(e, draggedBlockId) {
@@ -545,10 +536,8 @@ function _endDrag(e) {
     return;
   }
 
-  // Capture the persisted drop target BEFORE _hideDropLine clears it.
-  // Phase 4 v2 fix — previous version read _dropTarget AFTER clearing,
-  // so target was always null and every drag snapped back.
-  const target = _dropTarget;
+  // Phase 5A — drop-target capture removed (drag now commits as free
+  // position at the visual drop location, not at a reorder slot).
 
   // Phase 4 v2.1 — cross-slide drop detection. If the dragged wrapper is
   // more than 50% of its own height past the slide's top or bottom edge,
@@ -587,37 +576,43 @@ function _endDrag(e) {
     return;
   }
 
-  if (!target || target.full) {
-    if (target && target.full) {
-      flashCanvasMessage('Zone is full — delete a diagram first or drop elsewhere.');
-    }
-    // Snap back: re-render to discard transform + restore data state.
-    setMode('selectedBlock');
-    setSelected(ds.blockId);
-    return;
-  }
+  // Phase 5A — INTRA-SLIDE drag commits as FREE POSITION at the wrapper's
+  // final visual location. This is the change that makes drag actually
+  // move blocks (was: drag-to-reorder, which was a no-op for any slide
+  // without multiple blocks-in-zone or multiple zones).
+  // x, y, width, height are computed in slide-coord px (960 × 540 design
+  // space) so they're independent of the canvas's display scale.
+  const finalX = (wrapperFinalRect.left - slideRect.left) / ds.scaleX;
+  const finalY = (wrapperFinalRect.top  - slideRect.top)  / ds.scaleY;
+  const finalW = wrapperFinalRect.width  / ds.scaleX;
+  const finalH = wrapperFinalRect.height / ds.scaleY;
 
-  // Commit the intra-slide move via the data model.
   const slideId = _state.activeSlideId;
   _state.deck = withSlide(_state.deck, slideId, s =>
-    moveBlock(s, ds.blockId, target.zone, target.index)
+    updateBlock(s, ds.blockId, {
+      position: { mode: 'free', x: finalX, y: finalY },
+      size:     { widthPx: finalW, heightPx: finalH },
+    })
   );
   setMode('idle');
   rerenderEverything();
-  // Re-select the moved block in the new render so the toolbar follows.
   setSelected(ds.blockId);
 }
 
 /**
- * Phase 4 v2.1 — Cross-slide drop. When the user drags a block more than
- * 50% past the slide's top or bottom edge, try to move it to the prev /
- * next slide's first content zone. Returns true on success, false if the
- * caller should fall back to snap-back.
+ * Phase 5A — Cross-slide drop. When the user drags a block more than 50%
+ * past the slide's top or bottom edge, move it to the prev / next slide
+ * as a FREE-POSITIONED block (Phase 5A). Returns true on success, false
+ * if the caller should fall back to snap-back.
+ *
+ * The block lands near the top (when dragged past bottom → next slide) or
+ * near the bottom (when dragged past top → prev slide) of the target slide,
+ * preserving its horizontal position from the source slide.
  *
  * Failure cases (return false):
  *   • no neighbouring slide in that direction
- *   • target slide has no content-typed zone
- *   • all content zones on the target slide are full (3 blocks each)
+ *   • target slide can't accept blocks (e.g., title or closing slide
+ *     where dropping a diagram doesn't make semantic sense)
  */
 function _attemptCrossSlideDrop(blockId, direction) {
   if (!_state) return false;
@@ -632,17 +627,12 @@ function _attemptCrossSlideDrop(blockId, direction) {
   const targetTpl = TEMPLATES[targetSlide.templateId];
   if (!targetTpl) return false;
 
-  // First content-typed zone with < 3 blocks.
-  const contentZones = targetTpl.zones.filter(z => z.type === 'content');
-  if (contentZones.length === 0) return false;
-  let targetZone = null;
-  for (const z of contentZones) {
-    if (blocksInZone(targetSlide, z.name).length < 3) {
-      targetZone = z;
-      break;
-    }
-  }
-  if (!targetZone) return false;
+  // Phase 5A — free-positioned blocks don't need a content zone, but we
+  // still gate cross-slide drops on the target slide having SOME way to
+  // accept content. Hero / title / closing slides without any content
+  // zone still don't accept dropped blocks. Phase 6 may revisit this.
+  const hasContentZone = targetTpl.zones.some(z => z.type === 'content');
+  if (!hasContentZone) return false;
 
   // Get the block from the current slide.
   const currentSlide = getSlide(_state.deck, _state.activeSlideId);
@@ -650,13 +640,38 @@ function _attemptCrossSlideDrop(blockId, direction) {
   const block = currentSlide.blocks.find(b => b.id === blockId);
   if (!block) return false;
 
+  // Compute the landing position on the target slide.
+  // Preserve the block's horizontal x (or default to 50 if not set).
+  // Vertical: near top when dragged past source bottom, near bottom when
+  // dragged past source top. 5% padding from slide edges.
+  const SLIDE_PAD_X = 960 * 0.05;
+  const SLIDE_PAD_Y = 540 * 0.05;
+  const blockW = (block.size && block.size.widthPx)  || 400;
+  const blockH = (block.size && block.size.heightPx) || 200;
+
+  // X: keep current x if available, else center horizontally. Clamp to slide.
+  let landX = (block.position && typeof block.position.x === 'number')
+    ? block.position.x
+    : Math.max(SLIDE_PAD_X, (960 - blockW) / 2);
+  landX = Math.max(SLIDE_PAD_X, Math.min(landX, 960 - SLIDE_PAD_X - blockW));
+
+  // Y: top of target if landing from above, bottom if landing from below.
+  const landY = direction === 'prev'
+    ? Math.max(SLIDE_PAD_Y, 540 - SLIDE_PAD_Y - blockH)
+    : SLIDE_PAD_Y;
+
   // Remove from current slide.
   _state.deck = withSlide(_state.deck, _state.activeSlideId, s => removeBlock(s, blockId));
-  // Add to target slide's first content zone (end of stack — addBlock
-  // computes nextBlockOrder when no order is given).
+  // Add to target slide as a free-positioned block.
   const newBlockDef = {
     ...block,
-    position: { zone: targetZone.name },
+    position: { mode: 'free', x: landX, y: landY, zone: 'content' /* nominal */ },
+    size: {
+      widthPct:  (block.size && block.size.widthPct)  || 100,
+      heightPct: (block.size && block.size.heightPct) || null,
+      widthPx:   blockW,
+      heightPx:  blockH,
+    },
   };
   _state.deck = withSlide(_state.deck, targetSlide.id, s => addBlock(s, newBlockDef));
 
@@ -697,11 +712,13 @@ function _startResize(wrapper, handleEl, e) {
   if (!handle || !HANDLE_SIGNS[handle]) return;
 
   const slide  = wrapper.closest('.igs-slide');
-  const slotEl = wrapper.parentElement; // .igs-block-slot — the percentage CSS context
-  if (!slide || !slotEl) return;
+  const slotEl = wrapper.parentElement; // .igs-block-slot in flow mode; .igs-slide in free mode
+  if (!slide) return;
+
+  const isFree = wrapper.classList.contains('igs-block-free');
 
   const slideRect   = slide.getBoundingClientRect();
-  const slotRect    = slotEl.getBoundingClientRect();
+  const slotRect    = slotEl ? slotEl.getBoundingClientRect() : slideRect;
   const wrapperRect = wrapper.getBoundingClientRect();
   const scaleX = slideRect.width  / 960;
   const scaleY = slideRect.height / 540;
@@ -717,20 +734,21 @@ function _startResize(wrapper, handleEl, e) {
     blockId,
     wrapper,
     handle,
+    isFree,
     scaleX,
     scaleY,
     slideRect,
     // Wrapper start dimensions in slide-coord px.
     startWidth:  wrapperRect.width  / scaleX,
     startHeight: wrapperRect.height / scaleY,
-    // Slot rect — the wrapper's containing block. CSS interprets `width: X%`
-    // as X% of the slot's content box, so widthPct math must use slotWidthPx
-    // as the denominator. Phase 4 v2 fix for the 1.5–2 cm jump bug.
+    // Wrapper start position in slide-coord px (used in free mode to update
+    // the block's x/y when the user resizes from a left/top handle).
+    startX: (wrapperRect.left - slideRect.left) / scaleX,
+    startY: (wrapperRect.top  - slideRect.top)  / scaleY,
+    // Slot rect — the wrapper's containing block in FLOW mode. CSS interprets
+    // `width: X%` as X% of the slot's content box. In free mode the wrapper
+    // uses px sizing, so this isn't used — but we keep it for the flow path.
     slotWidthPx: slotRect.width  / scaleX,
-    // Wrapper top in slide-coord px (used for slide-edge clamp).
-    wrapperTopInSlidePx: (wrapperRect.top - slideRect.top) / scaleY,
-    // Wrapper left in slide-coord px (used for slide-edge clamp).
-    wrapperLeftInSlidePx: (wrapperRect.left - slideRect.left) / scaleX,
   };
   interactionState.resizeHandle = handle;
   document.body.classList.add('igs-deck-resizing');
@@ -749,34 +767,107 @@ function _updateResize(e) {
   let newWidthPx  = rs.startWidth  + sign.dx * dxPx;
   let newHeightPx = rs.startHeight + sign.dy * dyPx;
 
-  // Phase 4 v2 — slide-edge max clamps. Slide is 960 × 540 in design coords;
-  // safe area is 5% inset on every side. The wrapper's left/top are fixed by
-  // the flex layout (only east/south handles are exposed in v2, so growth
-  // is always rightward/downward), so max width = slide right edge − 5%
-  // − wrapper left; max height = slide bottom edge − 5% − wrapper top.
-  // Silent clamping per Lily's request — no red flash UI.
-  if (sign.dx !== 0) {
-    const SLIDE_PAD_X = 960 * 0.05;
-    const maxW = 960 - SLIDE_PAD_X - rs.wrapperLeftInSlidePx;
-    if (newWidthPx > maxW)  newWidthPx = maxW;
-    if (newWidthPx < MIN_BLOCK_WIDTH_PX) newWidthPx = MIN_BLOCK_WIDTH_PX;
-  }
-  if (sign.dy !== 0) {
-    const SLIDE_PAD_Y = 540 * 0.05;
-    const maxH = 540 - SLIDE_PAD_Y - rs.wrapperTopInSlidePx;
-    if (newHeightPx > maxH) newHeightPx = maxH;
-    if (newHeightPx < 40)   newHeightPx = 40;
+  // Phase 5A — for FREE-mode wrappers, west / north / nw / ne / sw handles
+  // also update the wrapper's position so the OPPOSITE edge stays fixed.
+  // Compute new x / y here. Flow mode keeps newX = startX, newY = startY.
+  let newX = rs.startX;
+  let newY = rs.startY;
+  if (rs.isFree) {
+    // West handle: cursor moves right by dxPx. Width shrinks by dxPx.
+    // The right edge stays at startX + startWidth, so:
+    //   newX = (startX + startWidth) - newWidthPx = startX + (startWidth - newWidthPx) = startX - sign.dx * dxPx
+    // sign.dx = -1 for west handles, so newX = startX + dxPx (cursor moved right → x increases).
+    if (sign.dx < 0) newX = rs.startX + dxPx;
+    if (sign.dy < 0) newY = rs.startY + dyPx;
   }
 
-  // Apply via inline style. Width as % of SLOT (the wrapper's containing
-  // block) — matches how CSS interprets % so there's no jump at grab.
+  // Slide-edge clamps. Slide is 960 × 540 in design coords; safe area is
+  // 5% inset on every side. Silent clamping per Lily's request.
+  const SLIDE_PAD_X = 960 * 0.05;
+  const SLIDE_PAD_Y = 540 * 0.05;
+
   if (sign.dx !== 0) {
-    const widthPct = (newWidthPx / rs.slotWidthPx) * 100;
-    rs.wrapper.style.width = `${widthPct}%`;
+    if (rs.isFree) {
+      // West handle: clamp newX >= 5% padding. Adjust newWidth to keep
+      // right edge fixed.
+      if (sign.dx < 0) {
+        if (newX < SLIDE_PAD_X) {
+          const overshoot = SLIDE_PAD_X - newX;
+          newX = SLIDE_PAD_X;
+          newWidthPx -= overshoot;
+        }
+        if (newWidthPx < MIN_BLOCK_WIDTH_PX) {
+          // Clamp width minimum, then clamp x so right edge stays fixed.
+          const overshoot = MIN_BLOCK_WIDTH_PX - newWidthPx;
+          newWidthPx = MIN_BLOCK_WIDTH_PX;
+          newX -= overshoot;
+        }
+      } else {
+        // East handle in free mode: clamp newWidth to keep right edge
+        // within slide right − 5%.
+        const maxW = 960 - SLIDE_PAD_X - rs.startX;
+        if (newWidthPx > maxW)  newWidthPx = maxW;
+        if (newWidthPx < MIN_BLOCK_WIDTH_PX) newWidthPx = MIN_BLOCK_WIDTH_PX;
+      }
+    } else {
+      // Flow mode — east handle only. Max width = slide right − 5% − layout left.
+      const maxW = 960 - SLIDE_PAD_X - rs.startX;
+      if (newWidthPx > maxW)  newWidthPx = maxW;
+      if (newWidthPx < MIN_BLOCK_WIDTH_PX) newWidthPx = MIN_BLOCK_WIDTH_PX;
+    }
   }
+
   if (sign.dy !== 0) {
-    rs.wrapper.style.height = `${newHeightPx}px`;
+    if (rs.isFree && sign.dy < 0) {
+      // North handle: clamp newY >= 5% padding. Adjust newHeight to keep
+      // bottom edge fixed.
+      if (newY < SLIDE_PAD_Y) {
+        const overshoot = SLIDE_PAD_Y - newY;
+        newY = SLIDE_PAD_Y;
+        newHeightPx -= overshoot;
+      }
+      if (newHeightPx < 40) {
+        const overshoot = 40 - newHeightPx;
+        newHeightPx = 40;
+        newY -= overshoot;
+      }
+    } else {
+      // South handle (flow OR free) — clamp newHeight to keep bottom edge
+      // within slide bottom − 5%.
+      const maxH = 540 - SLIDE_PAD_Y - rs.startY;
+      if (newHeightPx > maxH) newHeightPx = maxH;
+      if (newHeightPx < 40)   newHeightPx = 40;
+    }
   }
+
+  // Apply via inline style.
+  if (rs.isFree) {
+    // Free mode: px-based size + position.
+    if (sign.dx !== 0) {
+      rs.wrapper.style.width = `${newWidthPx}px`;
+      if (sign.dx < 0) rs.wrapper.style.left = `${newX}px`;
+    }
+    if (sign.dy !== 0) {
+      rs.wrapper.style.height = `${newHeightPx}px`;
+      if (sign.dy < 0) rs.wrapper.style.top = `${newY}px`;
+    }
+  } else {
+    // Flow mode: width as % of SLOT (the wrapper's containing block).
+    if (sign.dx !== 0) {
+      const widthPct = (newWidthPx / rs.slotWidthPx) * 100;
+      rs.wrapper.style.width = `${widthPct}%`;
+    }
+    if (sign.dy !== 0) {
+      rs.wrapper.style.height = `${newHeightPx}px`;
+    }
+  }
+
+  // Stash the latest values so _endResize can persist without re-reading
+  // the rect (avoids sub-pixel drift from rect rounding).
+  rs.latestWidthPx  = newWidthPx;
+  rs.latestHeightPx = newHeightPx;
+  rs.latestX        = newX;
+  rs.latestY        = newY;
 }
 
 function _endResize(/* e */) {
@@ -787,27 +878,53 @@ function _endResize(/* e */) {
     return;
   }
 
-  // Read final dimensions from the live wrapper rect, in slide-coord px.
-  const wrapperRect = rs.wrapper.getBoundingClientRect();
-  const finalWidthPct  = (wrapperRect.width  / rs.scaleX) / rs.slotWidthPx * 100;
-  const finalHeightPx  =  wrapperRect.height / rs.scaleY;
-
-  // Persist to data model.
   const slideId = _state.activeSlideId;
   const blockId = rs.blockId;
-  _state.deck = withSlide(_state.deck, slideId, s => {
-    const block = s.blocks.find(b => b.id === blockId);
-    if (!block) return s;
-    const sign = HANDLE_SIGNS[rs.handle] || {};
-    const newSize = { ...block.size };
-    if (sign.dx !== 0) newSize.widthPct  = Math.round(finalWidthPct * 10) / 10;
-    if (sign.dy !== 0) newSize.heightPct = Math.round(finalHeightPx);
-    return updateBlock(s, blockId, { size: newSize });
-  });
+  const sign    = HANDLE_SIGNS[rs.handle] || {};
 
-  // Clear inline style — the renderer will re-apply from block.size.
-  rs.wrapper.style.width  = '';
-  rs.wrapper.style.height = '';
+  if (rs.isFree) {
+    // Phase 5A — free mode: persist size as px and position (when changed).
+    const finalW = rs.latestWidthPx  != null ? rs.latestWidthPx  : rs.startWidth;
+    const finalH = rs.latestHeightPx != null ? rs.latestHeightPx : rs.startHeight;
+    const finalX = rs.latestX        != null ? rs.latestX        : rs.startX;
+    const finalY = rs.latestY        != null ? rs.latestY        : rs.startY;
+
+    _state.deck = withSlide(_state.deck, slideId, s => {
+      const block = s.blocks.find(b => b.id === blockId);
+      if (!block) return s;
+      const newSize = { ...block.size };
+      if (sign.dx !== 0) newSize.widthPx  = Math.round(finalW * 10) / 10;
+      if (sign.dy !== 0) newSize.heightPx = Math.round(finalH * 10) / 10;
+      const newPos = { ...block.position };
+      if (sign.dx < 0) newPos.x = Math.round(finalX * 10) / 10;
+      if (sign.dy < 0) newPos.y = Math.round(finalY * 10) / 10;
+      return updateBlock(s, blockId, { size: newSize, position: newPos });
+    });
+
+    // Clear inline overrides — renderer re-applies from data model.
+    rs.wrapper.style.width  = '';
+    rs.wrapper.style.height = '';
+    rs.wrapper.style.left   = '';
+    rs.wrapper.style.top    = '';
+  } else {
+    // Flow mode (legacy) — width as % of slot, height as px.
+    const wrapperRect = rs.wrapper.getBoundingClientRect();
+    const finalWidthPct  = (wrapperRect.width  / rs.scaleX) / rs.slotWidthPx * 100;
+    const finalHeightPx  =  wrapperRect.height / rs.scaleY;
+
+    _state.deck = withSlide(_state.deck, slideId, s => {
+      const block = s.blocks.find(b => b.id === blockId);
+      if (!block) return s;
+      const newSize = { ...block.size };
+      if (sign.dx !== 0) newSize.widthPct  = Math.round(finalWidthPct * 10) / 10;
+      if (sign.dy !== 0) newSize.heightPct = Math.round(finalHeightPx);
+      return updateBlock(s, blockId, { size: newSize });
+    });
+
+    rs.wrapper.style.width  = '';
+    rs.wrapper.style.height = '';
+  }
+
   interactionState.resizeStart = null;
   interactionState.resizeHandle = null;
 
@@ -3633,18 +3750,19 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
 .igs-resize-handle[data-handle="w"]  { top: 50%;       left: -12px; transform: translateY(-50%);  cursor: ew-resize; }
 .igs-resize-handle[data-handle="e"]  { top: 50%;       right: -12px;transform: translateY(-50%);  cursor: ew-resize; }
 
-/* ── Phase 4 v2 — only 3 handles work in the current flex layout ──
-   The wrapper is anchored top-left in a flex column. Handles that move the
-   left or top edge fight that anchor (mirrored / inverted behavior). For
-   v2 we expose only e (right edge), s (bottom edge), and se (bottom-right
-   corner) — those grow the wrapper in directions the layout naturally
-   allows. The 5 hidden handles will return in Phase 6 once Phase 5's
-   absolute positioning is in. */
-.igs-resize-handle[data-handle="nw"],
-.igs-resize-handle[data-handle="n"],
-.igs-resize-handle[data-handle="ne"],
-.igs-resize-handle[data-handle="w"],
-.igs-resize-handle[data-handle="sw"] {
+/* ── Phase 5A — handles per mode ──
+   FLOW (default): wrapper is in a flex column, anchored top-left. Only
+   e / s / se handles work (they grow rightward / downward — directions
+   the layout naturally allows). The other 5 handles are hidden because
+   left / top edges can't move independently in flex.
+   FREE (.igs-block-free): wrapper is absolutely positioned with its own
+   x / y. All 8 handles work — _updateResize moves x / y for w / n / nw /
+   ne / sw handles together with width / height. */
+.igs-block-wrapper:not(.igs-block-free) .igs-resize-handle[data-handle="nw"],
+.igs-block-wrapper:not(.igs-block-free) .igs-resize-handle[data-handle="n"],
+.igs-block-wrapper:not(.igs-block-free) .igs-resize-handle[data-handle="ne"],
+.igs-block-wrapper:not(.igs-block-free) .igs-resize-handle[data-handle="w"],
+.igs-block-wrapper:not(.igs-block-free) .igs-resize-handle[data-handle="sw"] {
   display: none !important;
 }
 

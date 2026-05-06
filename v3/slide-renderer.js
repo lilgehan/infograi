@@ -30,7 +30,7 @@ import {
 import { DIAGRAM_CSS } from './smart-diagrams.js';
 import { GRID_CSS } from './grid.js';
 import { TEMPLATES, TEMPLATE_CSS, getTemplateZones } from './slide-templates.js';
-import { blocksInZone } from './slide-deck.js';
+import { blocksInZone, freeBlocks } from './slide-deck.js';
 
 /* ─────────────────────────────────────────
    ESCAPE HELPER
@@ -149,23 +149,41 @@ function renderBlock(block, tone) {
 
   const inner = renderSection(section, tone);
 
-  // Phase G — apply user resize state. block.size.widthPct (0-100) sets the
-  // wrapper width as a percentage of its slot. heightPct, when present, sets
-  // an explicit height in CSS px. Default widthPct=100, heightPct=null
-  // (auto-size to content).
+  // Apply size + (Phase 5A) position styles. Two modes:
+  //   FLOW (default) — wrapper sits in a flex column inside its slot.
+  //     widthPct (% of slot) and heightPct (px) drive size.
+  //   FREE  (Phase 5A, after first user drag) — wrapper is positioned
+  //     absolutely at slide-coord (x, y). widthPx and heightPx (slide-coord px)
+  //     drive size. Renders as a direct child of .igs-slide via renderSlide.
   const sizeStyle = (() => {
-    const sz = block.size || {};
+    const sz  = block.size || {};
+    const pos = block.position || {};
     const parts = [];
-    if (typeof sz.widthPct === 'number' && sz.widthPct < 100) {
-      parts.push(`width:${sz.widthPct}%`);
-    }
-    if (typeof sz.heightPct === 'number' && sz.heightPct > 0) {
-      // heightPct stores absolute slide-coord pixels (not a percent — name kept
-      // for back-compat with existing data). Phase G v1.
-      parts.push(`height:${sz.heightPct}px`);
+
+    if (pos.mode === 'free' && typeof pos.x === 'number' && typeof pos.y === 'number') {
+      parts.push('position:absolute');
+      parts.push(`left:${pos.x}px`);
+      parts.push(`top:${pos.y}px`);
+      const w = (typeof sz.widthPx  === 'number') ? sz.widthPx  : null;
+      const h = (typeof sz.heightPx === 'number') ? sz.heightPx : sz.heightPct;
+      if (w) parts.push(`width:${w}px`);
+      if (h) parts.push(`height:${h}px`);
+    } else {
+      // Flow mode (legacy).
+      if (typeof sz.widthPct === 'number' && sz.widthPct < 100) {
+        parts.push(`width:${sz.widthPct}%`);
+      }
+      if (typeof sz.heightPct === 'number' && sz.heightPct > 0) {
+        parts.push(`height:${sz.heightPct}px`);
+      }
     }
     return parts.length ? ` style="${parts.join(';')}"` : '';
   })();
+
+  // Phase 5A — free-positioned blocks get .igs-block-free so CSS can show
+  // all 8 resize handles (vs only e/s/se in flow mode where left/top edges
+  // can't move).
+  const freeClass = (block.position && block.position.mode === 'free') ? ' igs-block-free' : '';
 
   // Phase 3 Unified Interaction — Section D of SLIDE-DECK-PHASE3-UNIFIED-PROMPT.
   // The wrapper has two children, exactly:
@@ -183,7 +201,7 @@ function renderBlock(block, tone) {
   // position is smart-flipped via .igs-grab-bar-below (added by
   // _positionGrabBarSmart in slide-deck-ui.js) when the wrapper is within
   // 24px of the slide's top edge.
-  return `<div class="igs-block igs-block-wrapper" data-block-id="${esc(block.id)}"${sizeStyle}>` +
+  return `<div class="igs-block igs-block-wrapper${freeClass}" data-block-id="${esc(block.id)}"${sizeStyle}>` +
            `<div class="igs-block-content"><div class="ig-page">${inner}</div></div>` +
            `<div class="igs-block-ui" aria-hidden="true">` +
              `<div class="igs-grab-bar" title="Drag to reorder">` +
@@ -429,7 +447,13 @@ export function renderSlide(slide, theme, accentColor) {
     return `<div class="${cls}" data-zone="${esc(zoneMeta.name)}" data-zone-type="${esc(zoneMeta.type)}"${densityAttr}${balanceAttr}>${inner}</div>`;
   }).join('');
 
-  return `<div class="igs-slide" data-template="${esc(slide.templateId)}" data-slide-id="${esc(slide.id)}">${zonesHtml}</div>`;
+  // Phase 5A — free-positioned blocks render as direct children of the
+  // slide root (siblings of zones), not inside any zone. Their absolute
+  // positioning is relative to .igs-slide (which is position: relative).
+  // They paint AFTER zones in DOM order so they sit on top of flow content.
+  const freeBlocksHtml = freeBlocks(slide).map(b => renderBlock(b, tone)).join('');
+
+  return `<div class="igs-slide" data-template="${esc(slide.templateId)}" data-slide-id="${esc(slide.id)}">${zonesHtml}${freeBlocksHtml}</div>`;
 }
 
 /**
