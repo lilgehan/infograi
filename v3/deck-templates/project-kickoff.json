@@ -1,0 +1,287 @@
+{
+  "$schema": "1.0",
+  "id": "project-kickoff",
+  "name": "Project Kickoff",
+  "description": "Engagement-launch deck used at the start of a consulting project, internal initiative, or cross-functional program. Establishes the team, defines scope and approach, sets the timeline, and aligns stakeholders on next steps.",
+  "category": "Consulting",
+  "useCases": [
+    "client engagement kickoff",
+    "consulting project launch",
+    "internal project initiation",
+    "cross-functional initiative kickoff",
+    "program launch meeting",
+    "vendor onboarding"
+  ],
+  "tags": ["kickoff", "engagement", "project-launch", "consulting", "team-intro", "alignment"],
+  "fitsTones": ["professional", "minimal"],
+  "recommendedLength": [8, 10],
+  "narrativeArc": "title → team → why (objectives) → how (approach) → comms → roles → timeline → risks → next steps → close",
+  "thumbnailHint": "warm professional palette, partnership imagery, structured layout with clear sections",
+
+  "pages": [
+    {
+      "id": "project-kickoff_01_title",
+      "narrativeRole": "title",
+      "compositionGrammar": "split-hero-left",
+      "pageTemplateId": "A2",
+      "contentSchema": {
+        "title":    { "type": "string", "required": true,  "pattern": "{project_name} Kickoff" },
+        "subtitle": { "type": "string", "required": false, "pattern": "{client_name} × {firm_name} | {start_date}" }
+      },
+      "behaviorRules": {
+        "titleStyle": "large-display",
+        "narrativeBridge": "Opening card — establishes who, with whom, and when"
+      },
+      "tags": ["title", "intro", "framing"],
+      "narrativePosition": "open",
+      "linksWellWith": ["agenda", "team"]
+    },
+
+    {
+      "id": "project-kickoff_02_team",
+      "narrativeRole": "team",
+      "compositionGrammar": "kpi-grid-three",
+      "pageTemplateId": "C4",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Welcome & Introductions" },
+        "subtitle": { "type": "string", "required": false, "pattern": "Building our core team" },
+        "items": {
+          "type": "array",
+          "length": 3,
+          "itemSchema": {
+            "title": { "type": "string", "max": 30, "description": "Group label, e.g. 'Project Leadership', 'Delivery Team', 'Key Stakeholders'" },
+            "body":  { "type": "string", "max": 130, "description": "Who's in this group and what they bring" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "boxes",
+        "diagramVariant": "solid-boxes-icons",
+        "requiredItems": 3,
+        "itemType": "team-group",
+        "narrativeBridge": "Three groupings: leadership / delivery / stakeholders. Establishes the people structure of the engagement."
+      },
+      "tags": ["team", "people", "stakeholders", "introduction", "leadership"],
+      "narrativePosition": "early",
+      "linksWellWith": ["objectives", "roles"]
+    },
+
+    {
+      "id": "project-kickoff_03_objectives",
+      "narrativeRole": "objectives",
+      "compositionGrammar": "bullets-with-icons",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Engagement objectives & scope" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 35, "description": "Objective headline" },
+            "body":  { "type": "string", "max": 120, "description": "Concrete description of the outcome" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "bullets",
+        "diagramVariant": "arrow-bullets",
+        "requiredItems": 4,
+        "itemType": "objective",
+        "narrativeBridge": "What this engagement will achieve. Each objective is observable and tied to business value."
+      },
+      "tags": ["objectives", "scope", "goals", "outcomes"],
+      "narrativePosition": "early",
+      "linksWellWith": ["approach", "benefits"]
+    },
+
+    {
+      "id": "project-kickoff_04_approach",
+      "narrativeRole": "approach",
+      "compositionGrammar": "timeline-horizontal-quarters",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Project approach & methodology" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 25, "description": "Phase name, e.g. 'Discover', 'Design', 'Build', 'Measure'" },
+            "body":  { "type": "string", "max": 130, "description": "What happens in this phase + key deliverable" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "sequence",
+        "diagramVariant": "timeline",
+        "requiredItems": 4,
+        "itemType": "phase",
+        "narrativeBridge": "Four-phase methodology. Each phase has a verb-led name and one tangible deliverable."
+      },
+      "tags": ["approach", "methodology", "phases", "process", "timeline"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["roles", "journey", "comms"]
+    },
+
+    {
+      "id": "project-kickoff_05_comms",
+      "narrativeRole": "approach",
+      "compositionGrammar": "split-hero-left",
+      "pageTemplateId": "B2",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Communication & collaboration plan" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 25, "description": "Channel or cadence label, e.g. 'Weekly sync', 'Steering committee'" },
+            "body":  { "type": "string", "max": 120, "description": "When, who, what for" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "bullets",
+        "diagramVariant": "process-steps",
+        "requiredItems": 4,
+        "itemType": "communication-channel",
+        "narrativeBridge": "Cadence + channels + escalation. Sets expectations for how the team will stay aligned."
+      },
+      "tags": ["communication", "comms", "cadence", "collaboration", "channels"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["roles", "timeline"]
+    },
+
+    {
+      "id": "project-kickoff_06_roles",
+      "narrativeRole": "roles",
+      "compositionGrammar": "kpi-grid-four",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Roles & responsibilities" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 35, "description": "Role title" },
+            "body":  { "type": "string", "max": 100, "description": "Primary responsibility — one sentence, action verbs" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "boxes",
+        "diagramVariant": "labeled-boxes",
+        "requiredItems": 4,
+        "itemType": "role",
+        "narrativeBridge": "Each role has a specific accountability. No vague titles — clarity prevents downstream conflict."
+      },
+      "tags": ["roles", "responsibilities", "raci", "accountability", "ownership"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["timeline", "risks"]
+    },
+
+    {
+      "id": "project-kickoff_07_timeline",
+      "narrativeRole": "journey",
+      "compositionGrammar": "timeline-horizontal-quarters",
+      "pageTemplateId": "B3",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Project timeline & milestones" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 20, "description": "Date or week range, e.g. 'Weeks 1-2', 'By March 15'" },
+            "body":  { "type": "string", "max": 110, "description": "Milestone — what is delivered by this date" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "sequence",
+        "diagramVariant": "timeline",
+        "requiredItems": 4,
+        "itemType": "milestone",
+        "narrativeBridge": "Concrete dated milestones. Each one is observable from outside the team."
+      },
+      "tags": ["timeline", "milestones", "dates", "schedule", "roadmap"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["risks", "cta"]
+    },
+
+    {
+      "id": "project-kickoff_08_risks",
+      "narrativeRole": "risks",
+      "compositionGrammar": "comparison-side-by-side",
+      "pageTemplateId": "C1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Risks & dependencies" },
+        "leftBlock": {
+          "type": "object",
+          "fields": {
+            "title": { "type": "string", "max": 25, "pattern": "Top risks" },
+            "items": { "type": "array", "length": 3, "itemSchema": { "body": { "type": "string", "max": 100 } } }
+          }
+        },
+        "rightBlock": {
+          "type": "object",
+          "fields": {
+            "title": { "type": "string", "max": 25, "pattern": "Mitigations" },
+            "items": { "type": "array", "length": 3, "itemSchema": { "body": { "type": "string", "max": 100 } } }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "bullets",
+        "diagramVariant": "small-bullets",
+        "narrativeBridge": "Honest two-column view: each risk paired with the mitigation owner is committing to."
+      },
+      "tags": ["risks", "dependencies", "mitigations", "honest"],
+      "narrativePosition": "late",
+      "linksWellWith": ["cta", "commit"]
+    },
+
+    {
+      "id": "project-kickoff_09_next_steps",
+      "narrativeRole": "cta",
+      "compositionGrammar": "bullets-with-icons",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Immediate next steps" },
+        "items": {
+          "type": "array",
+          "length": 3,
+          "itemSchema": {
+            "title": { "type": "string", "max": 30, "description": "Action — verb-led, e.g. 'Confirm stakeholder list'" },
+            "body":  { "type": "string", "max": 90, "description": "Owner + due date" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "bullets",
+        "diagramVariant": "process-steps",
+        "requiredItems": 3,
+        "itemType": "action",
+        "narrativeBridge": "Three near-term actions, each with an owner and a due date. Specific enough that progress is checkable."
+      },
+      "tags": ["next-steps", "actions", "cta", "ownership", "deadlines"],
+      "narrativePosition": "late",
+      "linksWellWith": ["close"]
+    },
+
+    {
+      "id": "project-kickoff_10_close",
+      "narrativeRole": "close",
+      "compositionGrammar": "centered-manifesto",
+      "pageTemplateId": "A4",
+      "contentSchema": {
+        "title":    { "type": "string", "required": true,  "pattern": "Thank you" },
+        "subtitle": { "type": "string", "required": false, "pattern": "Questions? {pm_email} | {pm_phone}" }
+      },
+      "behaviorRules": {
+        "titleStyle": "compact",
+        "narrativeBridge": "Closing card with PM contact"
+      },
+      "tags": ["close", "thanks", "contact"],
+      "narrativePosition": "close",
+      "linksWellWith": []
+    }
+  ]
+}

@@ -1,0 +1,259 @@
+{
+  "$schema": "1.0",
+  "id": "process-improvement-proposal",
+  "name": "Process Improvement Proposal",
+  "description": "Operational excellence proposal that diagnoses a current process, identifies the problem, presents a redesigned solution, quantifies expected benefits, and lays out the implementation roadmap. The bread-and-butter shape of a consulting recommendation deck.",
+  "category": "Operations",
+  "useCases": [
+    "process improvement proposal",
+    "operational excellence recommendation",
+    "lean transformation proposal",
+    "workflow redesign pitch",
+    "automation business case",
+    "consulting recommendation deck"
+  ],
+  "tags": ["proposal", "process", "improvement", "operations", "transformation", "recommendation", "consulting"],
+  "fitsTones": ["professional", "minimal"],
+  "recommendedLength": [7, 9],
+  "narrativeArc": "title → executive summary → current state → problem → solution → benefits → roadmap → roi → next steps",
+  "thumbnailHint": "structured consulting palette, cool blues and neutral grays, diagram-heavy",
+
+  "pages": [
+    {
+      "id": "process-improvement_01_title",
+      "narrativeRole": "title",
+      "compositionGrammar": "split-hero-left",
+      "pageTemplateId": "A2",
+      "contentSchema": {
+        "title":    { "type": "string", "required": true,  "pattern": "{process_name}: Improvement Proposal" },
+        "subtitle": { "type": "string", "required": false, "pattern": "Prepared for {client_name} | {date}" }
+      },
+      "behaviorRules": {
+        "titleStyle": "large-display",
+        "narrativeBridge": "Names the process being addressed and frames the deck as a proposal"
+      },
+      "tags": ["title", "proposal", "framing"],
+      "narrativePosition": "open",
+      "linksWellWith": ["summary", "context"]
+    },
+
+    {
+      "id": "process-improvement_02_summary",
+      "narrativeRole": "kpi",
+      "compositionGrammar": "kpi-grid-three",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Executive summary" },
+        "items": {
+          "type": "array",
+          "length": 3,
+          "itemSchema": {
+            "title": { "type": "string", "max": 12, "description": "Headline metric, e.g. '-40%', '$1.6M', '90 days'" },
+            "body":  { "type": "string", "max": 60, "description": "What this number represents — cycle time saved, savings unlocked, etc." }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "numbers",
+        "diagramVariant": "circle-stats",
+        "requiredItems": 3,
+        "itemType": "expected-impact-metric",
+        "narrativeBridge": "Three numbers up-front so the audience knows the proposed impact before reading the diagnosis"
+      },
+      "tags": ["summary", "kpi", "impact", "tldr", "numbers"],
+      "narrativePosition": "early",
+      "linksWellWith": ["state", "problem"]
+    },
+
+    {
+      "id": "process-improvement_03_current_state",
+      "narrativeRole": "state",
+      "compositionGrammar": "timeline-horizontal-quarters",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Current state: how the process runs today" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 20, "description": "Step name in the as-is process" },
+            "body":  { "type": "string", "max": 120, "description": "What happens at this step + the friction observed" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "sequence",
+        "diagramVariant": "arrows",
+        "requiredItems": 4,
+        "itemType": "process-step",
+        "narrativeBridge": "Walks through the as-is process step by step. Each step names the friction or pain felt at that point."
+      },
+      "tags": ["current-state", "as-is", "process", "diagnosis", "workflow"],
+      "narrativePosition": "early",
+      "linksWellWith": ["problem", "comparison"]
+    },
+
+    {
+      "id": "process-improvement_04_problem",
+      "narrativeRole": "problem",
+      "compositionGrammar": "bullets-with-icons",
+      "pageTemplateId": "B1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "What's holding the process back" },
+        "items": {
+          "type": "array",
+          "length": 3,
+          "itemSchema": {
+            "title": { "type": "string", "max": 35, "description": "Pain point headline" },
+            "body":  { "type": "string", "max": 130, "description": "Concrete description with measurable impact where possible" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "bullets",
+        "diagramVariant": "arrow-bullets",
+        "requiredItems": 3,
+        "itemType": "pain-point",
+        "narrativeBridge": "Three pain points, ranked by business impact. Each is concrete enough to be measured today."
+      },
+      "tags": ["problem", "pain-points", "diagnosis", "issues", "friction"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["solution", "approach"]
+    },
+
+    {
+      "id": "process-improvement_05_solution",
+      "narrativeRole": "solution",
+      "compositionGrammar": "timeline-horizontal-quarters",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Proposed redesign: {solution_short_name}" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 22, "description": "Step in the to-be process" },
+            "body":  { "type": "string", "max": 130, "description": "What changes vs. today + who or what enables it" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "sequence",
+        "diagramVariant": "arrows",
+        "requiredItems": 4,
+        "itemType": "process-step",
+        "narrativeBridge": "The proposed to-be process. Same step structure as the current-state slide so the audience can compare directly."
+      },
+      "tags": ["solution", "to-be", "redesign", "proposal", "workflow"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["benefits", "roadmap"]
+    },
+
+    {
+      "id": "process-improvement_06_benefits",
+      "narrativeRole": "benefits",
+      "compositionGrammar": "kpi-grid-four",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Expected benefits" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 14, "description": "Improvement metric, e.g. '-50% cycle time', '+30% throughput'" },
+            "body":  { "type": "string", "max": 70, "description": "How this benefit is realized + when it shows up" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "numbers",
+        "diagramVariant": "bar-stats",
+        "requiredItems": 4,
+        "itemType": "benefit-metric",
+        "narrativeBridge": "Four benefits with target metrics. Each is tied to a specific source of improvement from the redesign."
+      },
+      "tags": ["benefits", "impact", "improvements", "metrics", "outcomes"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["roadmap", "roi"]
+    },
+
+    {
+      "id": "process-improvement_07_roadmap",
+      "narrativeRole": "journey",
+      "compositionGrammar": "timeline-horizontal-quarters",
+      "pageTemplateId": "B3",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Implementation roadmap" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 20, "description": "Phase name + duration, e.g. 'Phase 1 — Pilot (4 wks)'" },
+            "body":  { "type": "string", "max": 130, "description": "What gets built or rolled out in this phase" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "sequence",
+        "diagramVariant": "timeline",
+        "requiredItems": 4,
+        "itemType": "phase",
+        "narrativeBridge": "Phased rollout. Pilot → expand → scale → operate. Each phase has a duration and a tangible outcome."
+      },
+      "tags": ["roadmap", "implementation", "phases", "rollout", "timeline"],
+      "narrativePosition": "late",
+      "linksWellWith": ["roi", "cta"]
+    },
+
+    {
+      "id": "process-improvement_08_roi",
+      "narrativeRole": "benefits",
+      "compositionGrammar": "comparison-side-by-side",
+      "pageTemplateId": "C1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Investment & ROI" },
+        "leftBlock": {
+          "type": "object",
+          "fields": {
+            "title": { "type": "string", "max": 25, "pattern": "Investment required" },
+            "items": { "type": "array", "length": 3, "itemSchema": { "body": { "type": "string", "max": 90 } } }
+          }
+        },
+        "rightBlock": {
+          "type": "object",
+          "fields": {
+            "title": { "type": "string", "max": 25, "pattern": "Expected return" },
+            "items": { "type": "array", "length": 3, "itemSchema": { "body": { "type": "string", "max": 90 } } }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "bullets",
+        "diagramVariant": "small-bullets",
+        "narrativeBridge": "Two columns: cost on the left (people, time, tooling), return on the right (savings, throughput, quality). ROI cycle stated explicitly."
+      },
+      "tags": ["roi", "investment", "cost", "return", "business-case"],
+      "narrativePosition": "late",
+      "linksWellWith": ["cta", "commit"]
+    },
+
+    {
+      "id": "process-improvement_09_cta",
+      "narrativeRole": "cta",
+      "compositionGrammar": "centered-manifesto",
+      "pageTemplateId": "E6",
+      "contentSchema": {
+        "title":    { "type": "string", "required": true,  "pattern": "Recommended next step" },
+        "subtitle": { "type": "string", "required": false, "pattern": "Approve {phase_one_label} to begin {start_date}" },
+        "ctaLabel": { "type": "string", "required": false, "pattern": "Approve Phase 1" }
+      },
+      "behaviorRules": {
+        "titleStyle": "large-display",
+        "narrativeBridge": "Single-decision ask. Names the specific approval needed and the start date that becomes possible if granted."
+      },
+      "tags": ["cta", "decision", "approval", "ask"],
+      "narrativePosition": "close",
+      "linksWellWith": []
+    }
+  ]
+}

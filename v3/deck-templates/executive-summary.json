@@ -1,0 +1,221 @@
+{
+  "$schema": "1.0",
+  "id": "executive-summary",
+  "name": "Executive Summary",
+  "description": "Concise board-level briefing. Establishes context, summarizes current state via KPIs, calls out priorities, projects forward, and closes with a decision or commitment ask.",
+  "category": "Strategy",
+  "useCases": [
+    "board update",
+    "leadership briefing",
+    "monthly business review",
+    "executive summary",
+    "investor update",
+    "C-suite presentation"
+  ],
+  "tags": ["summary", "executive", "kpi", "board", "high-level", "strategy", "outlook"],
+  "fitsTones": ["professional", "minimal", "bold"],
+  "recommendedLength": [6, 8],
+  "narrativeArc": "title → context → state (kpi) → priorities → outlook → close",
+  "thumbnailHint": "minimalist with bold typography, restrained color palette, clear hierarchy",
+
+  "pages": [
+    {
+      "id": "executive-summary_01_title",
+      "narrativeRole": "title",
+      "compositionGrammar": "split-hero-left",
+      "pageTemplateId": "A2",
+      "contentSchema": {
+        "title":    { "type": "string", "required": true,  "pattern": "{topic} Executive Summary" },
+        "subtitle": { "type": "string", "required": false, "pattern": "{period} | Prepared for {audience}" }
+      },
+      "behaviorRules": {
+        "titleStyle": "large-display",
+        "narrativeBridge": "Sets framing — what this briefing covers, who it's for, when it's about"
+      },
+      "tags": ["title", "intro", "framing"],
+      "narrativePosition": "open",
+      "linksWellWith": ["context", "agenda"]
+    },
+
+    {
+      "id": "executive-summary_02_context",
+      "narrativeRole": "context",
+      "compositionGrammar": "bullets-with-icons",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Why this matters now" },
+        "items": {
+          "type": "array",
+          "length": 3,
+          "itemSchema": {
+            "title": { "type": "string", "max": 30, "description": "A concise reason this discussion is timely" },
+            "body":  { "type": "string", "max": 120, "description": "One supporting sentence" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "bullets",
+        "diagramVariant": "arrow-bullets",
+        "requiredItems": 3,
+        "itemType": "rationale",
+        "narrativeBridge": "Explains why the audience should care — market conditions, organizational moment, decisions pending"
+      },
+      "tags": ["context", "rationale", "timing", "framing"],
+      "narrativePosition": "early",
+      "linksWellWith": ["state", "kpi"]
+    },
+
+    {
+      "id": "executive-summary_03_state_kpi",
+      "narrativeRole": "kpi",
+      "compositionGrammar": "kpi-grid-three",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Where we stand" },
+        "items": {
+          "type": "array",
+          "length": 3,
+          "itemSchema": {
+            "title": { "type": "string", "max": 12, "description": "Metric value, e.g. '$1.6M', '+18%', '92%'" },
+            "body":  { "type": "string", "max": 50, "description": "Metric label — what this number measures" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "numbers",
+        "diagramVariant": "circle-stats",
+        "requiredItems": 3,
+        "itemType": "metric",
+        "narrativeBridge": "Three numbers that capture the current state — chosen for material impact, not just availability"
+      },
+      "tags": ["kpi", "metrics", "state", "current", "numbers", "dashboard"],
+      "narrativePosition": "early",
+      "linksWellWith": ["state", "priorities", "comparison"]
+    },
+
+    {
+      "id": "executive-summary_04_state_narrative",
+      "narrativeRole": "state",
+      "compositionGrammar": "comparison-side-by-side",
+      "pageTemplateId": "C1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "What's working — and what isn't" },
+        "leftBlock": {
+          "type": "object",
+          "fields": {
+            "title": { "type": "string", "max": 25, "pattern": "What's working" },
+            "items": { "type": "array", "length": 3, "itemSchema": { "body": { "type": "string", "max": 80 } } }
+          }
+        },
+        "rightBlock": {
+          "type": "object",
+          "fields": {
+            "title": { "type": "string", "max": 25, "pattern": "What needs attention" },
+            "items": { "type": "array", "length": 3, "itemSchema": { "body": { "type": "string", "max": 80 } } }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "bullets",
+        "diagramVariant": "small-bullets",
+        "narrativeBridge": "Honest two-column read of current strengths and gaps. Sets up the priorities slide."
+      },
+      "tags": ["state", "comparison", "strengths", "gaps", "honest"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["priorities", "problem"]
+    },
+
+    {
+      "id": "executive-summary_05_priorities",
+      "narrativeRole": "priorities",
+      "compositionGrammar": "kpi-grid-four",
+      "pageTemplateId": "A1",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "Top priorities for {period}" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 30, "description": "Priority headline" },
+            "body":  { "type": "string", "max": 90, "description": "Why this priority matters" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "boxes",
+        "diagramVariant": "solid-boxes-icons",
+        "requiredItems": 4,
+        "itemType": "priority",
+        "narrativeBridge": "The four priorities the leadership team is committing to — concrete, ranked by impact, not exhaustive"
+      },
+      "tags": ["priorities", "focus", "commitment", "ranked"],
+      "narrativePosition": "middle",
+      "linksWellWith": ["outlook", "journey", "cta"]
+    },
+
+    {
+      "id": "executive-summary_06_outlook",
+      "narrativeRole": "outlook",
+      "compositionGrammar": "timeline-horizontal-quarters",
+      "pageTemplateId": "B3",
+      "contentSchema": {
+        "title": { "type": "string", "required": true, "pattern": "What's ahead" },
+        "items": {
+          "type": "array",
+          "length": 4,
+          "itemSchema": {
+            "title": { "type": "string", "max": 20, "description": "Time period or milestone label, e.g. 'Q1', 'By March', 'Phase 2'" },
+            "body":  { "type": "string", "max": 90, "description": "What we expect to deliver or learn in that period" }
+          }
+        }
+      },
+      "behaviorRules": {
+        "diagramFamily": "sequence",
+        "diagramVariant": "timeline",
+        "requiredItems": 4,
+        "itemType": "phase",
+        "narrativeBridge": "Four-stage forward look. Periods are concrete (months or quarters), each with one observable deliverable."
+      },
+      "tags": ["outlook", "roadmap", "timeline", "forward", "phases"],
+      "narrativePosition": "late",
+      "linksWellWith": ["cta", "commit", "close"]
+    },
+
+    {
+      "id": "executive-summary_07_cta",
+      "narrativeRole": "cta",
+      "compositionGrammar": "centered-manifesto",
+      "pageTemplateId": "E6",
+      "contentSchema": {
+        "title":    { "type": "string", "required": true,  "pattern": "What we need from you" },
+        "subtitle": { "type": "string", "required": false, "pattern": "Specific decisions or sign-offs" },
+        "ctaLabel": { "type": "string", "required": false, "pattern": "Approve {priority_one}" }
+      },
+      "behaviorRules": {
+        "titleStyle": "large-display",
+        "narrativeBridge": "Explicit ask — what decision, sign-off, or next-action is required from this audience"
+      },
+      "tags": ["cta", "decision", "ask", "commit"],
+      "narrativePosition": "late",
+      "linksWellWith": ["close"]
+    },
+
+    {
+      "id": "executive-summary_08_close",
+      "narrativeRole": "close",
+      "compositionGrammar": "centered-manifesto",
+      "pageTemplateId": "A4",
+      "contentSchema": {
+        "title":    { "type": "string", "required": true,  "pattern": "Thank you" },
+        "subtitle": { "type": "string", "required": false, "pattern": "Questions? {contact_email}" }
+      },
+      "behaviorRules": {
+        "titleStyle": "compact",
+        "narrativeBridge": "Closing card — thanks, contact, next-step pointer"
+      },
+      "tags": ["close", "thanks", "contact"],
+      "narrativePosition": "close",
+      "linksWellWith": []
+    }
+  ]
+}

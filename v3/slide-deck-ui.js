@@ -28,6 +28,8 @@ import {
 } from './slide-deck.js';
 import { renderSlide, DECK_MODE_CSS } from './slide-renderer.js';
 import { TEMPLATES, getTemplateZones, renderSlideTemplate } from './slide-templates.js';
+import { loadAll as loadDeckTemplates, getAllSync as getDeckTemplatesSync } from './deck-template-registry.js';
+import { expandTemplateToDeck } from './deck-template-expander.js';
 
 /* ─────────────────────────────────────────
    GALLERY METADATA — diagram catalog grouped by category.
@@ -1169,12 +1171,21 @@ export function enterSlideDeckMode(initialTopic, tone, accentColor) {
     openSections:  GALLERY.reduce((m, g, i) => { m[g.id] = i < 3; return m; }, {}),
     // Template-section accordion: keys are 'tpl_A' / 'tpl_B' / etc.
     openTemplateCats: { tpl_A: true, tpl_B: true, tpl_C: false, tpl_D: false, tpl_E: false },
-    // Top-level Templates / Diagrams toggles
-    templatesOpen: true,
-    diagramsOpen:  true,
-    popover:       null,
-    contextMenu:   null,
+    // Top-level Templates / Diagrams / Deck Templates toggles
+    templatesOpen:     true,
+    diagramsOpen:      true,
+    deckTemplatesOpen: true,
+    popover:           null,
+    contextMenu:       null,
   };
+
+  // Phase 7.1A — preload deck templates so the gallery section can render
+  // them as soon as the panel opens. Re-render the panel once they arrive.
+  loadDeckTemplates().then(() => {
+    if (_state) renderGalleryPanel();
+  }).catch(err => {
+    console.warn('Deck templates failed to load:', err);
+  });
 
   injectDeckModeCSS();
   _clearDeckHistory();
@@ -1529,7 +1540,7 @@ function renderGalleryPanel() {
   const panel = byId('igsGalleryPanel');
   if (!panel || !_state) return;
 
-  panel.innerHTML = renderTemplatesSection() + renderDiagramsSection();
+  panel.innerHTML = renderDeckTemplatesSection() + renderTemplatesSection() + renderDiagramsSection();
 
   // ── Templates section handlers ───────────────────────────
   panel.querySelectorAll('.igs-gallery-major[data-major="templates"]').forEach(el => {
@@ -1559,6 +1570,19 @@ function renderGalleryPanel() {
       renderGalleryPanel();
     });
   });
+
+  // ── Deck Templates section handlers ──────────────────────
+  panel.querySelectorAll('.igs-gallery-major[data-major="deck-templates"]').forEach(el => {
+    el.addEventListener('click', () => {
+      _state.deckTemplatesOpen = !_state.deckTemplatesOpen;
+      renderGalleryPanel();
+    });
+  });
+  panel.querySelectorAll('.igs-deck-tpl-card').forEach(el => {
+    el.addEventListener('click', () => {
+      applyDeckTemplate(el.dataset.deckTplId);
+    });
+  });
   panel.querySelectorAll('.igs-gallery-header').forEach(el => {
     el.addEventListener('click', () => {
       const id = el.dataset.section;
@@ -1571,6 +1595,95 @@ function renderGalleryPanel() {
       insertBlockOnActiveSlide(el.dataset.variant, el.dataset.family);
     });
   });
+}
+
+/* ── Deck Templates section (Phase 7.1A) ─────────────────── */
+
+function renderDeckTemplatesSection() {
+  const open = _state.deckTemplatesOpen;
+  const cache = getDeckTemplatesSync();
+
+  let body = '';
+  if (!cache) {
+    body = `<div class="igs-deck-tpl-loading">Loading deck templates…</div>`;
+  } else {
+    const ids = Object.keys(cache);
+    if (ids.length === 0) {
+      body = `<div class="igs-deck-tpl-empty">No deck templates available.</div>`;
+    } else {
+      body = ids.map(id => {
+        const tpl = cache[id];
+        // Render a miniature of the FIRST page so the user gets visual context.
+        // We expand the template into a deck and render slide 0.
+        let firstSlideHtml = '';
+        try {
+          const previewDeck = expandTemplateToDeck(tpl);
+          if (previewDeck && previewDeck.slides && previewDeck.slides[0]) {
+            firstSlideHtml = renderSlide(previewDeck.slides[0], previewDeck.theme, previewDeck.accentColor);
+          }
+        } catch (err) {
+          firstSlideHtml = '<div class="igs-deck-tpl-thumb-err">Preview failed</div>';
+        }
+        return `
+          <button class="igs-deck-tpl-card" data-deck-tpl-id="${tpl.id}" title="Apply ${tpl.name}">
+            <div class="igs-deck-tpl-thumb-wrap">
+              <div class="igs-deck-tpl-thumb-inner">${firstSlideHtml}</div>
+            </div>
+            <div class="igs-deck-tpl-meta">
+              <div class="igs-deck-tpl-name">${tpl.name}</div>
+              <div class="igs-deck-tpl-desc">${tpl.description || ''}</div>
+              <div class="igs-deck-tpl-meta-row">
+                <span class="igs-deck-tpl-pill">${tpl.pages.length} slides</span>
+                <span class="igs-deck-tpl-pill">${tpl.category || ''}</span>
+              </div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+  }
+
+  return `
+    <button class="igs-gallery-major" data-major="deck-templates">
+      <span class="igs-gallery-major-label">Deck Templates</span>
+      <span class="igs-gallery-toggle">${open ? '▾' : '▸'}</span>
+    </button>
+    <div class="igs-gallery-major-body" data-show="${open ? 'true' : 'false'}">
+      <div class="igs-deck-tpl-grid">
+        ${body}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Apply a deck template to the active session. Replaces the current deck
+ * with a fully expanded version of the template (pattern placeholders
+ * filled with sample data; AI-customized in Phase 7.1B+).
+ * Snapshots history first so Cmd+Z restores the previous deck.
+ */
+function applyDeckTemplate(deckTplId) {
+  if (!_state || !deckTplId) return;
+  const cache = getDeckTemplatesSync();
+  if (!cache || !cache[deckTplId]) return;
+  const tpl = cache[deckTplId];
+
+  _pushHistory();
+  const newDeck = expandTemplateToDeck(tpl, undefined, {
+    tone: _state.tone,
+    accentColor: _state.accentColor,
+  });
+  // Preserve the user's tone + accent.
+  newDeck.theme = _state.tone;
+  newDeck.accentColor = _state.accentColor;
+
+  _state.deck = newDeck;
+  _state.activeSlideId = newDeck.slides[0] ? newDeck.slides[0].id : null;
+  setHovered(null);
+  clearSelection();
+  setMode('idle');
+  rerenderEverything();
+  flashCanvasMessage(`Applied template: ${tpl.name}`);
 }
 
 /* ── Templates section (above Diagrams) ──────────────────── */
@@ -1684,11 +1797,17 @@ function toggleGalleryOverlay(which) {
   allBtns.forEach(b => b.classList.toggle('is-active', b === targetBtn));
 
   if (which === 'templates') {
-    _state.templatesOpen = true;
-    _state.diagramsOpen  = false;
+    _state.templatesOpen     = true;
+    _state.diagramsOpen      = false;
+    _state.deckTemplatesOpen = false;
   } else if (which === 'diagrams') {
-    _state.templatesOpen = false;
-    _state.diagramsOpen  = true;
+    _state.templatesOpen     = false;
+    _state.diagramsOpen      = true;
+    _state.deckTemplatesOpen = false;
+  } else if (which === 'deck-templates') {
+    _state.templatesOpen     = false;
+    _state.diagramsOpen      = false;
+    _state.deckTemplatesOpen = true;
   }
   renderGalleryPanel();
   gp.scrollTop = 0;
@@ -3330,6 +3449,112 @@ body[data-deck-overlay="open"] #igsGalleryToggles {
   border-bottom: 1px solid #E2E5EA;
 }
 .igs-gallery-major-body[data-show="false"] { display: none; }
+
+/* ── Phase 7.1A — Deck Templates section ──
+   Each card shows the first slide of the template as a miniature, plus
+   the template name + description + meta pills (slide count, category).
+   Click a card to apply the template (replaces the current deck — Cmd+Z
+   restores it via the snapshot taken in applyDeckTemplate). ── */
+.igs-deck-tpl-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 12px;
+}
+.igs-deck-tpl-loading,
+.igs-deck-tpl-empty {
+  padding: 14px 16px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+}
+.igs-deck-tpl-card {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #E2E5EA;
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.igs-deck-tpl-card:hover {
+  border-color: var(--accent, #2563EB);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+}
+.igs-deck-tpl-thumb-wrap {
+  width: 100%;
+  height: 132px;          /* matches 16:9 at panel content width ~234px */
+  position: relative;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #ffffff;
+  border: 1px solid #EEF1F4;
+}
+.igs-deck-tpl-thumb-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 960px;
+  height: 540px;
+  /* Card body is ~234px wide; scale = 234 / 960 ≈ 0.244 */
+  transform: scale(0.244);
+  transform-origin: top left;
+  pointer-events: none;
+}
+.igs-deck-tpl-thumb-inner .igs-slide {
+  pointer-events: none;
+}
+.igs-deck-tpl-thumb-err {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 11px;
+  color: #ef4444;
+}
+.igs-deck-tpl-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.igs-deck-tpl-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1A1A2E;
+  letter-spacing: 0.01em;
+}
+.igs-deck-tpl-desc {
+  font-size: 11px;
+  color: #4b5563;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.igs-deck-tpl-meta-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.igs-deck-tpl-pill {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent-soft, rgba(37,99,235,0.10));
+  color: var(--accent, #2563EB);
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
 
 /* Templates section — category groups */
 .igs-tpl-cat {
