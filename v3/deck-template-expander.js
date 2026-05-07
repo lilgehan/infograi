@@ -213,7 +213,7 @@ function pickColumns(variant, itemCount) {
    PAGE EXPANSION
 ───────────────────────────────────────── */
 
-function expandPage(deck, page, sampleData, prevSlideId, customItemTypes) {
+function expandPage(deck, page, sampleData, prevSlideId, customItemTypes, template) {
   const slideExtra = {};
   const cs = page.contentSchema || {};
 
@@ -351,7 +351,7 @@ export function expandTemplateToDeck(template, sampleData, opts) {
   let prevSlideId = null;
 
   for (const page of template.pages) {
-    const result = expandPage(deck, page, data, prevSlideId);
+    const result = expandPage(deck, page, data, prevSlideId, undefined, template);
     deck = result.deck;
     prevSlideId = result.slideId;
   }
