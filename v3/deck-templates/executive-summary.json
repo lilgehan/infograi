@@ -13,14 +13,17 @@
     "C-suite presentation"
   ],
   "tags": ["summary", "executive", "kpi", "board", "high-level", "strategy", "outlook"],
-  "fitsTones": ["professional", "minimal", "bold"],
+  "fitsTones": ["editorial-dark", "professional", "minimal", "bold"],
   "recommendedLength": [6, 8],
   "narrativeArc": "title → context → state (kpi) → priorities → outlook → close",
-  "thumbnailHint": "minimalist with bold typography, restrained color palette, clear hierarchy",
+  "thumbnailHint": "editorial dark canvas with restrained accent color, large display titles, generous whitespace",
+  "decor": "subtle-gradient",
 
   "pages": [
     {
       "id": "executive-summary_01_title",
+      "name": "Title & Framing",
+      "description": "Opens the briefing with topic, period, and audience identification.",
       "narrativeRole": "title",
       "compositionGrammar": "split-hero-left",
       "pageTemplateId": "A2",
@@ -39,6 +42,9 @@
 
     {
       "id": "executive-summary_02_context",
+      "name": "Why This Matters",
+      "description": "Three reasons the audience should engage with this discussion now.",
+      "eyebrow": { "icon": "", "label": "CONTEXT" },
       "narrativeRole": "context",
       "compositionGrammar": "bullets-with-icons",
       "pageTemplateId": "A1",
@@ -67,6 +73,9 @@
 
     {
       "id": "executive-summary_03_state_kpi",
+      "name": "State of the Numbers",
+      "description": "Three current-state metrics that define the starting point for the discussion.",
+      "eyebrow": { "icon": "", "label": "BY THE NUMBERS" },
       "narrativeRole": "kpi",
       "compositionGrammar": "kpi-grid-three",
       "pageTemplateId": "A1",
@@ -95,6 +104,9 @@
 
     {
       "id": "executive-summary_04_state_narrative",
+      "name": "What's Working / What Isn't",
+      "description": "Honest two-column read of organizational strengths versus current gaps.",
+      "eyebrow": { "icon": "", "label": "STATE OF PLAY" },
       "narrativeRole": "state",
       "compositionGrammar": "comparison-side-by-side",
       "pageTemplateId": "C1",
@@ -127,6 +139,9 @@
 
     {
       "id": "executive-summary_05_priorities",
+      "name": "Top Priorities",
+      "description": "Four focus areas the leadership team is committing to for the period.",
+      "eyebrow": { "icon": "", "label": "PRIORITIES" },
       "narrativeRole": "priorities",
       "compositionGrammar": "kpi-grid-four",
       "pageTemplateId": "A1",
@@ -155,6 +170,9 @@
 
     {
       "id": "executive-summary_06_outlook",
+      "name": "Forward Outlook",
+      "description": "Four-stage forward look with concrete deliverables per period.",
+      "eyebrow": { "icon": "", "label": "WHAT'S AHEAD" },
       "narrativeRole": "outlook",
       "compositionGrammar": "timeline-horizontal-quarters",
       "pageTemplateId": "B3",
@@ -183,6 +201,9 @@
 
     {
       "id": "executive-summary_07_cta",
+      "name": "Decision Ask",
+      "description": "Specific decision, sign-off, or next-action requested from the audience.",
+      "eyebrow": { "icon": "", "label": "DECISION" },
       "narrativeRole": "cta",
       "compositionGrammar": "centered-manifesto",
       "pageTemplateId": "E6",
@@ -202,6 +223,8 @@
 
     {
       "id": "executive-summary_08_close",
+      "name": "Closing Card",
+      "description": "Thank-you and contact information for follow-up.",
       "narrativeRole": "close",
       "compositionGrammar": "centered-manifesto",
       "pageTemplateId": "A4",

@@ -313,6 +313,218 @@ export const TEMPLATE_CSS = `
 }
 
 /* ══════════════════════════════════════════════════════════
+   PHASE 8 WAVE 1 — EDITORIAL DESIGN SYSTEM
+   Foundation primitives for premium deck templates: editorial-dark theme,
+   eyebrow pills, corner brackets, numbered indices, background decoration.
+   These are opt-in and additive — slides without `data-tone="editorial-dark"`
+   render exactly as before.
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Editorial-dark theme ──
+   Dark navy canvas, warm cream text, accent stays user-controlled.
+   Sets CSS variables on the slide root so all descendants (zones,
+   blocks, diagrams, text) inherit the dark palette automatically.
+   Accent color is whatever the user picked (default teal #14B8A6 in
+   TONE_ACCENT_DEFAULTS in renderer.js). */
+.igs-slide[data-tone="editorial-dark"] {
+  background: #0E1620;
+  color: #F4F1E8;
+  --bg-page:       #0E1620;
+  --text-primary:  #F4F1E8;
+  --text-secondary: rgba(244, 241, 232, 0.65);
+  --card-bg:       #14202B;
+  --card-border:   rgba(244, 241, 232, 0.10);
+  --divider:       rgba(244, 241, 232, 0.16);
+}
+/* Editorial-dark hero titles use a tighter editorial display weight. */
+.igs-slide[data-tone="editorial-dark"] .igs-slide-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #F4F1E8;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-slide-subtitle {
+  color: rgba(244, 241, 232, 0.72);
+  font-weight: 400;
+}
+/* Diagram text inside editorial-dark slides inherits the cream palette
+   automatically because smart-layouts.js + smart-diagrams.js use the
+   --text-primary CSS variable. Card backgrounds dim against the navy. */
+.igs-slide[data-tone="editorial-dark"] .igs-card,
+.igs-slide[data-tone="editorial-dark"] .ig-page .igs-card {
+  background: var(--card-bg);
+  border-color: var(--card-border);
+  color: var(--text-primary);
+}
+
+/* ── Eyebrow pill ──
+   Small rounded label that sits above the slide title. Used for
+   editorial section indicators ("THE CHALLENGE", "CORE CAPABILITIES",
+   "CLIENT TESTIMONIALS"). Renders only when slide.eyebrow is set. */
+.igs-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--accent, #2563EB);
+  border-radius: 999px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent, #2563EB);
+  background: transparent;
+  margin-bottom: 14px;
+  line-height: 1;
+  vertical-align: middle;
+}
+.igs-eyebrow[data-variant="hero"] {
+  font-size: 11px;
+  padding: 5px 12px;
+  margin-bottom: 18px;
+}
+.igs-eyebrow-icon {
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  outline: none;
+}
+.igs-eyebrow-label {
+  outline: none;
+}
+.igs-eyebrow-label[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  opacity: 0.55;
+}
+
+/* ── Corner-bracket frame ──
+   Editorial decoration applied to a block via the `igs-bracket-frame`
+   class. Renders teal (or accent) L-shaped corners on top-left and
+   bottom-right of the wrapper. Used for testimonial cards and pull
+   quotes in the editorial deck templates. */
+.igs-bracket-frame {
+  position: relative;
+}
+.igs-bracket-frame::before,
+.igs-bracket-frame::after {
+  content: '';
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--accent, #2563EB);
+  pointer-events: none;
+}
+.igs-bracket-frame::before {
+  top: -6px;
+  left: -6px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.igs-bracket-frame::after {
+  bottom: -6px;
+  right: -6px;
+  border-left: 0;
+  border-top: 0;
+}
+
+/* ── Numbered index ──
+   Large editorial section/step label ("01", "02") with thin colored
+   divider below. Used by templates that walk through ordered lists. */
+.igs-num-index {
+  display: block;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--accent, #2563EB);
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--accent, #2563EB);
+  width: 100%;
+  line-height: 1;
+}
+
+/* ── Background decoration layer ──
+   Optional per-slide visual accent. Activated via slide.decor on the
+   slide root. Each variant is a CSS-only pattern (no images) using
+   radial gradients or SVG masks. These are subtle by design — they
+   add depth without overwhelming the content. */
+
+/* `subtle-gradient` — faint radial glow in the top-right corner,
+   tinted with the accent color. Adds atmosphere to dark slides. */
+.igs-slide[data-decor="subtle-gradient"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 60% 50% at 80% 0%,
+    var(--accent-soft, rgba(37, 99, 235, 0.10)) 0%,
+    transparent 60%
+  );
+  z-index: 0;
+}
+.igs-slide[data-decor="subtle-gradient"] > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* `corner-orb` — soft accent orb in the bottom-right corner. Editorial
+   atmospheric without being distracting. */
+.igs-slide[data-decor="corner-orb"]::before {
+  content: '';
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  bottom: -120px;
+  right: -120px;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    var(--accent-soft, rgba(37, 99, 235, 0.18)) 0%,
+    transparent 70%
+  );
+  z-index: 0;
+  border-radius: 50%;
+}
+.igs-slide[data-decor="corner-orb"] > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* `editorial-rule` — single thin accent line stretched horizontally
+   across the slide near the top. Adds a magazine-like rhythm. */
+.igs-slide[data-decor="editorial-rule"]::before {
+  content: '';
+  position: absolute;
+  top: 64px;
+  left: 5%;
+  right: 5%;
+  height: 1px;
+  background: var(--divider, rgba(0, 0, 0, 0.12));
+  pointer-events: none;
+  z-index: 0;
+}
+.igs-slide[data-decor="editorial-rule"] > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Editorial spacing density ──
+   Apply to .igs-zone-content[data-density="editorial"] for generous
+   magazine-style padding + larger title scale. Wider whitespace + a
+   single hero focal point per slide. */
+.igs-zone-content[data-density="editorial"] {
+  padding: 48px 64px;
+}
+.igs-zone-content[data-density="editorial"] .igs-slide-title,
+.igs-slide[data-tone="editorial-dark"] .igs-zone-content .igs-slide-title {
+  font-size: 38px;
+  line-height: 1.15;
+}
+
+/* ══════════════════════════════════════════════════════════
    CATEGORY A — Blank & Full-Width
    ══════════════════════════════════════════════════════════ */
 

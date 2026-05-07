@@ -221,6 +221,19 @@ function expandPage(deck, page, sampleData, prevSlideId, customItemTypes) {
   if (cs.subtitle && cs.subtitle.pattern) slideExtra.subtitle = fillPattern(cs.subtitle.pattern, sampleData);
   if (cs.ctaLabel && cs.ctaLabel.pattern) slideExtra.ctaLabel = fillPattern(cs.ctaLabel.pattern, sampleData);
 
+  // Phase 8 Wave 1 — eyebrow pill + background decoration come from page
+  // metadata. The eyebrow lives on the page (each slide has its own pill),
+  // while decor can be either page-level (for slide-specific accents) or
+  // template-level (for a deck-wide default).
+  if (page.eyebrow) {
+    slideExtra.eyebrow = {
+      icon:  page.eyebrow.icon  || '',
+      label: fillPattern(page.eyebrow.label || '', sampleData),
+    };
+  }
+  if (page.decor)            slideExtra.decor = page.decor;
+  else if (template.decor)   slideExtra.decor = template.decor;
+
   let nextDeck = addSlide(deck, page.pageTemplateId, prevSlideId, slideExtra);
   const slideId = nextDeck.slides[nextDeck.slides.length - 1].id;
 

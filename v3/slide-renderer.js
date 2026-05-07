@@ -267,6 +267,28 @@ function renderContentZone(slide, zoneName, tone) {
  * H2 with `.is-placeholder` class when the title is empty, so the cursor
  * system can detect placeholder vs. real content on click.
  */
+/**
+ * Phase 8 Wave 1 — eyebrow pill HTML helper. Renders the small rounded
+ * label that sits above the slide title (the editorial deck convention:
+ * "🧠 THE CHALLENGE", "⭐ CORE CAPABILITIES", "💬 CLIENT TESTIMONIALS").
+ * Returns empty string when slide.eyebrow is unset, so existing templates
+ * are unaffected. Both label and icon are contenteditable.
+ *
+ * @param {object} slide
+ * @param {string} [variant] — 'compact' | 'hero'
+ * @returns {string}
+ */
+function renderEyebrow(slide, variant) {
+  const eb = slide && slide.eyebrow;
+  if (!eb || (!eb.label && !eb.icon)) return '';
+  const v = variant || 'compact';
+  const iconHtml = eb.icon
+    ? `<span class="igs-eyebrow-icon" contenteditable="true" data-edit-role="slide-eyebrow-icon">${esc(eb.icon)}</span>`
+    : '';
+  const labelHtml = `<span class="igs-eyebrow-label" contenteditable="true" data-edit-role="slide-eyebrow-label" data-placeholder="LABEL">${esc(eb.label || '')}</span>`;
+  return `<div class="igs-eyebrow" data-variant="${v}">${iconHtml}${labelHtml}</div>`;
+}
+
 function renderTitleBlock(slide, zoneType, zoneName) {
   // Compact / standard title row (C1-C4, D1, D2, E3, C5, C6, D3, D4 headers)
   const isCompact = (zoneType === 'title-block') &&
@@ -278,6 +300,7 @@ function renderTitleBlock(slide, zoneType, zoneName) {
     const titleText = (slide.title || '').trim();
     return `
       <div class="igs-zone-title" data-zone="title">
+        ${renderEyebrow(slide, 'compact')}
         <h2 class="igs-slide-title"
             contenteditable="true"
             data-edit-role="slide-title"
@@ -326,6 +349,7 @@ function renderTitleBlock(slide, zoneType, zoneName) {
     : '';
 
   return `
+    ${renderEyebrow(slide, 'hero')}
     ${titleHtml}
     ${subtitleHtml}
     ${extras}
@@ -453,7 +477,12 @@ export function renderSlide(slide, theme, accentColor) {
   // They paint AFTER zones in DOM order so they sit on top of flow content.
   const freeBlocksHtml = freeBlocks(slide).map(b => renderBlock(b, tone)).join('');
 
-  return `<div class="igs-slide" data-template="${esc(slide.templateId)}" data-slide-id="${esc(slide.id)}">${zonesHtml}${freeBlocksHtml}</div>`;
+  // Phase 8 Wave 1 — `data-tone` carries the deck tone onto the slide root
+  // so editorial-dark CSS can target `.igs-slide[data-tone="editorial-dark"]`.
+  // `data-decor` lets a slide opt into a background decoration variant
+  // (subtle-gradient, corner-orb, etc.) defined in TEMPLATE_CSS.
+  const decorAttr = slide.decor ? ` data-decor="${esc(slide.decor)}"` : '';
+  return `<div class="igs-slide" data-template="${esc(slide.templateId)}" data-slide-id="${esc(slide.id)}" data-tone="${esc(tone)}"${decorAttr}>${zonesHtml}${freeBlocksHtml}</div>`;
 }
 
 /**

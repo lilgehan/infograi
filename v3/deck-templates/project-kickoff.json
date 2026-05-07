@@ -21,6 +21,8 @@
   "pages": [
     {
       "id": "project-kickoff_01_title",
+      "name": "Kickoff Title",
+      "description": "Names the engagement, the parties involved, and the start date.",
       "narrativeRole": "title",
       "compositionGrammar": "split-hero-left",
       "pageTemplateId": "A2",
@@ -39,6 +41,8 @@
 
     {
       "id": "project-kickoff_02_team",
+      "name": "Welcome & Team Intro",
+      "description": "Introduces the three core groups: leadership, delivery, and stakeholders.",
       "narrativeRole": "team",
       "compositionGrammar": "kpi-grid-three",
       "pageTemplateId": "C4",
@@ -68,6 +72,8 @@
 
     {
       "id": "project-kickoff_03_objectives",
+      "name": "Objectives & Scope",
+      "description": "Four observable engagement outcomes tied to business value.",
       "narrativeRole": "objectives",
       "compositionGrammar": "bullets-with-icons",
       "pageTemplateId": "A1",
@@ -96,6 +102,8 @@
 
     {
       "id": "project-kickoff_04_approach",
+      "name": "Methodology",
+      "description": "Four-phase delivery approach with verb-led names and key deliverables.",
       "narrativeRole": "approach",
       "compositionGrammar": "timeline-horizontal-quarters",
       "pageTemplateId": "A1",
@@ -124,6 +132,8 @@
 
     {
       "id": "project-kickoff_05_comms",
+      "name": "Communication Plan",
+      "description": "Cadence, channels, and escalation path the team will use day-to-day.",
       "narrativeRole": "approach",
       "compositionGrammar": "split-hero-left",
       "pageTemplateId": "B2",
@@ -152,6 +162,8 @@
 
     {
       "id": "project-kickoff_06_roles",
+      "name": "Roles & Responsibilities",
+      "description": "Four core role definitions, each with a single primary accountability.",
       "narrativeRole": "roles",
       "compositionGrammar": "kpi-grid-four",
       "pageTemplateId": "A1",
@@ -180,6 +192,8 @@
 
     {
       "id": "project-kickoff_07_timeline",
+      "name": "Timeline & Milestones",
+      "description": "Four dated milestones observable from outside the team.",
       "narrativeRole": "journey",
       "compositionGrammar": "timeline-horizontal-quarters",
       "pageTemplateId": "B3",
@@ -208,6 +222,8 @@
 
     {
       "id": "project-kickoff_08_risks",
+      "name": "Risks & Mitigations",
+      "description": "Top three risks paired with the mitigation each owner is committing to.",
       "narrativeRole": "risks",
       "compositionGrammar": "comparison-side-by-side",
       "pageTemplateId": "C1",
@@ -240,6 +256,8 @@
 
     {
       "id": "project-kickoff_09_next_steps",
+      "name": "Immediate Next Steps",
+      "description": "Three actions with owners and due dates for the first week of work.",
       "narrativeRole": "cta",
       "compositionGrammar": "bullets-with-icons",
       "pageTemplateId": "A1",
@@ -268,6 +286,8 @@
 
     {
       "id": "project-kickoff_10_close",
+      "name": "Closing Card",
+      "description": "Thank-you and project manager contact details for follow-up.",
       "narrativeRole": "close",
       "compositionGrammar": "centered-manifesto",
       "pageTemplateId": "A4",

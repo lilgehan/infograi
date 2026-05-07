@@ -21,6 +21,8 @@
   "pages": [
     {
       "id": "process-improvement_01_title",
+      "name": "Proposal Title",
+      "description": "Names the process being addressed and the audience for the proposal.",
       "narrativeRole": "title",
       "compositionGrammar": "split-hero-left",
       "pageTemplateId": "A2",
@@ -39,6 +41,8 @@
 
     {
       "id": "process-improvement_02_summary",
+      "name": "Executive Summary",
+      "description": "Three headline metrics — the proposed impact stated up front before diagnosis.",
       "narrativeRole": "kpi",
       "compositionGrammar": "kpi-grid-three",
       "pageTemplateId": "A1",
@@ -67,6 +71,8 @@
 
     {
       "id": "process-improvement_03_current_state",
+      "name": "Current State",
+      "description": "Walks through the as-is process step by step with friction noted at each stage.",
       "narrativeRole": "state",
       "compositionGrammar": "timeline-horizontal-quarters",
       "pageTemplateId": "A1",
@@ -95,6 +101,8 @@
 
     {
       "id": "process-improvement_04_problem",
+      "name": "Pain Points",
+      "description": "Three ranked problems holding the process back today, by business impact.",
       "narrativeRole": "problem",
       "compositionGrammar": "bullets-with-icons",
       "pageTemplateId": "B1",
@@ -123,6 +131,8 @@
 
     {
       "id": "process-improvement_05_solution",
+      "name": "Proposed Redesign",
+      "description": "The to-be process, structured in the same shape as current state for direct comparison.",
       "narrativeRole": "solution",
       "compositionGrammar": "timeline-horizontal-quarters",
       "pageTemplateId": "A1",
@@ -151,6 +161,8 @@
 
     {
       "id": "process-improvement_06_benefits",
+      "name": "Expected Benefits",
+      "description": "Four target metrics, each tied to a specific source of improvement from the redesign.",
       "narrativeRole": "benefits",
       "compositionGrammar": "kpi-grid-four",
       "pageTemplateId": "A1",
@@ -179,6 +191,8 @@
 
     {
       "id": "process-improvement_07_roadmap",
+      "name": "Implementation Roadmap",
+      "description": "Four-phase rollout from pilot to full operation, each phase with a concrete outcome.",
       "narrativeRole": "journey",
       "compositionGrammar": "timeline-horizontal-quarters",
       "pageTemplateId": "B3",
@@ -207,6 +221,8 @@
 
     {
       "id": "process-improvement_08_roi",
+      "name": "Investment & ROI",
+      "description": "Two-column investment-versus-return summary with payback period stated explicitly.",
       "narrativeRole": "benefits",
       "compositionGrammar": "comparison-side-by-side",
       "pageTemplateId": "C1",
@@ -239,6 +255,8 @@
 
     {
       "id": "process-improvement_09_cta",
+      "name": "Recommended Approval",
+      "description": "Single-decision ask with start date contingent on the requested approval.",
       "narrativeRole": "cta",
       "compositionGrammar": "centered-manifesto",
       "pageTemplateId": "E6",

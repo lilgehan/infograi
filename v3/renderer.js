@@ -106,10 +106,14 @@ function renderIconHtml(name, cssClass, px = 40) {
 ───────────────────────────────────────── */
 
 const TONE_ACCENT_DEFAULTS = {
-  professional: '#2563EB',
-  bold:         '#F59E0B',
-  minimal:      '#0F766E',
-  playful:      '#7C3AED',
+  professional:    '#2563EB',
+  bold:            '#F59E0B',
+  minimal:         '#0F766E',
+  playful:         '#7C3AED',
+  // Phase 8 Wave 1 — editorial dark theme. Dark navy canvas + restrained
+  // accent + display-sans hierarchy. The accent default is teal but the
+  // user's chosen accent overrides it as with every other tone.
+  'editorial-dark': '#14B8A6',
 };
 
 /* ─────────────────────────────────────────

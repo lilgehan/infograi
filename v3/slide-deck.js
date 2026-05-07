@@ -81,10 +81,22 @@ export function addSlide(deck, templateId, afterSlideId, extra) {
  * Build a fresh slide object. Internal helper, exported for tests.
  */
 export function createSlide(templateId, extra) {
+  const ex = extra || {};
+  // Phase 8 Wave 1 — extended slide schema to carry through:
+  //   subtitle  — already documented in CODEBASE.md but was dropped here
+  //   ctaLabel  — same — only used by E6 template's CTA button text
+  //   eyebrow   — { icon, label } small editorial pill above the title
+  //   decor     — string id of a background-decoration variant
+  // None of these are required; templates that don't set them get default
+  // rendering and are unaffected.
   return {
     id:         genId('slide'),
     templateId: templateId || 'A1',
-    title:      (extra && extra.title) || '',
+    title:      ex.title    || '',
+    subtitle:   (ex.subtitle !== undefined && ex.subtitle !== null) ? ex.subtitle : null,
+    ctaLabel:   (ex.ctaLabel !== undefined && ex.ctaLabel !== null) ? ex.ctaLabel : null,
+    eyebrow:    ex.eyebrow  || null,
+    decor:      ex.decor    || null,
     blocks:     [],
   };
 }

@@ -42,6 +42,18 @@ Each entry in `pages` describes one slide. Pages are decomposed into 5 layers pe
   // Stable unique id. Convention: `{templateId}_{NN}_{role}`. Used by Tier 2
   // cross-template page composition for retrieval and dedup.
 
+  "name": "Title & Framing",
+  // REQUIRED. Short human-readable label (~25-35 chars). Shown in any
+  // page-level UI: search results, debug views, the "browse pages" panel
+  // (Phase 7.2+). Distinct from the slide's actual title content (which
+  // lives in contentSchema.title.pattern).
+
+  "description": "Opens the briefing with topic, period, and audience identification.",
+  // REQUIRED. One sentence (~60-100 chars), audience-facing. Describes
+  // what this page accomplishes for the reader. Distinct from
+  // behaviorRules.narrativeBridge (which is internal AI guidance about
+  // how to write the content). Used by Tier 2 matching as semantic context.
+
   "narrativeRole": "title",
   // L3 — what this slide IS. Controlled vocabulary (see roles list below).
 
@@ -156,12 +168,14 @@ Free-form but use existing tags first. As of Phase 7.1A:
 
 1. `id` is unique across all templates.
 2. `pages[].id` is unique within a template.
-3. Every `pages[].narrativeRole` is in the controlled vocabulary.
-4. Every `pages[].compositionGrammar` is in the starter set (Phase 7.1A) or registry (Phase 7.1B+).
-5. Every `pages[].pageTemplateId` exists in `v3/slide-templates.js`.
-6. `pages[].contentSchema` is well-formed JSON Schema-lite (type + required fields).
-7. `pages[].linksWellWith` contains valid roles from the controlled vocabulary.
-8. `recommendedLength[0]` <= `pages.length` <= `recommendedLength[1]` is loosely enforced (warning only — templates can have more or fewer pages than recommended).
+3. **`pages[].name` is required** — short human-readable label (~25-35 chars).
+4. **`pages[].description` is required** — one sentence describing what the page accomplishes (~60-100 chars).
+5. Every `pages[].narrativeRole` is in the controlled vocabulary.
+6. Every `pages[].compositionGrammar` is in the starter set (Phase 7.1A) or registry (Phase 7.1B+).
+7. Every `pages[].pageTemplateId` exists in `v3/slide-templates.js`.
+8. `pages[].contentSchema` is well-formed JSON Schema-lite (type + required fields).
+9. `pages[].linksWellWith` contains valid roles from the controlled vocabulary.
+10. `recommendedLength[0]` <= `pages.length` <= `recommendedLength[1]` is loosely enforced (warning only).
 
 ---
 
@@ -185,11 +199,72 @@ For truly novel topics with no library matches at all, AI generates from scratch
 
 ---
 
+## Phase 8 Wave 1 — editorial-dark tone + visual primitives
+
+Three new optional fields are available on each page. None are required; templates that don't use them render exactly as before.
+
+### `eyebrow` (page-level)
+
+Small rounded pill that sits above the slide title. Used for editorial section labels.
+
+```jsonc
+"eyebrow": {
+  "icon":  "🧠",                  // optional, single emoji or short symbol
+  "label": "THE CHALLENGE"        // ALL-CAPS short label, < 25 chars
+}
+```
+
+The label can include `{topic}` etc. — the expander runs pattern interpolation on it the same way it does for `contentSchema.title.pattern`.
+
+### `decor` (page-level OR template-level)
+
+Optional background decoration variant. Set on a page (slide-specific) or on the template (deck-wide default). Values:
+
+| Value | What it adds |
+|---|---|
+| `subtle-gradient` | Faint accent-colored radial glow in the top-right corner of the slide |
+| `corner-orb` | Soft accent orb in the bottom-right corner |
+| `editorial-rule` | Single thin horizontal accent line near the top |
+
+These are CSS-only — no images, no asset dependencies. Designed to be subtle.
+
+### Pages can opt into editorial spacing density
+
+Set `behaviorRules.density` to `"editorial"` for generous magazine-style padding + larger title scale. Existing values (`light` / `standard` / `dense`) still work — `editorial` is the new fourth tier.
+
+### `editorial-dark` tone
+
+A new fifth tone alongside `professional / bold / minimal / playful`. When the deck's tone is `editorial-dark`:
+- Slide background switches to dark navy (`#0E1620`)
+- Text becomes warm cream (`#F4F1E8`)
+- Card backgrounds dim to a slightly lighter navy
+- Accent color stays user-controlled (default `#14B8A6` teal)
+- Display typography uses Space Grotesk 600 with tighter letter-spacing
+- All existing diagram variants automatically theme-adapt because they use CSS variables (`--text-primary`, `--card-bg`, `--card-border`, `--divider`)
+
+To set a deck template's default tone, include it first in `fitsTones`:
+
+```jsonc
+"fitsTones": ["editorial-dark", "professional", "minimal"]
+```
+
+The expander uses the FIRST tone in the array as the default when rendering a preview.
+
+---
+
 ## Conventions for writing template files
 
-- Keep `description` and `useCases` concrete, not abstract. The AI matches on these.
+- Keep `description` (deck-level) and `useCases` concrete, not abstract. The AI matches on these.
+- **Every page MUST have `name` and `description`.** No exceptions.
+  - `name`: 25-35 chars, capitalized phrase, describes WHAT the page is. Examples: "State of the Numbers", "Welcome & Team Intro", "Roles & Responsibilities".
+  - `description`: 60-100 chars, one sentence, describes what the page ACCOMPLISHES for the audience. Reader-facing, not internal jargon.
 - Page count: aim for 6-10 pages per template. Less than 5 risks insufficient narrative; more than 12 risks bloat.
 - `contentSchema.pattern` strings are the single biggest lever for content quality. Write them like you'd write a fill-in-the-blank example.
 - Don't reuse `narrativeRole` more than once per template unless absolutely necessary. The role taxonomy is rich enough to stay distinct.
 - `narrativePosition` stays in order: `open` → `early` → `middle` → `late` → `close`.
 - `linksWellWith` is forward-looking — it suggests what should come AFTER this page, not before.
+- Three distinct text fields per page that often get confused:
+  - `name` (NEW, required): what the page IS, for UI display
+  - `description` (NEW, required): what the page ACCOMPLISHES, audience-facing
+  - `behaviorRules.narrativeBridge` (existing): internal AI guidance about how to write the content
+  Each serves a different consumer. Keep them distinct, not redundant.
