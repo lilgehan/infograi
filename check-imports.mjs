@@ -1,0 +1,11 @@
+import * as st from './v3/slide-templates.js';
+import * as sr from './v3/slide-renderer.js';
+import * as sd from './v3/slide-deck.js';
+import * as dt from './v3/deck-template-expander.js';
+import * as rd from './v3/renderer.js';
+console.log('slide-templates exports:', Object.keys(st).join(','));
+console.log('slide-renderer exports:', Object.keys(sr).join(','));
+console.log('slide-deck exports:', Object.keys(sd).join(','));
+console.log('expander exports:', Object.keys(dt).join(','));
+console.log('renderer exports:', Object.keys(rd).join(','));
+console.log('TEMPLATE_CSS length:', st.TEMPLATE_CSS.length);

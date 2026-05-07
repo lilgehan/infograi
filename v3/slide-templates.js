@@ -316,7 +316,7 @@ export const TEMPLATE_CSS = `
    PHASE 8 WAVE 1 — EDITORIAL DESIGN SYSTEM
    Foundation primitives for premium deck templates: editorial-dark theme,
    eyebrow pills, corner brackets, numbered indices, background decoration.
-   These are opt-in and additive — slides without `data-tone="editorial-dark"`
+   These are opt-in and additive — slides without data-tone="editorial-dark"
    render exactly as before.
    ══════════════════════════════════════════════════════════ */
 
@@ -399,7 +399,7 @@ export const TEMPLATE_CSS = `
 }
 
 /* ── Corner-bracket frame ──
-   Editorial decoration applied to a block via the `igs-bracket-frame`
+   Editorial decoration applied to a block via the .igs-bracket-frame
    class. Renders teal (or accent) L-shaped corners on top-left and
    bottom-right of the wrapper. Used for testimonial cards and pull
    quotes in the editorial deck templates. */
@@ -451,7 +451,7 @@ export const TEMPLATE_CSS = `
    radial gradients or SVG masks. These are subtle by design — they
    add depth without overwhelming the content. */
 
-/* `subtle-gradient` — faint radial glow in the top-right corner,
+/* "subtle-gradient" — faint radial glow in the top-right corner,
    tinted with the accent color. Adds atmosphere to dark slides. */
 .igs-slide[data-decor="subtle-gradient"]::before {
   content: '';
@@ -470,7 +470,7 @@ export const TEMPLATE_CSS = `
   z-index: 1;
 }
 
-/* `corner-orb` — soft accent orb in the bottom-right corner. Editorial
+/* "corner-orb" — soft accent orb in the bottom-right corner. Editorial
    atmospheric without being distracting. */
 .igs-slide[data-decor="corner-orb"]::before {
   content: '';
@@ -493,7 +493,7 @@ export const TEMPLATE_CSS = `
   z-index: 1;
 }
 
-/* `editorial-rule` — single thin accent line stretched horizontally
+/* "editorial-rule" — single thin accent line stretched horizontally
    across the slide near the top. Adds a magazine-like rhythm. */
 .igs-slide[data-decor="editorial-rule"]::before {
   content: '';
