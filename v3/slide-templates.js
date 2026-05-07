@@ -518,10 +518,108 @@ export const TEMPLATE_CSS = `
 .igs-zone-content[data-density="editorial"] {
   padding: 48px 64px;
 }
-.igs-zone-content[data-density="editorial"] .igs-slide-title,
-.igs-slide[data-tone="editorial-dark"] .igs-zone-content .igs-slide-title {
+.igs-zone-content[data-density="editorial"] .igs-slide-title {
   font-size: 38px;
   line-height: 1.15;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PHASE 8 WAVE 2 — EDITORIAL COMPOSITION PASS
+   Adds visual hierarchy + vertical rhythm to editorial-dark slides.
+   The Wave 1 work shipped the *theme*; Wave 2 ships the *composition*.
+   - Display titles render markedly larger to create typographic contrast.
+   - Zone content gets generous editorial padding and centers vertically
+     so KPI/tile rows stop hugging the top of the canvas with empty
+     space below.
+   - A quiet always-on base ornament (hairline + corner micro-orb) shows
+     on every editorial-dark slide so dead space reads as composed.
+   These rules are scoped to data-tone="editorial-dark", so light tones
+   are unchanged.
+   ══════════════════════════════════════════════════════════ */
+
+/* Larger display title scale on editorial-dark inline + zone titles. */
+.igs-slide[data-tone="editorial-dark"] .igs-zone-content .igs-slide-title,
+.igs-slide[data-tone="editorial-dark"] .igs-zone .igs-slide-title,
+.igs-slide[data-tone="editorial-dark"] .igs-zone-title .igs-slide-title {
+  font-size: 48px;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+/* Hero titles on editorial dark go bigger than the inline ones to act
+   as actual focal points (Gamma's "70% typography" rule). A2 is the
+   opening title slide, so it gets the largest scale. */
+.igs-slide[data-tone="editorial-dark"][data-template="A2"] .igs-slide-title {
+  font-size: 72px;
+  line-height: 1.05;
+}
+.igs-slide[data-tone="editorial-dark"][data-template="A4"] .igs-slide-title,
+.igs-slide[data-tone="editorial-dark"][data-template="E6"] .igs-slide-title {
+  font-size: 56px;
+  line-height: 1.08;
+}
+
+/* More breathing room around the slide edge and a stronger title→content
+   rhythm. */
+.igs-slide[data-tone="editorial-dark"] .igs-zone-content {
+  padding: 56px 72px;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-zone-title {
+  margin-bottom: 28px;
+}
+
+/* Editorial-dark A1 slides (KPI grids, priority tiles, bullet lists)
+   anchor the title at the top and let the diagram stack expand to fill
+   the remaining vertical space. The diagram centers itself within that
+   space — eliminating the "widgets clustered at top with dead air below"
+   problem that made the slides feel empty. */
+.igs-slide[data-tone="editorial-dark"][data-template="A1"] > .igs-zone-content {
+  justify-content: flex-start;
+  gap: 0;
+}
+.igs-slide[data-tone="editorial-dark"][data-template="A1"] > .igs-zone-content > *:not(.igs-zone-title) {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
+
+/* Always-on quiet ornament for editorial-dark slides — single ::after
+   layer composes a horizontal hairline near the bottom AND a faint
+   corner micro-orb. Per-slide data-decor variants use ::before, so they
+   coexist (the gradient on slide 1, the orb on slide 7, etc.). A2 hero
+   gradient + A3 accent block opt out so they don't fight the ornament. */
+.igs-slide[data-tone="editorial-dark"]:not([data-template="A2"]):not([data-template="A3"])::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    /* horizontal hairline rule, indented 7% on each edge */
+    linear-gradient(
+      to right,
+      transparent 7%,
+      rgba(244, 241, 232, 0.10) 7%,
+      rgba(244, 241, 232, 0.10) 93%,
+      transparent 93%
+    ),
+    /* corner micro-orb in the bottom-right */
+    radial-gradient(
+      140px 140px at 96% 96%,
+      rgba(20, 184, 166, 0.12) 0%,
+      transparent 70%
+    );
+  background-size: 100% 1px, 100% 100%;
+  background-position: 0 calc(100% - 32px), 0 0;
+  background-repeat: no-repeat, no-repeat;
+  z-index: 0;
+}
+/* Keep zones (and free blocks) above the base ornament. */
+.igs-slide[data-tone="editorial-dark"] > .igs-zone,
+.igs-slide[data-tone="editorial-dark"] > [data-block-id] {
+  position: relative;
+  z-index: 1;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -954,13 +1052,23 @@ export const TEMPLATE_CSS = `
 .igs-slide[data-template="E5"] > .igs-zone-content { grid-column: 1; }
 .igs-slide[data-template="E5"] > .igs-zone-accent  { grid-column: 3; }
 
-/* E6 — Call to Action */
+/* E6 — Call to Action.
+   Uses background-image (not the background shorthand) so the underlying
+   background-color set by the tone (e.g. #0E1620 on editorial-dark) is
+   preserved. The radial gradient composites on top as an accent glow. */
 .igs-slide[data-template="E6"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
+  background-image:
     radial-gradient(circle at 50% 100%, var(--accent-soft, rgba(37,99,235,0.10)) 0%, transparent 70%);
+}
+/* Editorial-dark CTA: stronger glow + remove the legacy white fallback so
+   the navy canvas stays intact. */
+.igs-slide[data-tone="editorial-dark"][data-template="E6"] {
+  background-color: #0E1620;
+  background-image:
+    radial-gradient(circle at 50% 100%, var(--accent-soft, rgba(20,184,166,0.20)) 0%, transparent 70%);
 }
 .igs-slide[data-template="E6"] > .igs-zone-content {
   width: 75%;

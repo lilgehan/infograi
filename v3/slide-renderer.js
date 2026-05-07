@@ -361,12 +361,17 @@ function renderTitleBlock(slide, zoneType, zoneName) {
  * inlineTitle: true). This is prepended inside the content zone before
  * the block stack. Uses the same compact title styling as full-width
  * title rows.
+ *
+ * Phase 8 Wave 2 — also emits an eyebrow pill above the title if
+ * slide.eyebrow is set. Existing B-template decks aren't affected because
+ * they don't carry eyebrows.
  */
 function renderInlineTitle(slide) {
   // Phase 3C — Invisible editing. Always contenteditable, CSS handles placeholder.
   const titleText = (slide.title || '').trim();
   return `
     <div class="igs-zone-title" data-zone="title">
+      ${renderEyebrow(slide, 'compact')}
       <h2 class="igs-slide-title"
           contenteditable="true"
           data-edit-role="slide-title"
@@ -415,7 +420,16 @@ export function renderSlide(slide, theme, accentColor) {
 
   // For inline-title templates (B1-B6, E5), the title element is prepended
   // inside the FIRST content-typed zone. Track which zone gets it.
-  const inlineTitle = !!tpl.inlineTitle;
+  //
+  // Phase 8 Wave 2 — A1 in editorial-dark also gets an inline title when
+  // the slide carries one. A1 has no native title zone, but the editorial
+  // deck templates (Executive Summary etc.) need an eyebrow + display title
+  // anchoring every slide for visual hierarchy. We synthesize the inline
+  // title here so the existing zone has its block stack rendered below.
+  const editorialA1 = tpl.id === 'A1'
+    && tone === 'editorial-dark'
+    && (!!(slide.title && slide.title.trim()) || !!slide.eyebrow);
+  const inlineTitle = !!tpl.inlineTitle || editorialA1;
   const firstContentZoneName = inlineTitle
     ? (tpl.zones.find(z => z.type === 'content') || {}).name
     : null;
