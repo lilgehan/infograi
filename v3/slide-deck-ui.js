@@ -30,6 +30,7 @@ import { renderSlide, DECK_MODE_CSS } from './slide-renderer.js';
 import { TEMPLATES, getTemplateZones, renderSlideTemplate } from './slide-templates.js';
 import { loadAll as loadDeckTemplates, getAllSync as getDeckTemplatesSync } from './deck-template-registry.js';
 import { expandTemplateToDeck } from './deck-template-expander.js';
+import { TONE_ACCENT_DEFAULTS } from './renderer.js';
 
 /* ─────────────────────────────────────────
    GALLERY METADATA — diagram catalog grouped by category.
@@ -1669,16 +1670,29 @@ function applyDeckTemplate(deckTplId) {
   const tpl = cache[deckTplId];
 
   _pushHistory();
+
+  // Phase 8 Wave 1 — honor the template's preferred tone.
+  // Each template ships with a `fitsTones` array; the first entry is the
+  // tone the template was designed for (e.g. 'editorial-dark' for Executive
+  // Summary). Apply that tone + its default accent so the editorial
+  // primitives (eyebrow pills, dark canvas, bracket frames) actually render.
+  const preferredTone =
+    (Array.isArray(tpl.fitsTones) && tpl.fitsTones[0]) || _state.tone;
+  const preferredAccent =
+    TONE_ACCENT_DEFAULTS[preferredTone] || _state.accentColor;
+
   const newDeck = expandTemplateToDeck(tpl, undefined, {
-    tone: _state.tone,
-    accentColor: _state.accentColor,
+    tone: preferredTone,
+    accentColor: preferredAccent,
   });
-  // Preserve the user's tone + accent.
-  newDeck.theme = _state.tone;
-  newDeck.accentColor = _state.accentColor;
+  newDeck.theme = preferredTone;
+  newDeck.accentColor = preferredAccent;
 
   _state.deck = newDeck;
+  _state.tone = preferredTone;
+  _state.accentColor = preferredAccent;
   _state.activeSlideId = newDeck.slides[0] ? newDeck.slides[0].id : null;
+  applyAccentVars();
   setHovered(null);
   clearSelection();
   setMode('idle');
