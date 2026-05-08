@@ -475,10 +475,19 @@ export function renderSlide(slide, theme, accentColor) {
       // Plain content zone — render any blocks placed here.
       // For inline-title templates, prepend the title element to the first content zone.
       const stackHtml = renderContentZone(slide, zoneMeta.name, tone);
+
+      // Phase 8 Wave 3 fix — optional per-zone header (comparison column
+      // titles like "What's working" / "What needs attention" on C1).
+      let zoneHeaderHtml = '';
+      if (slide.zoneHeaders && slide.zoneHeaders[zoneMeta.name]) {
+        const headerText = slide.zoneHeaders[zoneMeta.name];
+        zoneHeaderHtml = `<div class="igs-zone-header" contenteditable="true" data-edit-role="zone-header" data-zone-header="${esc(zoneMeta.name)}">${esc(headerText)}</div>`;
+      }
+
       if (inlineTitle && zoneMeta.name === firstContentZoneName) {
-        inner = renderInlineTitle(slide) + stackHtml;
+        inner = renderInlineTitle(slide) + zoneHeaderHtml + stackHtml;
       } else {
-        inner = stackHtml;
+        inner = zoneHeaderHtml + stackHtml;
       }
     }
 

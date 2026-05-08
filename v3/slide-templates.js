@@ -662,6 +662,49 @@ export const TEMPLATE_CSS = `
   margin-top: 0.6rem;
 }
 
+/* ── A1 timeline densification on editorial-dark ──
+   With editorial title sizes + zone padding, a 4-step timeline crowds
+   the bottom edge. Tighten the per-item padding so all four phases
+   fit cleanly inside the slide. */
+.igs-slide[data-tone="editorial-dark"][data-template="A1"] .igs-tl-item {
+  padding-bottom: 0.7rem;
+}
+.igs-slide[data-tone="editorial-dark"][data-template="A1"] .igs-tl-content .igs-tl-body {
+  margin-top: 0.1rem;
+}
+
+/* ── Slide overflow safety net ──
+   Defensive guard: zones, the diagram wrapper, and the block-stack all
+   clip at the slide edge. The slide root already has overflow:hidden,
+   but reinforcing here means even a malformed diagram renders cleanly
+   inside the canvas instead of leaking past the bottom. */
+.igs-slide .igs-zone-content > .ig-page,
+.igs-slide .igs-zone-content > [data-block-id] {
+  max-height: 100%;
+  overflow: hidden;
+}
+
+/* ── Comparison zone-header (Wave 3 fix) ──
+   Small editorial heading rendered above each side of a side-by-side
+   comparison ("What's working" / "What needs attention"). Picks up
+   the editorial-dark palette automatically via CSS variables. */
+.igs-zone-content > .igs-zone-header {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent, #2563EB);
+  margin-bottom: 12px;
+  outline: none;
+  cursor: text;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-zone-content > .igs-zone-header {
+  color: var(--accent, #14B8A6);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
 /* ══════════════════════════════════════════════════════════
    CATEGORY A — Blank & Full-Width
    ══════════════════════════════════════════════════════════ */
@@ -1135,6 +1178,11 @@ export const TEMPLATE_CSS = `
   font-size: 18px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  text-decoration: none;
   box-shadow: 0 8px 20px var(--accent-soft, rgba(37,99,235,0.30));
+}
+.igs-slide[data-template="E6"] .igs-cta-button .igs-cta-text {
+  text-decoration: none;
+  color: inherit;
 }
 `;

@@ -455,6 +455,41 @@ export const BOXES_CSS = `
    its role regardless of how many siblings are rendered).
 ───────────────────────────────────────── */
 
+/**
+ * Phase 8 Wave 3 — soft validator for box-family diagrams.
+ * Gamma's box rows look balanced because every tile has the same number
+ * of words in its headline and within 1–2 words of body length. We surface
+ * a console.warn when sample data drifts so authors fix it; rendering is
+ * never blocked.
+ */
+function validateBoxItemBalance(items, variant) {
+  if (!Array.isArray(items) || items.length < 2) return;
+  const wc = s => (s || '').trim().split(/\s+/).filter(Boolean).length;
+  const titleCounts = items.map(it => wc(it.title));
+  const bodyCounts  = items.map(it => wc(it.body));
+
+  const tMin = Math.min(...titleCounts);
+  const tMax = Math.max(...titleCounts);
+  if (tMax - tMin > 0) {
+    console.warn(
+      `[${variant}] Title word counts vary across the row: ${titleCounts.join(', ')}. ` +
+      `Gamma rule: every tile title must have the EXACT same word count.`
+    );
+  }
+
+  const bodiesPresent = bodyCounts.filter(n => n > 0);
+  if (bodiesPresent.length >= 2) {
+    const bMin = Math.min(...bodiesPresent);
+    const bMax = Math.max(...bodiesPresent);
+    if (bMax - bMin > 2) {
+      console.warn(
+        `[${variant}] Body word counts vary by ${bMax - bMin} words: ${bodyCounts.join(', ')}. ` +
+        `Gamma rule: keep body text within 1–2 words of variance for a balanced row.`
+      );
+    }
+  }
+}
+
 /** solid-boxes / solid-boxes-icons */
 function renderSolidItem(item, idx, withIcons, density, variant) {
   const n = idx + 1;
@@ -608,6 +643,12 @@ export function renderBoxes(items, variant = 'solid-boxes', tone = 'professional
   // Clamp columns
   const cols = Math.min(Math.max(Number(columns) || 3, 1), 4);
 
+  // Phase 8 Wave 3 fix — Gamma title/body word-count balance rule.
+  // Box diagrams read tidiest when titles share an exact word count and
+  // bodies stay within a 1–2 word variance. Surface a soft warning so
+  // authors notice unbalanced sample data; never break the render.
+  validateBoxItemBalance(items, variant);
+
   switch (variant) {
 
     case 'solid-boxes': {
@@ -731,32 +772,39 @@ export const BULLETS_CSS = `
   margin-top: 0.2rem;
   line-height: 1.45;
 }
-/* small-bullets */
+/* small-bullets — dot rendered inline with the title's first text line
+   so it sits ON the same baseline rather than floating above or below
+   when the title wraps across multiple lines. Body indents to align
+   beneath the title text. */
 .ig-page .igs-bl-small {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
+  display: block;
   padding: 0.35rem 0.5rem;
 }
 .ig-page .igs-bl-small .igs-bl-dot {
-  flex-shrink: 0;
+  display: inline-block;
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
   background: var(--accent);
-  margin-top: 0.45rem;
+  vertical-align: middle;
+  margin-right: 0.6rem;
+  position: relative;
+  top: -1px;
 }
 .ig-page .igs-bl-small .igs-bl-title {
   font-family: var(--font-body);
   font-size: 0.88rem;
   color: var(--text-primary);
   line-height: 1.4;
+  display: inline;
 }
 .ig-page .igs-bl-small .igs-bl-body {
   font-family: var(--font-body);
   font-size: 0.78rem;
   color: var(--text-secondary);
-  margin-top: 0.1rem;
+  margin-top: 0.2rem;
+  margin-left: 1.1rem;
+  line-height: 1.45;
 }
 /* arrow-bullets */
 .ig-page .igs-bl-arrow {
@@ -863,13 +911,14 @@ export function renderBullets(items, variant = 'large-bullets', tone = 'professi
       </li>`;
     }
     if (variant === 'small-bullets') {
-      return `<li class="igs-bl-small">
-        <span class="igs-bl-dot"></span>
-        <div>
-          <div class="igs-bl-title">${esc(title)}</div>
-          ${body ? `<div class="igs-bl-body">${esc(body)}</div>` : ''}
-        </div>
-      </li>`;
+      // Dot rendered inline with the title text so it sits ON the first
+      // line baseline regardless of how the title wraps. Body indents
+      // beneath the title.
+      return `<li class="igs-bl-small">` +
+        `<span class="igs-bl-dot"></span>` +
+        `<span class="igs-bl-title">${esc(title)}</span>` +
+        (body ? `<div class="igs-bl-body">${esc(body)}</div>` : '') +
+      `</li>`;
     }
     if (variant === 'arrow-bullets') {
       return `<li class="igs-bl-arrow">

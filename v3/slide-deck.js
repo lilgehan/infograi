@@ -90,14 +90,18 @@ export function createSlide(templateId, extra) {
   // None of these are required; templates that don't set them get default
   // rendering and are unaffected.
   return {
-    id:         genId('slide'),
-    templateId: templateId || 'A1',
-    title:      ex.title    || '',
-    subtitle:   (ex.subtitle !== undefined && ex.subtitle !== null) ? ex.subtitle : null,
-    ctaLabel:   (ex.ctaLabel !== undefined && ex.ctaLabel !== null) ? ex.ctaLabel : null,
-    eyebrow:    ex.eyebrow  || null,
-    decor:      ex.decor    || null,
-    blocks:     [],
+    id:           genId('slide'),
+    templateId:   templateId || 'A1',
+    title:        ex.title    || '',
+    subtitle:     (ex.subtitle !== undefined && ex.subtitle !== null) ? ex.subtitle : null,
+    ctaLabel:     (ex.ctaLabel !== undefined && ex.ctaLabel !== null) ? ex.ctaLabel : null,
+    eyebrow:      ex.eyebrow  || null,
+    decor:        ex.decor    || null,
+    /* Phase 8 Wave 3 fix — optional per-zone headers (e.g. comparison
+       column titles "What's working" / "What needs attention"). Map of
+       zone-name → small heading string. */
+    zoneHeaders:  ex.zoneHeaders || null,
+    blocks:       [],
   };
 }
 

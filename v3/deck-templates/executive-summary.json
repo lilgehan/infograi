@@ -175,7 +175,7 @@
       "eyebrow": { "icon": "", "label": "WHAT'S AHEAD" },
       "narrativeRole": "outlook",
       "compositionGrammar": "timeline-horizontal-quarters",
-      "pageTemplateId": "B3",
+      "pageTemplateId": "A1",
       "contentSchema": {
         "title": { "type": "string", "required": true, "pattern": "What's ahead" },
         "items": {

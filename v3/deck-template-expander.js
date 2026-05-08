@@ -67,11 +67,14 @@ const SAMPLE_ITEMS = {
     { title: 'Capacity gap',        body: 'Current operations cannot absorb forecasted Q4 demand without intervention.' },
     { title: 'Decision pending',    body: 'Leadership committed to a direction by end of month — this deck supports that decision.' },
   ],
+  /* priority — used by box-family diagrams (solid-boxes-icons in slide 5).
+     Gamma rule: every title is exactly 2 words; every body is within 1
+     word of the same length. Drop the rule and the row reads ragged. */
   priority: [
-    { title: 'Operational excellence', body: 'Reduce friction in the customer journey end to end.' },
+    { title: 'Operational excellence', body: 'Reduce friction across the customer journey end to end.' },
     { title: 'Revenue growth',         body: 'Expand into the mid-market segment with a focused go-to-market.' },
-    { title: 'Talent investment',      body: 'Hire 4 senior roles in product and engineering by end of Q1.' },
-    { title: 'Brand authority',        body: 'Establish thought leadership through 12 published pieces this quarter.' },
+    { title: 'Talent investment',      body: 'Hire four senior product and engineering roles by Q1 close.' },
+    { title: 'Brand authority',        body: 'Establish thought leadership through twelve published pieces this quarter.' },
   ],
   phase: [
     { title: 'Discover', body: 'Map current state and identify friction points (Weeks 1-2).' },
@@ -238,6 +241,20 @@ function expandPage(deck, page, sampleData, prevSlideId, customItemTypes, templa
   }
   if (page.decor)            slideExtra.decor = page.decor;
   else if (template.decor)   slideExtra.decor = template.decor;
+
+  // Phase 8 Wave 3 fix — comparison sub-block headers (e.g.
+  // "What's working" / "What needs attention" above each column on C1).
+  // Stored as slide.zoneHeaders so the renderer can emit a small heading
+  // at the top of each comparison zone.
+  if (cs.leftBlock && cs.rightBlock) {
+    const leftHead  = cs.leftBlock.fields  && cs.leftBlock.fields.title  && cs.leftBlock.fields.title.pattern;
+    const rightHead = cs.rightBlock.fields && cs.rightBlock.fields.title && cs.rightBlock.fields.title.pattern;
+    if (leftHead || rightHead) {
+      slideExtra.zoneHeaders = {};
+      if (leftHead)  slideExtra.zoneHeaders.left  = fillPattern(leftHead,  sampleData);
+      if (rightHead) slideExtra.zoneHeaders.right = fillPattern(rightHead, sampleData);
+    }
+  }
 
   let nextDeck = addSlide(deck, page.pageTemplateId, prevSlideId, slideExtra);
   const slideId = nextDeck.slides[nextDeck.slides.length - 1].id;
