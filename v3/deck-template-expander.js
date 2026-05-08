@@ -51,11 +51,16 @@ export const DEFAULT_SAMPLE_DATA = {
 ───────────────────────────────────────── */
 
 const SAMPLE_ITEMS = {
+  /* metric — used by circle-stats which fills the donut from a numeric
+     percentage. Values MUST be 0–100 or 0%–100%. Any '$', '×', '+/-' or
+     letters here will fail the percentage validator and the ring will
+     render unfilled. Titles are normalised to two words each so the row
+     reads as a balanced trio (Gamma rule). Bodies are short, similar
+     length, optional. */
   metric: [
-    { title: '90%',   body: 'Cycle time reduction' },
-    { title: '$1.6M', body: 'Annual savings' },
-    { title: '3.2x',  body: 'Throughput uplift' },
-    { title: '+18%',  body: 'Customer satisfaction' },
+    { number: '90%', title: 'Cycle reduction',    body: 'Quote-to-cash speed.' },
+    { number: '92%', title: 'Customer retention', body: 'Holding above target.' },
+    { number: '76%', title: 'Plan completion',    body: 'Three months progress.' },
   ],
   rationale: [
     { title: 'Market shift',        body: 'Customer expectations have moved upmarket while internal capability has stayed flat.' },

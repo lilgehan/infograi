@@ -232,6 +232,23 @@ These are CSS-only — no images, no asset dependencies. Designed to be subtle.
 
 Set `behaviorRules.density` to `"editorial"` for generous magazine-style padding + larger title scale. Existing values (`light` / `standard` / `dense`) still work — `editorial` is the new fourth tier.
 
+### Diagram-variant data rules (Wave 3)
+
+Some diagram variants only render correctly when the data matches their visual model. Authors are expected to choose the right variant for the data they have:
+
+**`circle-stats` — donut rings**
+- The ring fill is calibrated for **percentages 0–100** (with or without trailing `%`).
+- Valid: `"90"`, `"90%"`, `"0%"`, `"100"`, `"12.5%"`.
+- Invalid: `"$1.6M"`, `"3.2x"`, `"3.2×"`, `"+18%"`, `"-50%"`, `"abc"`.
+- Invalid inputs still render (without ring fill) but log a `console.warn`. Use the `stats` variant for currency, multipliers, or signed deltas.
+- Each item should carry: `number` (the percentage shown inside the ring), `title` (label below), and optional `body` (one short descriptor below the title).
+- **Title word-count balance (Gamma rule):** keep title labels within 1 word of each other across the row. Equal word count is ideal. The renderer logs a `console.warn` if labels vary by more than 1 word.
+- **Body length balance:** descriptions should be similar length, small variation only.
+
+**`stats` — giant text numbers, no ring**
+- Accepts any value (currency, multipliers, deltas, percentages).
+- Use this when the data is heterogeneous or non-percentage.
+
 ### `editorial-dark` tone
 
 A new fifth tone alongside `professional / bold / minimal / playful`. When the deck's tone is `editorial-dark`:

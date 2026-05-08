@@ -1589,6 +1589,27 @@ function parsePctFill(str) {
   return { pct: null, isPercent: false };
 }
 
+/**
+ * Phase 8 Wave 3 — circle-stats input validator.
+ * The circle ring fill is calibrated for percentages 0–100. Anything
+ * else (currency $1.6M, multipliers 3.2×, deltas +18%, plain letters)
+ * cannot fill the ring meaningfully. This guard logs a console warning
+ * during development so authors catch misuse early. Production output
+ * still renders (without fill) so a bad input never breaks a slide.
+ *
+ * Valid: "90", "90%", "0", "100%", "12.5", "12.5%"
+ * Invalid: "$1.6M", "3.2x", "3.2×", "+18%", "-50%", "abc", "100%+"
+ */
+function isValidCirclePctInput(str) {
+  if (!str) return false;
+  const s = String(str).trim();
+  // 0–100 with optional decimal, optional trailing %, NOTHING else.
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*%?$/);
+  if (!m) return false;
+  const n = parseFloat(m[1]);
+  return n >= 0 && n <= 100;
+}
+
 function renderStarHtml(score) {
   let html = '';
   for (let i = 1; i <= 5; i++) {
@@ -1618,11 +1639,41 @@ export function renderNumbers(items, variant = 'stats', tone = 'professional', c
     return `<div class="igs-stats-row">${cols.join('')}</div>`;
   }
 
-  /* ── circle-stats / circle-bold-line / circle-external-line: SVG donut rings ── */
+  /* ── circle-stats / circle-bold-line / circle-external-line: SVG donut rings ──
+     Phase 8 Wave 3 — circle ring fill is percentage-based by design.
+     Inputs are validated and a console.warn surfaces any value that
+     can't fill a ring (so authors notice). Title word-count balance
+     is a Gamma-style guideline documented in deck-templates/SCHEMA.md. */
   if (variant === 'circle-stats' || variant === 'circle-bold-line' || variant === 'circle-external-line') {
     const sw   = variant === 'circle-bold-line' ? 12 : 8;
     const r    = variant === 'circle-bold-line' ? 38 : 40;
     const circ = +(2 * Math.PI * r).toFixed(2);
+
+    // Phase 8 Wave 3 — validate inputs once per render call.
+    items.forEach(item => {
+      const v = getNum(item);
+      if (!isValidCirclePctInput(v)) {
+        console.warn(
+          `[circle-stats] "${v}" is not a valid percentage value. ` +
+          `Expected a number 0–100 with optional trailing %. ` +
+          `Use the "stats" variant for currency, multipliers, or signed deltas.`
+        );
+      }
+    });
+    // Phase 8 Wave 3 — title word-count balance check (soft warning only).
+    const wordCounts = items
+      .map(it => (it.title || '').trim().split(/\s+/).filter(Boolean).length)
+      .filter(n => n > 0);
+    if (wordCounts.length >= 2) {
+      const min = Math.min(...wordCounts);
+      const max = Math.max(...wordCounts);
+      if (max - min > 1) {
+        console.warn(
+          `[circle-stats] Title word counts vary by ${max - min} words ` +
+          `(${wordCounts.join(', ')}). Gamma rule: keep labels within 1 word of each other for a balanced row.`
+        );
+      }
+    }
 
     const cols = items.map(item => {
       const numStr = getNum(item);
