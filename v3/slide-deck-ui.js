@@ -1880,6 +1880,14 @@ function renderActiveSlide() {
   fitSlideStage();
   ensureCanvasResizeObserver();
 
+  // Phase 8 Wave 3 fix — vertical overflow auto-fit. Same idea as the
+  // left/right slide-edge clamp, but applied vertically: if a zone's
+  // rendered content height exceeds the zone's available height, we
+  // tag the slide with data-fit-mode="compact" which triggers tighter
+  // CSS rules (smaller item padding, gaps, line-heights) until content
+  // fits inside the canvas.
+  applyAutoFitDensity(wrap);
+
   // Phase 3 Unified Interaction — wire mousemove / mousedown / click /
   // input handlers exactly once. Event delegation survives renderActiveSlide
   // replacing the inner HTML.
@@ -1893,6 +1901,49 @@ function renderActiveSlide() {
   if (interactionState.mode === 'selectedBlock') setMode('idle');
 
   updateSlideNav();
+}
+
+/* ─────────────────────────────────────────
+   PHASE 8 WAVE 3 — VERTICAL OVERFLOW AUTO-FIT
+───────────────────────────────────────── */
+
+/**
+ * Phase 8 Wave 3 fix — vertical overflow auto-fit.
+ *
+ * Mirrors the left/right slide-edge clamp from Phase 4 but for top/bottom:
+ * after a slide renders we measure each content zone and, if the rendered
+ * content is taller than the zone's available height, we tag the slide
+ * with `data-fit-mode="compact"`. Compact-mode CSS rules (in slide-templates.js)
+ * tighten per-item padding, gaps, and line-heights so the content fits
+ * inside the slide canvas without auto-shrinking fonts.
+ *
+ * We measure at native 960×540 resolution (the slide is scaled visually
+ * via CSS transform but the underlying box is rendered at native size).
+ * scrollHeight is computed against unscaled dimensions, so the comparison
+ * is consistent regardless of viewport size.
+ */
+function applyAutoFitDensity(wrap) {
+  if (!wrap) return;
+  const slide = wrap.querySelector('.igs-canvas-wrap .igs-slide');
+  if (!slide) return;
+
+  // Reset before re-checking — re-renders need a clean slate.
+  slide.removeAttribute('data-fit-mode');
+
+  // requestAnimationFrame ensures layout has run before we measure.
+  requestAnimationFrame(() => {
+    const zones = slide.querySelectorAll('.igs-zone-content');
+    let overflows = false;
+    zones.forEach(zone => {
+      // 2px tolerance for sub-pixel rounding.
+      if (zone.scrollHeight > zone.clientHeight + 2) {
+        overflows = true;
+      }
+    });
+    if (overflows) {
+      slide.setAttribute('data-fit-mode', 'compact');
+    }
+  });
 }
 
 /* ─────────────────────────────────────────

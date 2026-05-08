@@ -706,6 +706,123 @@ export const TEMPLATE_CSS = `
 }
 
 /* ══════════════════════════════════════════════════════════
+   PHASE 8 WAVE 3 FIX — VERTICAL OVERFLOW PREVENTION
+   The same idea as our left/right slide-edge clamp, but for top/bottom:
+   content is not allowed to extend past the slide bottom. We do this
+   without auto-shrinking fonts. Two layers:
+   1. Auto-collapse empty image zones — when an .igs-zone-accent
+      contains only the placeholder (no real image), the zone's row
+      or column collapses so the content zone gets the canvas.
+   2. Tighter zone padding on multi-zone editorial-dark templates so
+      headers + items + bodies fit cleanly. The Wave 2 56×72 padding
+      was tuned for A1 (single zone); C1 / B-templates have multiple
+      zones competing for the 540px height and need less padding.
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Auto-collapse empty image zones (B1–B6) ──
+   When the accent zone shows only the placeholder (no real image),
+   collapse the row/column so the content zone takes the slide canvas.
+   When a real image is added later, the layout reverts to the original
+   accent split automatically. */
+.igs-slide[data-template="B1"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) {
+  grid-template-columns: 100%;
+}
+.igs-slide[data-template="B2"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) {
+  grid-template-columns: 100%;
+}
+.igs-slide[data-template="B3"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) {
+  grid-template-rows: 100%;
+}
+.igs-slide[data-template="B4"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) {
+  grid-template-rows: 100%;
+}
+.igs-slide[data-template="B5"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) {
+  grid-template-columns: 100%;
+}
+.igs-slide[data-template="B6"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) {
+  grid-template-columns: 100%;
+}
+/* When collapsed, hide the empty accent zone entirely. The user still
+   sees a "click to add image" affordance via the editor toolbar / zone
+   selection — the placeholder strip just isn't taking up canvas. */
+.igs-slide[data-template^="B"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) > .igs-zone-accent {
+  display: none;
+}
+/* The content zone now occupies the full grid track. */
+.igs-slide[data-template="B1"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) > .igs-zone-content,
+.igs-slide[data-template="B2"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) > .igs-zone-content,
+.igs-slide[data-template="B5"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) > .igs-zone-content,
+.igs-slide[data-template="B6"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) > .igs-zone-content {
+  grid-column: 1;
+}
+.igs-slide[data-template="B3"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) > .igs-zone-content,
+.igs-slide[data-template="B4"]:has(> .igs-zone-accent > .igs-accent-placeholder:only-child) > .igs-zone-content {
+  grid-row: 1;
+}
+
+/* ── Tighter zone padding on multi-zone editorial-dark templates ──
+   The Wave 2 default of 56×72 inside .igs-zone-content was tuned for
+   A1 (one full-bleed zone). For C1 (title row + two column zones),
+   B3/B4 (image row + content row), and similar split layouts, three
+   stacked zones × 112px vertical padding eats most of the canvas
+   before content even renders. Trim to 28×56 (still generous) so a
+   3-bullet column fits cleanly inside the 540px slide.
+   This rule applies ONLY to multi-zone templates — A1 keeps the wide
+   editorial breathing room from Wave 2. */
+.igs-slide[data-tone="editorial-dark"][data-template="C1"] > .igs-zone-content,
+.igs-slide[data-tone="editorial-dark"][data-template="C2"] > .igs-zone-content,
+.igs-slide[data-tone="editorial-dark"][data-template="C3"] > .igs-zone-content,
+.igs-slide[data-tone="editorial-dark"][data-template="C4"] > .igs-zone-content,
+.igs-slide[data-tone="editorial-dark"][data-template="B3"] > .igs-zone-content,
+.igs-slide[data-tone="editorial-dark"][data-template="B4"] > .igs-zone-content {
+  padding: 28px 56px;
+}
+/* Title row in these templates is even tighter — title auto-sizes,
+   no need for top/bottom padding eating into row height. */
+.igs-slide[data-tone="editorial-dark"][data-template^="C"] > .igs-zone-content[data-zone="title"] {
+  padding: 36px 56px 12px 56px;
+}
+
+/* ── Auto-fit compact mode ──
+   Set on the slide root by slide-deck-ui.js applyAutoFitDensity() when
+   any zone's scrollHeight exceeds clientHeight. Same intent as the
+   left/right slide-edge clamp, applied vertically: shrink spacing
+   (NOT fonts) until content fits inside the slide canvas. */
+.igs-slide[data-fit-mode="compact"] .igs-zone-content {
+  padding: 20px 36px;
+}
+.igs-slide[data-fit-mode="compact"] .igs-zone-title {
+  margin-bottom: 12px;
+}
+.igs-slide[data-fit-mode="compact"] .igs-bullets-list {
+  gap: 0.25rem;
+}
+.igs-slide[data-fit-mode="compact"] .igs-bl-small,
+.igs-slide[data-fit-mode="compact"] .igs-bl-large,
+.igs-slide[data-fit-mode="compact"] .igs-bl-arrow {
+  padding: 0.2rem 0.5rem;
+}
+.igs-slide[data-fit-mode="compact"] .igs-bl-large .igs-bl-body,
+.igs-slide[data-fit-mode="compact"] .igs-bl-arrow .igs-bl-body,
+.igs-slide[data-fit-mode="compact"] .igs-bl-small .igs-bl-body {
+  margin-top: 0.05rem;
+  line-height: 1.35;
+}
+.igs-slide[data-fit-mode="compact"] .igs-tl-item {
+  padding-bottom: 0.5rem;
+}
+.igs-slide[data-fit-mode="compact"] .igs-tl-content .igs-tl-body {
+  margin-top: 0.05rem;
+  line-height: 1.35;
+}
+.igs-slide[data-fit-mode="compact"] .igs-zone-content > .igs-zone-header {
+  margin-bottom: 6px;
+}
+.igs-slide[data-fit-mode="compact"][data-tone="editorial-dark"] .igs-zone-title {
+  margin-bottom: 14px;
+}
+
+/* ══════════════════════════════════════════════════════════
    CATEGORY A — Blank & Full-Width
    ══════════════════════════════════════════════════════════ */
 
