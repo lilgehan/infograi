@@ -623,6 +623,134 @@ export const TEMPLATE_CSS = `
 }
 
 /* ══════════════════════════════════════════════════════════
+   PHASE 8 WAVE 3 — COMPOSITION VARIATION
+   Wave 1 shipped the theme. Wave 2 shipped the visual hierarchy.
+   Wave 3 introduces composition asymmetry on editorial-dark slides
+   so the deck stops looking like the same layout repeated 8 times.
+   - Hero-stat: 3-item circle-stats reorganizes as 1 dominant left
+     stat + 2 supporting right stats (no new diagram variant —
+     pure CSS rearrangement of existing markup).
+   - Gutter: A1 inline titles cap at 75% width so the right side
+     reads as deliberate negative space.
+   - Tile polish: A1 priority tile rows fill more vertical space
+     with taller, denser cards.
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Editorial gutter on A1 hero titles ──
+   The eyebrow + display title get a 75% max width so the right
+   third of the slide reads as intentional negative space. */
+.igs-slide[data-tone="editorial-dark"][data-template="A1"] > .igs-zone-content > .igs-zone-title {
+  max-width: 78%;
+}
+
+/* ── Hero-stat asymmetric on 3-item circle-stats ──
+   A 3-item circle-stats grid in editorial-dark reflows as 1 hero
+   stat (left half, large ring + large number, label below) plus
+   2 supporting stats (right half, small inline rings with labels
+   to their right). All from the same items array — the CSS just
+   re-grids the existing columns. */
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-rows: 1fr 1fr;
+  column-gap: 64px;
+  row-gap: 24px;
+  align-items: center;
+  justify-items: stretch;
+  max-width: 100%;
+  padding: 0 8px;
+}
+
+/* Hero (first item) — big ring, big number, label + body left-aligned. */
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(1) {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  max-width: 100%;
+  flex: none;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(1) .igs-circstat-wrap {
+  width: 100%;
+  max-width: 220px;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(1) .igs-circstat-num {
+  font-size: 56px !important;
+  font-weight: 700;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(1) .igs-circstat-title {
+  font-size: 1.05em;
+  font-weight: 700;
+  margin-top: 1.1rem;
+  line-height: 1.2;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(1) .igs-circstat-desc {
+  font-size: 0.78em;
+  margin-top: 0.5rem;
+  max-width: 280px;
+}
+
+/* Supporting (items 2 and 3) — small inline rings with labels to the right. */
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(2),
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(3) {
+  grid-column: 2;
+  flex-direction: row;
+  align-items: center;
+  text-align: left;
+  max-width: 100%;
+  gap: 18px;
+  min-width: 0;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(2) { grid-row: 1; }
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(3) { grid-row: 2; }
+
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(2) .igs-circstat-wrap,
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(3) .igs-circstat-wrap {
+  flex: 0 0 80px;
+  width: 80px;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(2) .igs-circstat-num,
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(3) .igs-circstat-num {
+  font-size: 18px !important;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(2) .igs-circstat-title,
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(3) .igs-circstat-title {
+  margin-top: 0;
+  font-size: 0.95em;
+  font-weight: 700;
+}
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(2) .igs-circstat-desc,
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(3) .igs-circstat-desc {
+  font-size: 0.74em;
+  margin-top: 0.25rem;
+}
+/* Wrap the title + desc in a flexible column inside the inline row. */
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(2) > *:not(.igs-circstat-wrap),
+.igs-slide[data-tone="editorial-dark"] .igs-circstat-row:has(> .igs-circstat-col:nth-child(3):last-child) > .igs-circstat-col:nth-child(3) > *:not(.igs-circstat-wrap) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ── A1 priority tile polish ──
+   solid-boxes / solid-boxes-icons cards on editorial-dark get taller
+   min-heights and tighter typography so the row of 4 tiles reads
+   with editorial weight rather than as small floating chips. */
+.igs-slide[data-tone="editorial-dark"][data-template="A1"] .igs-solid {
+  min-height: 200px;
+  padding: 24px 22px;
+}
+.igs-slide[data-tone="editorial-dark"][data-template="A1"] .igs-solid .igs-title {
+  font-size: 1.05em;
+  line-height: 1.2;
+}
+.igs-slide[data-tone="editorial-dark"][data-template="A1"] .igs-solid .igs-body {
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin-top: 0.6rem;
+}
+
+/* ══════════════════════════════════════════════════════════
    CATEGORY A — Blank & Full-Width
    ══════════════════════════════════════════════════════════ */
 
